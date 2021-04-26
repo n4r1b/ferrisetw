@@ -64,6 +64,9 @@ fn main() {
     trace.stop();
 }
 ```
+## Documentation
+I'm having some trouble to get docs.rs to build the documentation for the crate so at the moment is being hosted on my domain.
+[FerrisETW Doc](https://www.n4r1b.com/doc/ferrisetw/index.html)
 
 ## Notes
 - The project is still WIP, there's still plenty of things to evaluate/investigate and things to fix and do better.
