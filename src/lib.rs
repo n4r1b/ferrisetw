@@ -1,5 +1,5 @@
 //! # Event Windows Tracing FTW!
-//! **Basically a rip off [KrabsETW] written in Rust**, hence the name `Ferris` 🦀
+//! **Basically a [KrabsETW] rip-off written in Rust**, hence the name `Ferris` 🦀
 //!
 //! All **credits** go to the team at Microsoft who develop KrabsEtw, without it, this project
 //! probably wouldn't be a thing.
