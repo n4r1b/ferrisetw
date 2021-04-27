@@ -1,5 +1,5 @@
 # FerrisETW 🦀
-**Basically a rip off [KrabsETW](https://github.com/microsoft/krabsetw/) written in Rust**, 
+**Basically a [KrabsETW](https://github.com/microsoft/krabsetw/) rip-off written in Rust**, 
 hence the name [`Ferris`](https://rustacean.net/) 🦀
 
 All **credits** go to the team at Microsoft who develop KrabsEtw, without it, this project 
