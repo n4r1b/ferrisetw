@@ -2,6 +2,7 @@
 //!
 //! This module act as a helper to parse the Buffer from an ETW Event
 use crate::native::etw_types::EVENT_HEADER_FLAG_32_BIT_HEADER;
+use crate::native::sddl;
 use crate::native::tdh;
 use crate::native::tdh_types::{Property, PropertyFlags, TdhInType, TdhOutType};
 use crate::property::{PropertyInfo, PropertyIter};
@@ -28,6 +29,10 @@ pub enum ParserError {
     Utf8Error(std::string::FromUtf8Error),
     /// An error trying to get an slice as an array
     SliceError(std::array::TryFromSliceError),
+    /// Represents an internal [SddlNativeError]
+    ///
+    /// [SddlNativeError]: sddl::SddlNativeError
+    SddlNativeError(sddl::SddlNativeError),
     /// Represents an internal [TdhNativeError]
     ///
     /// [TdhNativeError]: tdh::TdhNativeError
@@ -37,6 +42,12 @@ pub enum ParserError {
 impl From<tdh::TdhNativeError> for ParserError {
     fn from(err: tdh::TdhNativeError) -> Self {
         ParserError::TdhNativeError(err)
+    }
+}
+
+impl From<sddl::SddlNativeError> for ParserError {
+    fn from(err: sddl::SddlNativeError) -> Self {
+        ParserError::SddlNativeError(err)
     }
 }
 
@@ -270,6 +281,9 @@ impl TryParse<String> for Parser<'_> {
             TdhInType::InTypeAnsiString => String::from_utf8(prop_info.buffer.clone())?
                 .trim_matches(char::default())
                 .to_string(),
+            TdhInType::InTypeSid => {
+                sddl::convert_sid_to_string(prop_info.buffer.as_ptr() as isize)?
+            }
             TdhInType::InTypeCountedString => unimplemented!(),
             _ => return Err(ParserError::InvalidType),
         };
@@ -386,6 +400,6 @@ impl TryParse<Vec<u8>> for Parser<'_> {
         Ok(prop_info.buffer.clone())
     }
 }
+
 // TODO: Implement SocketAddress
-// TODO: Implement SID
 // TODO: Study if we can use primitive types for HexInt64, HexInt32 and Pointer
