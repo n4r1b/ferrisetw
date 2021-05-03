@@ -40,25 +40,25 @@ fn verify_system_version(major: u8, minor: u8, sp_major: u16) -> VersionHelperRe
     unsafe {
         condition_mask = WindowsProgramming::VerSetConditionMask(
             condition_mask,
-            WindowsProgramming::VER_MASK::VER_MAJORVERSION,
+            WindowsProgramming::VER_FLAGS::VER_MAJORVERSION,
             VER_GREATER_OR_EQUAL,
         );
         condition_mask = WindowsProgramming::VerSetConditionMask(
             condition_mask,
-            WindowsProgramming::VER_MASK::VER_MINORVERSION,
+            WindowsProgramming::VER_FLAGS::VER_MINORVERSION,
             VER_GREATER_OR_EQUAL,
         );
         condition_mask = WindowsProgramming::VerSetConditionMask(
             condition_mask,
-            WindowsProgramming::VER_MASK::VER_SERVICEPACKMAJOR,
+            WindowsProgramming::VER_FLAGS::VER_SERVICEPACKMAJOR,
             VER_GREATER_OR_EQUAL,
         );
 
         Ok(WindowsProgramming::VerifyVersionInfoA(
             &mut os_version,
-            WindowsProgramming::VER_MASK::VER_MAJORVERSION
-                | WindowsProgramming::VER_MASK::VER_MINORVERSION
-                | WindowsProgramming::VER_MASK::VER_SERVICEPACKMAJOR,
+            WindowsProgramming::VER_FLAGS::VER_MAJORVERSION
+                | WindowsProgramming::VER_FLAGS::VER_MINORVERSION
+                | WindowsProgramming::VER_FLAGS::VER_SERVICEPACKMAJOR,
             condition_mask,
         ) != false)
     }

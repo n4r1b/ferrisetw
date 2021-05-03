@@ -5,7 +5,7 @@
 //!
 //! This module shouldn't be accessed directly. Modules from the the crate level provide a safe API to interact
 //! with the crate
-use super::bindings::Windows::Win32::{Etw, SystemServices::ERROR_INSUFFICIENT_BUFFER};
+use super::bindings::Windows::Win32::{Debug::WIN32_ERROR, Etw};
 use super::etw_types::*;
 use crate::traits::*;
 
@@ -35,7 +35,7 @@ pub(crate) fn schema_from_tdh(mut event: EventRecord) -> TdhNativeResult<TraceEv
             std::ptr::null_mut(),
             std::ptr::null_mut(),
             &mut buffer_size,
-        ) != ERROR_INSUFFICIENT_BUFFER
+        ) != WIN32_ERROR::ERROR_INSUFFICIENT_BUFFER.0
         {
             return Err(TdhNativeError::IoError(std::io::Error::last_os_error()));
         }

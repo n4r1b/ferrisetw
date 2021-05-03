@@ -5,10 +5,7 @@
 //!
 //! This module shouldn't be accessed directly. Modules from the crate level provide a safe API to interact
 //! with the crate
-use super::bindings::Windows::Win32::{
-    Etw, SystemServices::ERROR_ALREADY_EXISTS, SystemServices::ERROR_CTX_CLOSE_PENDING,
-    SystemServices::ERROR_WMI_INSTANCE_NOT_FOUND, WindowsProgramming,
-};
+use super::bindings::Windows::Win32::{Debug::WIN32_ERROR, Etw, WindowsProgramming};
 use super::etw_types::*;
 use crate::provider::Provider;
 use crate::trace::{TraceData, TraceProperties, TraceTrait};
@@ -136,7 +133,7 @@ impl NativeEtw {
                 &mut *self.info.properties,
             );
 
-            if status == ERROR_ALREADY_EXISTS {
+            if status == WIN32_ERROR::ERROR_ALREADY_EXISTS.0 {
                 return Err(EvntraceNativeError::AlreadyExist);
             } else if status != 0 {
                 return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
@@ -173,7 +170,7 @@ impl NativeEtw {
 
         unsafe {
             let status = Etw::CloseTrace(self.session_handle);
-            if status != 0 && status != ERROR_CTX_CLOSE_PENDING {
+            if status != 0 && status != WIN32_ERROR::ERROR_CTX_CLOSE_PENDING.0 {
                 return Err(EvntraceNativeError::IoError(
                     std::io::Error::from_raw_os_error(status as i32),
                 ));
@@ -197,7 +194,7 @@ impl NativeEtw {
                 control_code,
             );
 
-            if status != 0 && status != ERROR_WMI_INSTANCE_NOT_FOUND {
+            if status != 0 && status != WIN32_ERROR::ERROR_WMI_INSTANCE_NOT_FOUND.0 {
                 return Err(EvntraceNativeError::IoError(
                     std::io::Error::from_raw_os_error(status as i32),
                 ));
