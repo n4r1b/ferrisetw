@@ -1,5 +1,5 @@
 fn main() {
-    windows::build!(
+    windows_macros::build!(
         Windows::Win32::Etw::*,
         Windows::Win32::Debug::WIN32_ERROR,
         Windows::Win32::SystemServices::{

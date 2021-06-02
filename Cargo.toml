@@ -23,7 +23,7 @@ bitflags = "1.2.1"
 # anyhow = "~1.0"
 
 [build-dependencies]
-windows = "0.9.1"
+windows_macros = "0.9.1"
 
 [lib]
 doctest = false
