@@ -51,29 +51,53 @@ pub mod kernel_providers {
     ///
     /// Credits: [KrabsETW::kernel_guids](https://github.com/microsoft/krabsetw/blob/master/krabs/krabs/kernel_guids.hpp)
     pub mod kernel_guids {
-        pub const ALPC_GUID: &str = "45d8cccd-539f-4b72-a8b7-5c683142609a";
-        pub const POWER_GUID: &str = "e43445e0-0903-48c3-b878-ff0fccebdd04";
-        pub const DEBUG_GUID: &str = "13976d09-a327-438c-950b-7f03192815c7";
-        pub const TCP_IP_GUID: &str = "9a280ac0-c8e0-11d1-84e2-00c04fb998a2";
-        pub const UDP_IP_GUID: &str = "bf3a50c5-a9c9-4988-a005-2df0b7c80f80";
-        pub const THREAD_GUID: &str = "3d6fa8d1-fe05-11d0-9dda-00c04fd7ba7c";
-        pub const DISK_IO_GUID: &str = "3d6fa8d4-fe05-11d0-9dda-00c04fd7ba7c";
-        pub const FILE_IO_GUID: &str = "90cbdc39-4a3e-11d1-84f4-0000f80464e3";
-        pub const PROCESS_GUID: &str = "3d6fa8d0-fe05-11d0-9dda-00c04fd7ba7c";
-        pub const REGISTRY_GUID: &str = "AE53722E-C863-11d2-8659-00C04FA321A1";
-        pub const SPLIT_IO_GUID: &str = "d837ca92-12b9-44a5-ad6a-3a65b3578aa8";
-        pub const OB_TRACE_GUID: &str = "89497f50-effe-4440-8cf2-ce6b1cdcaca7";
-        pub const UMS_EVENT_GUID: &str = "9aec974b-5b8e-4118-9b92-3186d8002ce5";
-        pub const PERF_INFO_GUID: &str = "ce1dbfb4-137e-4da6-87b0-3f59aa102cbc";
-        pub const PAGE_FAULT_GUID: &str = "3d6fa8d3-fe05-11d0-9dda-00c04fd7ba7c";
-        pub const IMAGE_LOAD_GUID: &str = "2cb15d1d-5fc1-11d2-abe1-00a0c911f518";
-        pub const POOL_TRACE_GUID: &str = "0268a8b6-74fd-4302-9dd0-6e8f1795c0cf";
-        pub const LOST_EVENT_GUID: &str = "6a399ae0-4bc6-4de9-870b-3657f8947e7e";
-        pub const STACK_WALK_GUID: &str = "def2fe46-7bd6-4b80-bd94-f57fe20d0ce3";
-        pub const EVENT_TRACE_GUID: &str = "68fdd900-4a3e-11d1-84f4-0000f80464e3";
-        pub const MMCSS_TRACE_GUID: &str = "f8f10121-b617-4a56-868b-9df1b27fe32c";
-        pub const SYSTEM_TRACE_GUID: &str = "9e814aad-3204-11d2-9a82-006008a86939";
-        pub const EVENT_TRACE_CONFIG_GUID: &str = "01853a65-418f-4f36-aefc-dc0f1d2fd235";
+        use super::Guid;
+        pub const ALPC_GUID: Guid = Guid::from_values(
+            0x45d8cccd, 0x539f, 0x4b72, [0xa8, 0xb7, 0x5c, 0x68, 0x31, 0x42, 0x60, 0x9a]);
+        pub const POWER_GUID: Guid = Guid::from_values(
+            0xe43445e0, 0x0903, 0x48c3, [0xb8, 0x78, 0xff, 0x0f, 0xcc, 0xeb, 0xdd, 0x04]);
+        pub const DEBUG_GUID: Guid = Guid::from_values(
+            0x13976d09, 0xa327, 0x438c, [0x95, 0x0b, 0x7f, 0x03, 0x19, 0x28, 0x15, 0xc7]);
+        pub const TCP_IP_GUID: Guid = Guid::from_values(
+            0x9a280ac0, 0xc8e0, 0x11d1, [0x84, 0xe2, 0x00, 0xc0, 0x4f, 0xb9, 0x98, 0xa2]);
+        pub const UDP_IP_GUID: Guid = Guid::from_values(
+            0xbf3a50c5, 0xa9c9, 0x4988, [0xa0, 0x05, 0x2d, 0xf0, 0xb7, 0xc8, 0x0f, 0x80]);
+        pub const THREAD_GUID: Guid = Guid::from_values(
+            0x3d6fa8d1, 0xfe05, 0x11d0, [0x9d, 0xda, 0x00, 0xc0, 0x4f, 0xd7, 0xba, 0x7c]);
+        pub const DISK_IO_GUID: Guid = Guid::from_values(
+            0x3d6fa8d4, 0xfe05, 0x11d0, [0x9d, 0xda, 0x00, 0xc0, 0x4f, 0xd7, 0xba, 0x7c]);
+        pub const FILE_IO_GUID: Guid = Guid::from_values(
+            0x90cbdc39, 0x4a3e, 0x11d1, [0x84, 0xf4, 0x00, 0x00, 0xf8, 0x04, 0x64, 0xe3]);
+        pub const PROCESS_GUID: Guid = Guid::from_values(
+            0x3d6fa8d0, 0xfe05, 0x11d0, [0x9d, 0xda, 0x00, 0xc0, 0x4f, 0xd7, 0xba, 0x7c]);
+        pub const REGISTRY_GUID: Guid = Guid::from_values(
+            0xAE53722E, 0xC863, 0x11d2, [0x86, 0x59, 0x00, 0xC0, 0x4F, 0xA3, 0x21, 0xA1]);
+        pub const SPLIT_IO_GUID: Guid = Guid::from_values(
+            0xd837ca92, 0x12b9, 0x44a5, [0xad, 0x6a, 0x3a, 0x65, 0xb3, 0x57, 0x8a, 0xa8]);
+        pub const OB_TRACE_GUID: Guid = Guid::from_values(
+            0x89497f50, 0xeffe, 0x4440, [0x8c, 0xf2, 0xce, 0x6b, 0x1c, 0xdc, 0xac, 0xa7]);
+        pub const UMS_EVENT_GUID: Guid = Guid::from_values(
+            0x9aec974b, 0x5b8e, 0x4118, [0x9b, 0x92, 0x31, 0x86, 0xd8, 0x00, 0x2c, 0xe5]);
+        pub const PERF_INFO_GUID: Guid = Guid::from_values(
+            0xce1dbfb4, 0x137e, 0x4da6, [0x87, 0xb0, 0x3f, 0x59, 0xaa, 0x10, 0x2c, 0xbc]);
+        pub const PAGE_FAULT_GUID: Guid = Guid::from_values(
+            0x3d6fa8d3, 0xfe05, 0x11d0, [0x9d, 0xda, 0x00, 0xc0, 0x4f, 0xd7, 0xba, 0x7c]);
+        pub const IMAGE_LOAD_GUID: Guid = Guid::from_values(
+            0x2cb15d1d, 0x5fc1, 0x11d2, [0xab, 0xe1, 0x00, 0xa0, 0xc9, 0x11, 0xf5, 0x18]);
+        pub const POOL_TRACE_GUID: Guid = Guid::from_values(
+            0x0268a8b6, 0x74fd, 0x4302, [0x9d, 0xd0, 0x6e, 0x8f, 0x17, 0x95, 0xc0, 0xcf]);
+        pub const LOST_EVENT_GUID: Guid = Guid::from_values(
+            0x6a399ae0, 0x4bc6, 0x4de9, [0x87, 0x0b, 0x36, 0x57, 0xf8, 0x94, 0x7e, 0x7e]);
+        pub const STACK_WALK_GUID: Guid = Guid::from_values(
+            0xdef2fe46, 0x7bd6, 0x4b80, [0xbd, 0x94, 0xf5, 0x7f, 0xe2, 0x0d, 0x0c, 0xe3]);
+        pub const EVENT_TRACE_GUID: Guid = Guid::from_values(
+            0x68fdd900, 0x4a3e, 0x11d1, [0x84, 0xf4, 0x00, 0x00, 0xf8, 0x04, 0x64, 0xe3]);
+        pub const MMCSS_TRACE_GUID: Guid = Guid::from_values(
+            0xf8f10121, 0xb617, 0x4a56, [0x86, 0x8b, 0x9d, 0xf1, 0xb2, 0x7f, 0xe3, 0x2c]);
+        pub const SYSTEM_TRACE_GUID: Guid = Guid::from_values(
+            0x9e814aad, 0x3204, 0x11d2, [0x9a, 0x82, 0x00, 0x60, 0x08, 0xa8, 0x69, 0x39]);
+        pub const EVENT_TRACE_CONFIG_GUID: Guid = Guid::from_values(
+            0x01853a65, 0x418f, 0x4f36, [0xae, 0xfc, 0xdc, 0x0f, 0x1d, 0x2f, 0xd2, 0x35]);
     }
 
     /// List of Kernel Providers flags
@@ -117,129 +141,127 @@ pub mod kernel_providers {
 
     impl KernelProvider {
         /// Use the `new` function to create a Kernel Provider which can be then tied into a Provider
-        pub fn new(guid: &str, flags: u32) -> KernelProvider {
+        pub const fn new(guid: Guid, flags: u32) -> KernelProvider {
             KernelProvider {
-                guid: Guid::from(guid),
+                guid: guid,
                 flags,
             }
         }
     }
 
-    lazy_static! {
-        /// Represents the VirtualAlloc Kernel Provider
-        pub static ref VIRTUAL_ALLOC_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::PAGE_FAULT_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_VIRTUAL_ALLOC
-        );
-        /// Represents the VA Map Kernel Provider
-        pub static ref VAMAP_PROVIDER: KernelProvider =
-            KernelProvider::new(kernel_guids::FILE_IO_GUID, kernel_flags::EVENT_TRACE_FLAG_VAMAP);
-        /// Represents the Thread Kernel Provider
-        pub static ref THREAD_PROVIDER: KernelProvider =
-            KernelProvider::new(kernel_guids::THREAD_GUID, kernel_flags::EVENT_TRACE_FLAG_THREAD);
-        /// Represents the Split IO Kernel Provider
-        pub static ref SPLIT_IO_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::SPLIT_IO_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_SPLIT_IO
-        );
-        /// Represents the SystemCall Kernel Provider
-        pub static ref SYSTEM_CALL_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::PERF_INFO_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_SYSTEMCALL
-        );
-        /// Represents the Registry Kernel Provider
-        pub static ref REGISTRY_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::REGISTRY_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_REGISTRY
-        );
-        /// Represents the Profile Kernel Provider
-        pub static ref PROFILE_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::PERF_INFO_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_PROFILE
-        );
-        /// Represents the Process Counter Kernel Provider
-        pub static ref PROCESS_COUNTER_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::PROCESS_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_PROCESS_COUNTERS
-        );
-        /// Represents the Process Kernel Provider
-        pub static ref PROCESS_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::PROCESS_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_PROCESS
-        );
-        /// Represents the TCP-IP Kernel Provider
-        pub static ref TCP_IP_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::TCP_IP_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_NETWORK_TCPIP
-        );
-        /// Represents the Memory Page Fault Kernel Provider
-        pub static ref MEMORY_PAGE_FAULT_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::PAGE_FAULT_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_MEMORY_PAGE_FAULTS
-        );
-        /// Represents the Memory Hard Fault Kernel Provider
-        pub static ref MEMORY_HARD_FAULT_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::PAGE_FAULT_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_MEMORY_HARD_FAULTS
-        );
-        /// Represents the Interrupt Kernel Provider
-        pub static ref INTERRUPT_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::PERF_INFO_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_INTERRUPT
-        );
-        /// Represents the Driver Kernel Provider
-        pub static ref DRIVER_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::DISK_IO_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_DISK_IO
-        );
-        /// Represents the DPC Kernel Provider
-        pub static ref DPC_PROVIDER: KernelProvider =
-            KernelProvider::new(kernel_guids::PERF_INFO_GUID, kernel_flags::EVENT_TRACE_FLAG_DPC);
-        /// Represents the Image Load Kernel Provider
-        pub static ref IMAGE_LOAD_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::IMAGE_LOAD_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_IMAGE_LOAD
-        );
-        /// Represents the Thread Dispatcher Kernel Provider
-        pub static ref THREAD_DISPATCHER_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::THREAD_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_DISPATCHER
-        );
-        /// Represents the File Init IO Kernel Provider
-        pub static ref FILE_INIT_IO_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::FILE_IO_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_FILE_IO_INIT
-        );
-        /// Represents the File IO Kernel Provider
-        pub static ref FILE_IO_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::FILE_IO_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_FILE_IO
-        );
-        /// Represents the Disk IO Init Kernel Provider
-        pub static ref DISK_IO_INIT_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::DISK_IO_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_DISK_IO_INIT
-        );
-        /// Represents the Disk IO Kernel Provider
-        pub static ref DISK_IO_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::DISK_IO_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_DISK_IO
-        );
-        /// Represents the Disk File IO Kernel Provider
-        pub static ref DISK_FILE_IO_PROVIDER: KernelProvider = KernelProvider::new(
-            kernel_guids::DISK_IO_GUID,
-            kernel_flags::EVENT_TRACE_FLAG_DISK_FILE_IO
-        );
-        /// Represents the Dbg Pring Kernel Provider
-        pub static ref DEBUG_PRINT_PROVIDER: KernelProvider =
-            KernelProvider::new(kernel_guids::DEBUG_GUID, kernel_flags::EVENT_TRACE_FLAG_DBGPRINT);
-        /// Represents the Context Swtich Kernel Provider
-        pub static ref CONTEXT_SWITCH_PROVIDER: KernelProvider =
-            KernelProvider::new(kernel_guids::THREAD_GUID, kernel_flags::EVENT_TRACE_FLAG_CSWITCH);
-        /// Represents the ALPC Kernel Provider
-        pub static ref ALPC_PROVIDER: KernelProvider =
-            KernelProvider::new(kernel_guids::ALPC_GUID, kernel_flags::EVENT_TRACE_FLAG_ALPC);
-    }
+    /// Represents the VirtualAlloc Kernel Provider
+    pub static VIRTUAL_ALLOC_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::PAGE_FAULT_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_VIRTUAL_ALLOC
+    );
+    /// Represents the VA Map Kernel Provider
+    pub static VAMAP_PROVIDER: KernelProvider =
+        KernelProvider::new(kernel_guids::FILE_IO_GUID, kernel_flags::EVENT_TRACE_FLAG_VAMAP);
+    /// Represents the Thread Kernel Provider
+    pub static THREAD_PROVIDER: KernelProvider =
+        KernelProvider::new(kernel_guids::THREAD_GUID, kernel_flags::EVENT_TRACE_FLAG_THREAD);
+    /// Represents the Split IO Kernel Provider
+    pub static SPLIT_IO_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::SPLIT_IO_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_SPLIT_IO
+    );
+    /// Represents the SystemCall Kernel Provider
+    pub static SYSTEM_CALL_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::PERF_INFO_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_SYSTEMCALL
+    );
+    /// Represents the Registry Kernel Provider
+    pub static REGISTRY_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::REGISTRY_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_REGISTRY
+    );
+    /// Represents the Profile Kernel Provider
+    pub static PROFILE_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::PERF_INFO_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_PROFILE
+    );
+    /// Represents the Process Counter Kernel Provider
+    pub static PROCESS_COUNTER_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::PROCESS_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_PROCESS_COUNTERS
+    );
+    /// Represents the Process Kernel Provider
+    pub static PROCESS_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::PROCESS_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_PROCESS
+    );
+    /// Represents the TCP-IP Kernel Provider
+    pub static TCP_IP_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::TCP_IP_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_NETWORK_TCPIP
+    );
+    /// Represents the Memory Page Fault Kernel Provider
+    pub static MEMORY_PAGE_FAULT_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::PAGE_FAULT_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_MEMORY_PAGE_FAULTS
+    );
+    /// Represents the Memory Hard Fault Kernel Provider
+    pub static MEMORY_HARD_FAULT_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::PAGE_FAULT_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_MEMORY_HARD_FAULTS
+    );
+    /// Represents the Interrupt Kernel Provider
+    pub static INTERRUPT_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::PERF_INFO_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_INTERRUPT
+    );
+    /// Represents the Driver Kernel Provider
+    pub static DRIVER_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::DISK_IO_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_DISK_IO
+    );
+    /// Represents the DPC Kernel Provider
+    pub static DPC_PROVIDER: KernelProvider =
+        KernelProvider::new(kernel_guids::PERF_INFO_GUID, kernel_flags::EVENT_TRACE_FLAG_DPC);
+    /// Represents the Image Load Kernel Provider
+    pub static IMAGE_LOAD_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::IMAGE_LOAD_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_IMAGE_LOAD
+    );
+    /// Represents the Thread Dispatcher Kernel Provider
+    pub static THREAD_DISPATCHER_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::THREAD_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_DISPATCHER
+    );
+    /// Represents the File Init IO Kernel Provider
+    pub static FILE_INIT_IO_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::FILE_IO_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_FILE_IO_INIT
+    );
+    /// Represents the File IO Kernel Provider
+    pub static FILE_IO_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::FILE_IO_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_FILE_IO
+    );
+    /// Represents the Disk IO Init Kernel Provider
+    pub static DISK_IO_INIT_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::DISK_IO_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_DISK_IO_INIT
+    );
+    /// Represents the Disk IO Kernel Provider
+    pub static DISK_IO_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::DISK_IO_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_DISK_IO
+    );
+    /// Represents the Disk File IO Kernel Provider
+    pub static DISK_FILE_IO_PROVIDER: KernelProvider = KernelProvider::new(
+        kernel_guids::DISK_IO_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_DISK_FILE_IO
+    );
+    /// Represents the Dbg Pring Kernel Provider
+    pub static DEBUG_PRINT_PROVIDER: KernelProvider =
+        KernelProvider::new(kernel_guids::DEBUG_GUID, kernel_flags::EVENT_TRACE_FLAG_DBGPRINT);
+    /// Represents the Context Swtich Kernel Provider
+    pub static CONTEXT_SWITCH_PROVIDER: KernelProvider =
+        KernelProvider::new(kernel_guids::THREAD_GUID, kernel_flags::EVENT_TRACE_FLAG_CSWITCH);
+    /// Represents the ALPC Kernel Provider
+    pub static ALPC_PROVIDER: KernelProvider =
+        KernelProvider::new(kernel_guids::ALPC_GUID, kernel_flags::EVENT_TRACE_FLAG_ALPC);
 }
 
 /// Main Provider structure
@@ -569,7 +591,7 @@ mod test {
 
     #[test]
     fn test_kernel_provider_struct() {
-        let kernel_provider = KernelProvider::new("D396B546-287D-4712-A7F5-8BE226A8C643", 0x10000);
+        let kernel_provider = KernelProvider::new("D396B546-287D-4712-A7F5-8BE226A8C643".into(), 0x10000);
 
         assert_eq!(0x10000, kernel_provider.flags);
         assert_eq!(
@@ -589,5 +611,32 @@ mod test {
         assert_eq!(EVENT_TRACE_FLAG_IMAGE_LOAD, kernel_provider.flags);
         assert_eq!(true, kernel_provider.guid.is_some());
         assert_eq!(Guid::from(IMAGE_LOAD_GUID), kernel_provider.guid.unwrap());
+    }
+
+    #[test]
+    fn test_kernel_provider_guids_correct() {
+        assert_eq!(ALPC_GUID, Guid::from("45d8cccd-539f-4b72-a8b7-5c683142609a"));
+        assert_eq!(POWER_GUID, Guid::from("e43445e0-0903-48c3-b878-ff0fccebdd04"));
+        assert_eq!(DEBUG_GUID, Guid::from("13976d09-a327-438c-950b-7f03192815c7"));
+        assert_eq!(TCP_IP_GUID, Guid::from("9a280ac0-c8e0-11d1-84e2-00c04fb998a2"));
+        assert_eq!(UDP_IP_GUID, Guid::from("bf3a50c5-a9c9-4988-a005-2df0b7c80f80"));
+        assert_eq!(THREAD_GUID, Guid::from("3d6fa8d1-fe05-11d0-9dda-00c04fd7ba7c"));
+        assert_eq!(DISK_IO_GUID, Guid::from("3d6fa8d4-fe05-11d0-9dda-00c04fd7ba7c"));
+        assert_eq!(FILE_IO_GUID, Guid::from("90cbdc39-4a3e-11d1-84f4-0000f80464e3"));
+        assert_eq!(PROCESS_GUID, Guid::from("3d6fa8d0-fe05-11d0-9dda-00c04fd7ba7c"));
+        assert_eq!(REGISTRY_GUID, Guid::from("AE53722E-C863-11d2-8659-00C04FA321A1"));
+        assert_eq!(SPLIT_IO_GUID, Guid::from("d837ca92-12b9-44a5-ad6a-3a65b3578aa8"));
+        assert_eq!(OB_TRACE_GUID, Guid::from("89497f50-effe-4440-8cf2-ce6b1cdcaca7"));
+        assert_eq!(UMS_EVENT_GUID, Guid::from("9aec974b-5b8e-4118-9b92-3186d8002ce5"));
+        assert_eq!(PERF_INFO_GUID, Guid::from("ce1dbfb4-137e-4da6-87b0-3f59aa102cbc"));
+        assert_eq!(PAGE_FAULT_GUID, Guid::from("3d6fa8d3-fe05-11d0-9dda-00c04fd7ba7c"));
+        assert_eq!(IMAGE_LOAD_GUID, Guid::from("2cb15d1d-5fc1-11d2-abe1-00a0c911f518"));
+        assert_eq!(POOL_TRACE_GUID, Guid::from("0268a8b6-74fd-4302-9dd0-6e8f1795c0cf"));
+        assert_eq!(LOST_EVENT_GUID, Guid::from("6a399ae0-4bc6-4de9-870b-3657f8947e7e"));
+        assert_eq!(STACK_WALK_GUID, Guid::from("def2fe46-7bd6-4b80-bd94-f57fe20d0ce3"));
+        assert_eq!(EVENT_TRACE_GUID, Guid::from("68fdd900-4a3e-11d1-84f4-0000f80464e3"));
+        assert_eq!(MMCSS_TRACE_GUID, Guid::from("f8f10121-b617-4a56-868b-9df1b27fe32c"));
+        assert_eq!(SYSTEM_TRACE_GUID, Guid::from("9e814aad-3204-11d2-9a82-006008a86939"));
+        assert_eq!(EVENT_TRACE_CONFIG_GUID, Guid::from("01853a65-418f-4f36-aefc-dc0f1d2fd235"));
     }
 }

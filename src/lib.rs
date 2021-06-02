@@ -106,9 +106,6 @@ extern crate bitflags;
 extern crate num_derive;
 extern crate num_traits;
 
-#[macro_use]
-extern crate lazy_static;
-
 pub mod native;
 pub mod parser;
 pub mod property;
