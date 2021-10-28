@@ -61,7 +61,8 @@ pub(crate) fn property_size(mut event: EventRecord, name: &str) -> TdhNativeResu
 
     let mut desc = Etw::PROPERTY_DATA_DESCRIPTOR::default();
     desc.ArrayIndex = u32::MAX;
-    desc.PropertyName = name.as_utf16().as_ptr() as u64;
+    let name = name.as_utf16();
+    desc.PropertyName = name.as_ptr() as u64;
 
     unsafe {
         let status = Etw::TdhGetPropertySize(
