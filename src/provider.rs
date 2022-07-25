@@ -132,6 +132,7 @@ pub mod kernel_providers {
     }
 
     /// Represents a Kernel Provider structure which can be used to create a Kernel Provider
+    #[derive(Debug)]
     pub struct KernelProvider {
         /// Kernel Provider GUID
         pub guid: GUID,

@@ -6,7 +6,7 @@ use crate::native::tdh_types::Property;
 use crate::schema::Schema;
 
 /// Event Property information
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct PropertyInfo {
     /// Property attributes
     pub property: Property,
@@ -20,6 +20,7 @@ impl PropertyInfo {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct PropertyIter {
     properties: Vec<Property>,
 }

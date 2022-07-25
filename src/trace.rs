@@ -245,12 +245,14 @@ macro_rules! impl_base_trace {
 }
 
 /// User Trace struct
+#[derive(Debug)]
 pub struct UserTrace {
     data: TraceData,
     etw: evntrace::NativeEtw,
 }
 
 /// Kernel Trace struct
+#[derive(Debug)]
 pub struct KernelTrace {
     data: TraceData,
     etw: evntrace::NativeEtw,
