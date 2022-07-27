@@ -68,8 +68,7 @@ type ParserResult<T> = Result<T, ParserError>;
 /// Trait to try and parse a type
 ///
 /// This trait has to be implemented in order to be able to parse a type we want to retrieve from
-/// within an Event. On success the parsed value will be returned within a Result, on error an Err
-/// should be returned accordingly
+/// within an Event.
 ///
 /// An implementation for most of the Primitive Types is created by using a Macro, any other needed type
 /// requires this trait to be implemented
