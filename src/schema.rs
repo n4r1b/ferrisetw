@@ -97,7 +97,7 @@ impl SchemaLocator {
         }
     }
 
-    /// Use the `event_schema` function to retrieve the Schema of an ETW Event
+    /// Retrieve the Schema of an ETW Event
     ///
     /// # Arguments
     /// * `event` - The [EventRecord] that's passed to the callback
@@ -106,8 +106,6 @@ impl SchemaLocator {
     /// This is the first function that should be called within a Provider callback.
     /// It consumes the ETW event and wrap it into a [Schema] that represents it
     /// and provides a way to access its fields.
-    ///
-    /// This function can fail, if it does it will return a [SchemaError]
     ///
     /// # Example
     /// ```rust
@@ -131,10 +129,12 @@ impl SchemaLocator {
     }
 }
 
-/// Represents a Schema
+/// Represents an `EventRecord` along with its suitable Schema
+///
+/// It is usually built from [`SchemaLocator::event_schema`].
 ///
 /// This structure holds a [TraceEventInfo](https://docs.microsoft.com/en-us/windows/win32/api/tdh/ns-tdh-trace_event_info)
-/// which let us obtain information from the ETW event
+/// which let us obtain information from the ETW event.
 pub struct Schema {
     record: EventRecord,
     schema: Arc<TraceEventInfoRaw>,
@@ -161,9 +161,7 @@ impl Schema {
         self.record
     }
 
-    /// Use the `event_id` function to obtain the EventId of the Event Record
-    ///
-    /// This getter returns the EventId of the ETW Event that triggered the registered callback
+    /// Return the EventId of the ETW Event that triggered the registered callback
     ///
     /// # Example
     /// ```rust
@@ -176,9 +174,7 @@ impl Schema {
         self.record.EventHeader.EventDescriptor.Id
     }
 
-    /// Use the `opcode` function to obtain the Opcode of the Event Record
-    ///
-    /// This getter returns the opcode of the ETW Event that triggered the registered callback
+    /// Return the opcode of the ETW Event that triggered the registered callback
     ///
     /// # Example
     /// ```rust
@@ -191,9 +187,7 @@ impl Schema {
         self.record.EventHeader.EventDescriptor.Opcode
     }
 
-    /// Use the `event_flags` function to obtain the Event Flags of the [EventRecord]
-    ///
-    /// This getter returns the Event Flags of the ETW Event that triggered the registered callback
+    /// Returns the Event Flags of the ETW Event that triggered the registered callback
     ///
     /// # Example
     /// ```rust
@@ -206,9 +200,7 @@ impl Schema {
         self.record.EventHeader.Flags
     }
 
-    /// Use the `event_version` function to obtain the Version of the [EventRecord]
-    ///
-    /// This getter returns the Version of the ETW Event that triggered the registered callback
+    /// Returns the Version of the ETW Event that triggered the registered callback
     ///
     /// # Example
     /// ```rust
@@ -221,9 +213,7 @@ impl Schema {
         self.record.EventHeader.EventDescriptor.Version
     }
 
-    /// Use the `process_id` function to obtain the ProcessId of the [EventRecord]
-    ///
-    /// This getter returns the ProcessId of the process that triggered the ETW Event
+    /// Returns the ProcessId of the process that triggered the ETW Event
     ///
     /// # Example
     /// ```rust
@@ -236,9 +226,7 @@ impl Schema {
         self.record.EventHeader.ProcessId
     }
 
-    /// Use the `thread_id` function to obtain the ThreadId of the [EventRecord]
-    ///
-    /// This getter returns the ThreadId of the thread that triggered the ETW Event
+    /// Returns the ThreadId of the thread that triggered the ETW Event
     ///
     /// # Example
     /// ```rust
@@ -251,9 +239,7 @@ impl Schema {
         self.record.EventHeader.ThreadId
     }
 
-    /// Use the `timestamp` function to obtain the TimeStamp of the [EventRecord]
-    ///
-    /// This getter returns the TimeStamp of the ETW Event
+    /// Returns the TimeStamp of the ETW Event
     ///
     /// # Example
     /// ```rust
@@ -266,9 +252,7 @@ impl Schema {
         self.record.EventHeader.TimeStamp
     }
 
-    /// Use the `activity_id` function to obtain the ActivityId of the [EventRecord]
-    ///
-    /// This getter returns the ActivityId from the ETW Event, this value is used to related Two events
+    /// Returns the ActivityId from the ETW Event, this value is used to related Two events
     ///
     /// # Example
     /// ```rust
