@@ -119,55 +119,35 @@ impl<'a> Parser<'a> {
         }
     }
 
-    #[allow(dead_code)]
-    fn fill_cache(
-        schema: &Schema,
-        properties: &PropertyIter,
-    ) -> ParserResult<HashMap<String, PropertyInfo>> {
-        let user_buffer_len = schema.user_buffer().len();
-
-        Ok(properties.properties_iter().iter().try_fold(
-            HashMap::new(),
-            |mut cache, x| -> ParserResult<HashMap<String, PropertyInfo>> {
-                let prop_size = tdh::property_size(schema.record(), &x.name)? as usize;
-
-                if user_buffer_len < prop_size {
-                    return Err(ParserError::PropertyError(
-                        "Property length out of buffer bounds".to_owned(),
-                    ));
-                }
-                let prop_buffer = schema.user_buffer()[..prop_size]
-                    .iter()
-                    .take(prop_size)
-                    .cloned()
-                    .collect();
-
-                cache.insert(x.name.clone(), PropertyInfo::create(x.clone(), prop_buffer));
-
-                Ok(cache)
-            },
-        )?)
-    }
-
     // TODO: Find a cleaner way to do this, not very happy with it rn
     fn find_property_size(&self, property: &Property) -> ParserResult<usize> {
+        // There are several cases
+        //  * regular case, where property.len() directly makes sense
+        //  * but EVENT_PROPERTY_INFO.length is an union, and (in its lengthPropertyIndex form) can refeer to another field
+        //    e.g.: the WinInet provider manifest has fields such as `<data name="Verb" inType="win:AnsiString" length="_VerbLength"/>`
+        //    In this case, we defer to TDH to know the right length.
+
         if property
             .flags
-            .intersects(PropertyFlags::PROPERTY_PARAM_LENGTH)
+            .intersects(PropertyFlags::PROPERTY_PARAM_LENGTH) == false
             && property.len() > 0
         {
             let size;
-            if property.in_type() == TdhInType::InTypePointer {
+            if property.in_type() != TdhInType::InTypePointer {
+                size = property.len() as usize;
+            } else {
+                // There is an exception regarding pointer size though
+                // When reading captures from another architecture, we should take care of the _source_ pointer size, not the current architecture's pointer size.
                 size = if (self.schema.event_flags() & EVENT_HEADER_FLAG_32_BIT_HEADER) != 0 {
                     4
                 } else {
                     8
                 };
-            } else {
-                size = property.len() as usize;
             }
             return Ok(size);
         }
+
+        // Actually, before asking TDH for the right length, there are some cases where we could determine ourselves.
 
         // TODO: Study heuristic method used in krabsetw :)
         if property.flags.is_empty() && property.len() > 0 {
