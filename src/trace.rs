@@ -327,12 +327,12 @@ impl TraceTrait for UserTrace {
         if let Ok(providers) = self.data.providers.read() {
             providers.iter().for_each(|prov| {
                 // Should always be Some but just in case
-                if prov.guid.is_some() {
+                if let Some(prov_guid) = prov.guid {
                     let parameters =
-                        EnableTraceParameters::create(prov.guid.unwrap(), prov.trace_flags);
+                        EnableTraceParameters::create(prov_guid, prov.trace_flags);
                     // Fixme: return error if this fails
                     self.etw.enable_trace(
-                        prov.guid.unwrap().clone(),
+                        prov_guid.clone(),
                         prov.any,
                         prov.all,
                         prov.level,
