@@ -5,7 +5,15 @@
 //!
 //! This module shouldn't be accessed directly. Modules from the crate level provide a safe API to interact
 //! with the crate
-use windows::core::GUID;
+use windows::core::{GUID, PCSTR};
+use windows::Win32::Foundation::FILETIME;
+use windows::Win32::System::Diagnostics::Etw;
+use windows::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
+use windows::Win32::Foundation::ERROR_ALREADY_EXISTS;
+use windows::Win32::Foundation::ERROR_CTX_CLOSE_PENDING;
+use windows::Win32::Foundation::ERROR_WMI_INSTANCE_NOT_FOUND;
+
+
 use super::etw_types::*;
 use crate::provider::Provider;
 use crate::trace::{TraceData, TraceProperties, TraceTrait};
@@ -33,7 +41,7 @@ impl From<std::io::Error> for EvntraceNativeError {
 
 pub(crate) type EvntraceNativeResult<T> = Result<T, EvntraceNativeError>;
 
-unsafe fn trace_callback_thunk(event_record: PEventRecord) {
+unsafe extern "system" fn trace_callback_thunk(event_record: PEventRecord) {
     let ctx: &mut TraceData = TraceData::unsafe_get_callback_ctx((*event_record).UserContext);
     ctx.on_event(*event_record);
 }
@@ -95,14 +103,14 @@ impl NativeEtw {
             return Err(EvntraceNativeError::InvalidHandle);
         }
 
-        let mut clone_handle = self.session_handle.clone();
+        let clone_handle = self.session_handle.clone();
         std::thread::spawn(move || {
-            let mut now = WindowsProgramming::FILETIME::default();
+            let mut now = FILETIME::default();
             unsafe {
-                WindowsProgramming::GetSystemTimeAsFileTime(&mut now);
+                GetSystemTimeAsFileTime(&mut now);
 
-                Etw::ProcessTrace(&mut clone_handle, 1, &mut now, std::ptr::null_mut());
-                // if Etw::ProcessTrace(&mut clone_handle, 1, &mut now, std::ptr::null_mut()) != 0 {
+                Etw::ProcessTrace(&[clone_handle], &mut now, std::ptr::null_mut());
+                // if Etw::ProcessTrace(&[clone_handlee], &mut now, std::ptr::null_mut()) != 0 {
                 //     return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
                 // }
             }
@@ -128,11 +136,11 @@ impl NativeEtw {
         unsafe {
             let status = Etw::StartTraceA(
                 &mut self.registration_handle,
-                trace_data.name.clone(),
+                PCSTR::from_raw(trace_data.name.as_ptr()),
                 &mut *self.info.properties,
             );
 
-            if status == WIN32_ERROR::ERROR_ALREADY_EXISTS.0 {
+            if status == ERROR_ALREADY_EXISTS.0 {
                 return Err(EvntraceNativeError::AlreadyExist);
             } else if status != 0 {
                 return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
@@ -157,7 +165,7 @@ impl NativeEtw {
     fn stop_trace(&mut self, trace_data: &TraceData) -> EvntraceNativeResult<()> {
         self.control_trace(
             trace_data,
-            EvenTraceControl::from(ControlValues::ControlStop as u32),
+            windows::Win32::System::Diagnostics::Etw::EVENT_TRACE_CONTROL_STOP,
         )?;
         Ok(())
     }
@@ -169,7 +177,7 @@ impl NativeEtw {
 
         unsafe {
             let status = Etw::CloseTrace(self.session_handle);
-            if status != 0 && status != WIN32_ERROR::ERROR_CTX_CLOSE_PENDING.0 {
+            if status != 0 && status != ERROR_CTX_CLOSE_PENDING.0 {
                 return Err(EvntraceNativeError::IoError(
                     std::io::Error::from_raw_os_error(status as i32),
                 ));
@@ -188,12 +196,12 @@ impl NativeEtw {
         unsafe {
             let status = Etw::ControlTraceA(
                 0,
-                trace_data.name.clone(),
+                PCSTR::from_raw(trace_data.name.as_ptr()),
                 &mut *self.info.properties,
                 control_code,
             );
 
-            if status != 0 && status != WIN32_ERROR::ERROR_WMI_INSTANCE_NOT_FOUND.0 {
+            if status != 0 && status != ERROR_WMI_INSTANCE_NOT_FOUND.0 {
                 return Err(EvntraceNativeError::IoError(
                     std::io::Error::from_raw_os_error(status as i32),
                 ));

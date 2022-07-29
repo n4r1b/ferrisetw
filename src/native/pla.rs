@@ -5,9 +5,9 @@
 //!
 //! This module shouldn't be accessed directly. Modules from the the crate level provide a safe API to interact
 //! with the crate
-use super::bindings::Windows::Win32::Automation::{SysStringLen, BSTR};
 use std::mem::MaybeUninit;
 use windows::core::GUID;
+use windows::Win32::Foundation::BSTR;
 
 /// Pla native module errors
 #[derive(Debug, PartialEq)]
@@ -100,14 +100,14 @@ fn check_hr(hr: i32) -> ProvidersComResult<()> {
 }
 
 // https://github.com/microsoft/krabsetw/blob/31679cf84bc85360158672699f2f68a821e8a6d0/krabs/krabs/provider.hpp#L487
-pub(crate) unsafe fn get_provider_guid(name: &str) -> ProvidersComResult<Guid> {
+pub(crate) unsafe fn get_provider_guid(name: &str) -> ProvidersComResult<GUID> {
     com::runtime::init_runtime()?;
 
     let all_providers = com::runtime::create_instance::<
         pla_interfaces::ITraceDataProviderCollection,
     >(&pla_interfaces::CLSID_TRACE_DATA_PROV_COLLECTION)?;
 
-    let mut guid: MaybeUninit<Guid> = MaybeUninit::uninit();
+    let mut guid: MaybeUninit<GUID> = MaybeUninit::uninit();
     let mut hr = all_providers.get_trace_data_providers(BSTR::from(""));
     check_hr(hr)?;
 
@@ -130,10 +130,7 @@ pub(crate) unsafe fn get_provider_guid(name: &str) -> ProvidersComResult<Guid> {
         check_hr(hr)?;
 
         let raw_name = raw_name.assume_init();
-        let prov_name = String::from_utf16_lossy(std::slice::from_raw_parts(
-            raw_name.abi(),
-            SysStringLen(raw_name) as usize,
-        ));
+        let prov_name = String::from_utf16_lossy(raw_name.as_wide());
 
         index.increment_val();
         // check if matches, if it does get guid and break

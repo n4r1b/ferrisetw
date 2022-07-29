@@ -271,7 +271,6 @@ impl_try_parse_primitive!(isize);
 impl TryParse<String> for Parser<'_> {
     fn try_parse(&mut self, name: &str) -> ParserResult<String> {
         let prop_info = self.find_property(name)?;
-        let prop_info: &PropertyInfo = prop_info.borrow();
 
         // TODO: Handle errors and type checking better
         let res = match prop_info.property.in_type() {
@@ -282,7 +281,7 @@ impl TryParse<String> for Parser<'_> {
                 .trim_matches(char::default())
                 .to_string(),
             TdhInType::InTypeSid => {
-                sddl::convert_sid_to_string(prop_info.buffer.as_ptr() as isize)?
+                sddl::convert_sid_to_string(prop_info.buffer.as_ptr() as *const _)?
             }
             TdhInType::InTypeCountedString => unimplemented!(),
             _ => return Err(ParserError::InvalidType),

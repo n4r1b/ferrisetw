@@ -5,7 +5,9 @@
 //!
 //! At the moment the only option available is to check if the actual System Version is greater than
 //! Win8, is the only check we need for the crate to work as expected
-use super::bindings::Windows::Win32::{SystemServices, WindowsProgramming};
+use windows::Win32::System::SystemInformation::{OSVERSIONINFOEXA, VER_MAJORVERSION, VER_MINORVERSION, VER_SERVICEPACKMAJOR};
+use windows::Win32::System::SystemInformation::{VerifyVersionInfoA, VerSetConditionMask};
+
 use crate::traits::*;
 
 /// Version Helper native error
@@ -25,9 +27,9 @@ impl From<std::io::Error> for VersionHelperError {
 
 pub(crate) type VersionHelperResult<T> = Result<T, VersionHelperError>;
 
-type OsVersionInfo = WindowsProgramming::OSVERSIONINFOEXA;
+type OsVersionInfo = OSVERSIONINFOEXA;
 // Safe cast, we now the value fits in a u8 (VER_GREATER_EQUAL == 3)
-const VER_GREATER_OR_EQUAL: u8 = SystemServices::VER_GREATER_EQUAL as u8;
+const VER_GREATER_OR_EQUAL: u8 = windows::Win32::System::SystemServices::VER_GREATER_EQUAL as u8;
 
 fn verify_system_version(major: u8, minor: u8, sp_major: u16) -> VersionHelperResult<bool> {
     let mut os_version = OsVersionInfo::default();
@@ -38,27 +40,27 @@ fn verify_system_version(major: u8, minor: u8, sp_major: u16) -> VersionHelperRe
 
     let mut condition_mask = 0;
     unsafe {
-        condition_mask = WindowsProgramming::VerSetConditionMask(
+        condition_mask = VerSetConditionMask(
             condition_mask,
-            WindowsProgramming::VER_FLAGS::VER_MAJORVERSION,
+            VER_MAJORVERSION,
             VER_GREATER_OR_EQUAL,
         );
-        condition_mask = WindowsProgramming::VerSetConditionMask(
+        condition_mask = VerSetConditionMask(
             condition_mask,
-            WindowsProgramming::VER_FLAGS::VER_MINORVERSION,
+            VER_MINORVERSION,
             VER_GREATER_OR_EQUAL,
         );
-        condition_mask = WindowsProgramming::VerSetConditionMask(
+        condition_mask = VerSetConditionMask(
             condition_mask,
-            WindowsProgramming::VER_FLAGS::VER_SERVICEPACKMAJOR,
+            VER_SERVICEPACKMAJOR,
             VER_GREATER_OR_EQUAL,
         );
 
-        Ok(WindowsProgramming::VerifyVersionInfoA(
+        Ok(VerifyVersionInfoA(
             &mut os_version,
-            WindowsProgramming::VER_FLAGS::VER_MAJORVERSION
-                | WindowsProgramming::VER_FLAGS::VER_MINORVERSION
-                | WindowsProgramming::VER_FLAGS::VER_SERVICEPACKMAJOR,
+            VER_MAJORVERSION
+                | VER_MINORVERSION
+                | VER_SERVICEPACKMAJOR,
             condition_mask,
         ) != false)
     }

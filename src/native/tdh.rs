@@ -5,9 +5,10 @@
 //!
 //! This module shouldn't be accessed directly. Modules from the the crate level provide a safe API to interact
 //! with the crate
-use super::bindings::Windows::Win32::{Debug::WIN32_ERROR, Etw};
 use super::etw_types::*;
 use crate::traits::*;
+use windows::Win32::System::Diagnostics::Etw;
+use windows::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
 
 /// Tdh native module errors
 #[derive(Debug)]
@@ -31,11 +32,10 @@ pub(crate) fn schema_from_tdh(mut event: EventRecord) -> TdhNativeResult<TraceEv
     unsafe {
         if Etw::TdhGetEventInformation(
             &mut event,
-            0,
-            std::ptr::null_mut(),
+            &[],
             std::ptr::null_mut(),
             &mut buffer_size,
-        ) != WIN32_ERROR::ERROR_INSUFFICIENT_BUFFER.0
+        ) != ERROR_INSUFFICIENT_BUFFER.0
         {
             return Err(TdhNativeError::IoError(std::io::Error::last_os_error()));
         }
@@ -43,8 +43,7 @@ pub(crate) fn schema_from_tdh(mut event: EventRecord) -> TdhNativeResult<TraceEv
         let mut buffer = TraceEventInfoRaw::alloc(buffer_size);
         if Etw::TdhGetEventInformation(
             &mut event,
-            0,
-            std::ptr::null_mut(),
+            &[],
             buffer.info_as_ptr() as *mut _,
             &mut buffer_size,
         ) != 0
@@ -67,10 +66,8 @@ pub(crate) fn property_size(mut event: EventRecord, name: &str) -> TdhNativeResu
     unsafe {
         let status = Etw::TdhGetPropertySize(
             &mut event,
-            0,
-            std::ptr::null_mut(),
-            1,
-            &mut desc,
+            &[],
+            &[desc],
             &mut property_size,
         );
         if status != 0 {

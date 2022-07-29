@@ -1,9 +1,10 @@
-use super::bindings::Windows::Win32::{
-    Security,
-    SystemServices::{LocalFree, PSTR},
-};
 use crate::traits::*;
 use std::str::Utf8Error;
+use core::ffi::c_void;
+use windows::core::PSTR;
+use windows::Win32::Foundation::PSID;
+use windows::Win32::System::Memory::LocalFree;
+use windows::Win32::Security::Authorization::ConvertSidToStringSidA;
 
 /// SDDL native error
 #[derive(Debug)]
@@ -30,10 +31,11 @@ impl From<Utf8Error> for SddlNativeError {
 
 pub(crate) type SddlResult<T> = Result<T, SddlNativeError>;
 
-pub fn convert_sid_to_string(sid: isize) -> SddlResult<String> {
-    let mut tmp = PSTR::NULL;
+pub fn convert_sid_to_string(sid: *const c_void) -> SddlResult<String> {
+    let mut tmp = PSTR::null();
     unsafe {
-        if !Security::ConvertSidToStringSidA(Security::PSID(sid), &mut tmp).as_bool() {
+        let not_really_mut_sid = sid as *mut _; // That's OK to widely change the constness here, because it will be given as an _input_ of ConvertSidToStringSidA and will not be modified
+        if !ConvertSidToStringSidA(PSID(not_really_mut_sid), &mut tmp).as_bool() {
             return Err(SddlNativeError::IoError(std::io::Error::last_os_error()));
         }
 
@@ -54,7 +56,7 @@ mod test {
     #[test]
     fn test_convert_string_to_sid() {
         let sid: Vec<u8> = vec![1, 2, 0, 0, 0, 0, 0, 5, 0x20, 0, 0, 0, 0x20, 2, 0, 0];
-        if let Ok(string_sid) = convert_sid_to_string(sid.as_ptr() as isize) {
+        if let Ok(string_sid) = convert_sid_to_string(sid.as_ptr() as *const c_void) {
             assert_eq!(string_sid, "S-1-5-32-544");
         }
     }

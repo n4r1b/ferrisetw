@@ -6,10 +6,6 @@
 //!
 //! In most cases a user of the crate won't have to deal with this and can directly obtain the data
 //! needed by using the functions exposed by the modules at the crate level
-use super::bindings::Windows::Win32::{
-    Etw,
-    SystemServices::{MAX_PATH, PSTR},
-};
 use crate::native::tdh_types::Property;
 use crate::provider::Provider;
 use crate::trace::{TraceData, TraceProperties, TraceTrait};
@@ -17,6 +13,9 @@ use crate::utils;
 use std::fmt::Formatter;
 use std::sync::RwLock;
 use windows::core::GUID;
+use windows::core::PSTR;
+use windows::Win32::Foundation::MAX_PATH;
+use windows::Win32::System::Diagnostics::Etw;
 
 // typedef ULONG64 TRACEHANDLE, *PTRACEHANDLE;
 pub(crate) type TraceHandle = u64;
@@ -166,7 +165,7 @@ impl TraceInfo {
         }
 
         self.properties.0.LogFileMode |= T::augmented_file_mode();
-        self.properties.0.EnableFlags = Etw::EVENT_TRACE_FLAG::from(T::enable_flags(providers));
+        self.properties.0.EnableFlags = Etw::EVENT_TRACE_FLAG(T::enable_flags(providers));
 
         self.properties.0.LoggerNameOffset = offset_of!(TraceInfo, log_file_name) as u32;
         self.trace_name[..trace_name.len()].copy_from_slice(trace_name.as_bytes())
@@ -192,29 +191,27 @@ impl Default for TraceInfo {
 pub struct EventTraceLogfile(Etw::EVENT_TRACE_LOGFILEA);
 
 impl EventTraceLogfile {
-    pub fn create<T>(trace_data: &TraceData, callback: unsafe fn(T)) -> Self {
+    pub fn create(trace_data: &TraceData, callback: unsafe extern "system" fn(*mut EventRecord)) -> Self {
         let mut log_file = EventTraceLogfile::default();
 
-        log_file.0.LoggerName = PSTR::from(trace_data.name.clone());
+        log_file.0.LoggerName = pstr_from(trace_data.name.clone());
         log_file.0.Anonymous1.ProcessTraceMode =
             u32::from(ProcessTraceMode::RealTime) | u32::from(ProcessTraceMode::EventRecord);
 
-        log_file.0.Anonymous2.EventRecordCallback = callback as *mut _;
+        log_file.0.Anonymous2.EventRecordCallback = Some(callback);
         log_file.0.Context = unsafe { std::mem::transmute(trace_data as *const _) };
 
         log_file
     }
 }
 
-impl From<String> for PSTR {
-    fn from(val: String) -> Self {
-        PSTR(
-            val.bytes()
-                .chain(::std::iter::once(0))
-                .collect::<std::vec::Vec<u8>>()
-                .as_mut_ptr(),
-        )
-    }
+fn pstr_from(val: String) -> PSTR {
+    PSTR(
+        val.bytes()
+            .chain(::std::iter::once(0))
+            .collect::<std::vec::Vec<u8>>()
+            .as_mut_ptr(),
+    )
 }
 
 impl Default for EventTraceLogfile {
@@ -348,10 +345,10 @@ pub enum DecodingSource {
 impl From<Etw::DECODING_SOURCE> for DecodingSource {
     fn from(val: Etw::DECODING_SOURCE) -> Self {
         match val {
-            Etw::DECODING_SOURCE::DecodingSourceXMLFile => DecodingSource::DecodingSourceXMLFile,
-            Etw::DECODING_SOURCE::DecodingSourceWbem => DecodingSource::DecodingSourceWbem,
-            Etw::DECODING_SOURCE::DecodingSourceWPP => DecodingSource::DecodingSourceWPP,
-            Etw::DECODING_SOURCE::DecodingSourceTlg => DecodingSource::DecodingSourceTlg,
+            Etw::DecodingSourceXMLFile => DecodingSource::DecodingSourceXMLFile,
+            Etw::DecodingSourceWbem => DecodingSource::DecodingSourceWbem,
+            Etw::DecodingSourceWPP => DecodingSource::DecodingSourceWPP,
+            Etw::DecodingSourceTlg => DecodingSource::DecodingSourceTlg,
             _ => DecodingSource::DecodingSourceMax,
         }
     }
