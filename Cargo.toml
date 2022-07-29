@@ -29,8 +29,5 @@ bitflags = "1.2.1"
 # thiserror = "~1.0"
 # anyhow = "~1.0"
 
-[build-dependencies]
-windows_macros = "0.9.1"
-
 [lib]
 doctest = false
