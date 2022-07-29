@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::rc::Rc;
-use windows::Guid;
+use windows::core::GUID;
 
 /// Parser module errors
 #[derive(Debug)]
@@ -292,8 +292,8 @@ impl TryParse<String> for Parser<'_> {
     }
 }
 
-impl TryParse<Guid> for Parser<'_> {
-    fn try_parse(&mut self, name: &str) -> Result<Guid, ParserError> {
+impl TryParse<GUID> for Parser<'_> {
+    fn try_parse(&mut self, name: &str) -> Result<GUID, ParserError> {
         let prop_info = self.find_property(name)?;
         let prop_info: &PropertyInfo = prop_info.borrow();
 
@@ -303,7 +303,7 @@ impl TryParse<Guid> for Parser<'_> {
             return Err(ParserError::LengthMismatch);
         }
 
-        Ok(Guid::from(guid_string.as_str()))
+        Ok(GUID::from(guid_string.as_str()))
     }
 }
 

@@ -7,7 +7,7 @@
 //! with the crate
 use super::bindings::Windows::Win32::Automation::{SysStringLen, BSTR};
 use std::mem::MaybeUninit;
-use windows::{Abi, Guid};
+use windows::core::GUID;
 
 /// Pla native module errors
 #[derive(Debug, PartialEq)]
@@ -154,7 +154,7 @@ pub(crate) unsafe fn get_provider_guid(name: &str) -> ProvidersComResult<Guid> {
 }
 
 mod pla_interfaces {
-    use super::{Guid, Variant, BSTR};
+    use super::{GUID, Variant, BSTR};
     use com::sys::IID;
     use com::{interfaces, interfaces::iunknown::IUnknown, sys::HRESULT};
 
@@ -203,7 +203,7 @@ mod pla_interfaces {
            pub fn get_guid(
                 &self,
                 #[pass_through]
-                guid: *mut Guid
+                guid: *mut GUID
            ) -> HRESULT;
            pub fn put_guid(&self) -> HRESULT;
            pub fn get_level(&self) -> HRESULT;
@@ -242,7 +242,7 @@ mod test {
             let guid =
                 get_provider_guid("Microsoft-Windows-Kernel-Process").expect("Error Getting GUID");
 
-            assert_eq!(Guid::from("22FB2CD6-0E7B-422B-A0C7-2FAD1FD0E716"), guid);
+            assert_eq!(GUID::from("22FB2CD6-0E7B-422B-A0C7-2FAD1FD0E716"), guid);
         }
     }
 

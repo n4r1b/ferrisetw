@@ -5,13 +5,12 @@
 //!
 //! This module shouldn't be accessed directly. Modules from the crate level provide a safe API to interact
 //! with the crate
-use super::bindings::Windows::Win32::{Debug::WIN32_ERROR, Etw, WindowsProgramming};
+use windows::core::GUID;
 use super::etw_types::*;
 use crate::provider::Provider;
 use crate::trace::{TraceData, TraceProperties, TraceTrait};
 use crate::traits::*;
 use std::sync::RwLock;
-use windows::Guid;
 
 /// Evntrace native module errors
 #[derive(Debug)]
@@ -206,7 +205,7 @@ impl NativeEtw {
 
     pub(crate) fn enable_trace(
         &self,
-        mut guid: Guid,
+        mut guid: GUID,
         any: u64,
         all: u64,
         level: u8,

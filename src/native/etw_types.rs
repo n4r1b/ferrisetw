@@ -16,7 +16,7 @@ use crate::trace::{TraceData, TraceProperties, TraceTrait};
 use crate::utils;
 use std::fmt::Formatter;
 use std::sync::RwLock;
-use windows::Guid;
+use windows::core::GUID;
 
 // typedef ULONG64 TRACEHANDLE, *PTRACEHANDLE;
 pub(crate) type TraceHandle = u64;
@@ -245,7 +245,7 @@ impl std::ops::DerefMut for EventTraceLogfile {
 pub struct EnableTraceParameters(Etw::ENABLE_TRACE_PARAMETERS);
 
 impl EnableTraceParameters {
-    pub fn create(guid: Guid, trace_flags: u32) -> Self {
+    pub fn create(guid: GUID, trace_flags: u32) -> Self {
         let mut params = EnableTraceParameters::default();
         params.0.ControlFlags = 0;
         params.0.Version = Etw::ENABLE_TRACE_PARAMETERS_VERSION_2;
@@ -378,7 +378,7 @@ impl TraceEventInfoRaw {
         self.info.as_mut_ptr()
     }
 
-    pub(crate) fn provider_guid(&self) -> Guid {
+    pub(crate) fn provider_guid(&self) -> GUID {
         TraceEventInfo::from(self).ProviderGuid
     }
 

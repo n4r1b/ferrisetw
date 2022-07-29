@@ -6,7 +6,7 @@ use crate::native::tdh;
 use crate::native::tdh_types::Property;
 use std::collections::HashMap;
 use std::sync::Arc;
-use windows::Guid;
+use windows::core::GUID;
 
 /// Schema module errors
 #[derive(Debug)]
@@ -199,7 +199,7 @@ impl Schema {
     ///     let schema = schema_locator.event_schema(record)?;
     ///     let event_version = schema.event_version();
     /// };
-    /// ```  
+    /// ```
     pub fn event_version(&self) -> u8 {
         self.record.EventHeader.EventDescriptor.Version
     }
@@ -214,7 +214,7 @@ impl Schema {
     ///     let schema = schema_locator.event_schema(record)?;
     ///     let pid = schema.process_id();
     /// };
-    /// ```  
+    /// ```
     pub fn process_id(&self) -> u32 {
         self.record.EventHeader.ProcessId
     }
@@ -229,7 +229,7 @@ impl Schema {
     ///     let schema = schema_locator.event_schema(record)?;
     ///     let tid = schema.thread_id();
     /// };
-    /// ```  
+    /// ```
     pub fn thread_id(&self) -> u32 {
         self.record.EventHeader.ThreadId
     }
@@ -244,7 +244,7 @@ impl Schema {
     ///     let schema = schema_locator.event_schema(record)?;
     ///     let timestamp = schema.timestamp();
     /// };
-    /// ```  
+    /// ```
     pub fn timestamp(&self) -> i64 {
         self.record.EventHeader.TimeStamp
     }
@@ -261,7 +261,7 @@ impl Schema {
     /// };
     /// ```
     /// [TraceEventInfo]: crate::native::etw_types::TraceEventInfo
-    pub fn activity_id(&self) -> Guid {
+    pub fn activity_id(&self) -> GUID {
         self.record.EventHeader.ActivityId
     }
 
