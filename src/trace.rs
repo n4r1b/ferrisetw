@@ -7,7 +7,7 @@ use crate::native::{evntrace, version_helper};
 use crate::provider::Provider;
 use crate::{provider, schema, utils};
 use std::sync::RwLock;
-use windows::Guid;
+use windows::core::GUID;
 
 const KERNEL_LOGGER_NAME: &str = "NT Kernel Logger";
 const SYSTEM_TRACE_CONTROL_GUID: &str = "9e814aad-3204-11d2-9a82-006008a86939";
@@ -312,8 +312,8 @@ pub trait TraceTrait: TraceBaseTrait {
     fn enable_flags(_providers: &RwLock<Vec<Provider>>) -> u32 {
         0
     }
-    fn trace_guid() -> Guid {
-        Guid::new().unwrap_or(Guid::zeroed())
+    fn trace_guid() -> GUID {
+        GUID::new().unwrap_or(GUID::zeroed())
     }
 }
 
@@ -419,11 +419,11 @@ impl TraceTrait for KernelTrace {
         flags
     }
 
-    fn trace_guid() -> Guid {
+    fn trace_guid() -> GUID {
         if version_helper::is_win8_or_greater() {
-            Guid::new().unwrap_or(Guid::zeroed())
+            GUID::new().unwrap_or(GUID::zeroed())
         } else {
-            Guid::from(SYSTEM_TRACE_CONTROL_GUID)
+            GUID::from(SYSTEM_TRACE_CONTROL_GUID)
         }
     }
 }

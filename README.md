@@ -34,8 +34,8 @@ fn wmi_callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
                     .try_parse("ProviderName")
                     .unwrap_or(String::from("ProviderName missing"));
                 // Could also use String as type
-                let provider_guid: Guid =
-                    parser.try_parse("ProviderGuid").unwrap_or(Guid::zeroed());
+                let provider_guid: GUID =
+                    parser.try_parse("ProviderGuid").unwrap_or(GUID::zeroed());
                 println!(
                     "WMI-Activity -> ProviderName {}, ProviderGuid: {:?}, Operation: {}",
                     provider_name, provider_guid, op
