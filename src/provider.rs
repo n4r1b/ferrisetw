@@ -8,6 +8,9 @@ use crate::schema;
 use std::sync::{Arc, RwLock};
 use windows::core::GUID;
 
+pub(crate) mod event_filter;
+pub use event_filter::EventFilter;
+
 mod trace_flags;
 pub use trace_flags::TraceFlags;
 
@@ -286,9 +289,10 @@ pub struct Provider {
     pub trace_flags: TraceFlags,
     /// Provider kernel flags, only apply to KernelProvider
     pub flags: u32, // Only applies to KernelProviders
+    /// Provider filters
+    filters: Vec<EventFilter>,
     // perfinfo
     callbacks: Arc<RwLock<Vec<EtwCallback>>>,
-    // filters: RwLock<Vec<F>>,
 }
 
 impl std::fmt::Debug for Provider {
@@ -309,6 +313,7 @@ impl Provider {
             level: 5,
             trace_flags: TraceFlags::empty(),
             flags: 0,
+            filters: Vec::new(),
             callbacks: Arc::new(RwLock::new(Vec::new())),
         }
     }
@@ -325,6 +330,7 @@ impl Provider {
             level: 5,
             trace_flags: TraceFlags::empty(),
             flags: kernel_provider.flags,
+            filters: Vec::new(),
             callbacks: Arc::new(RwLock::new(Vec::new())),
         }
     }
@@ -457,16 +463,25 @@ impl Provider {
         self
     }
 
-    /*
-    pub fn add_filter(&mut self) -> ProviderResult<()> {
-        if let Ok(mut filters) = self.callbacks.write() {
-            self.filters.push(callback_info);
-
-            return Ok(());
-        }
-        Ok(())
+    /// Add a filter to this Provider.
+    ///
+    /// Adding multiple filters will bind them with an `AND` relationship.<br/>
+    /// If you want an `OR` relationship, include them in the same `EventFilter`.
+    ///
+    /// # Example
+    /// ```
+    /// # use ferrisetw::provider::{EventFilter, Provider};
+    /// let only_events_18_or_42 = EventFilter::ByEventIds(vec![18, 42]);
+    /// let only_pid_1234 = EventFilter::ByPids(vec![1234]);
+    ///
+    /// Provider::new()
+    ///     .add_filter(only_events_18_or_42)
+    ///     .add_filter(only_pid_1234);
+    /// ```
+    pub fn add_filter(mut self, filter: EventFilter) -> Self {
+        self.filters.push(filter);
+        self
     }
-     */
 
     /// Build the provider
     ///
@@ -488,6 +503,10 @@ impl Provider {
             return Err(ProviderError::NoGuid);
         }
         Ok(self)
+    }
+
+    pub fn filters(&self) -> &[EventFilter] {
+        &self.filters
     }
 
     pub(crate) fn on_event(&self, record: EventRecord, locator: &mut schema::SchemaLocator) {

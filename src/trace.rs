@@ -5,6 +5,7 @@ use super::traits::*;
 use crate::native::etw_types::{EnableTraceParameters, EventRecord, INVALID_TRACE_HANDLE};
 use crate::native::{evntrace, version_helper};
 use crate::provider::Provider;
+use crate::provider::event_filter::EventFilterDescriptor;
 use crate::{provider, schema, utils};
 use std::sync::RwLock;
 use windows::core::GUID;
@@ -207,8 +208,11 @@ macro_rules! impl_base_trace {
             fn open(mut self) -> TraceResult<Self> {
                 self.data.events_handled = 0;
 
+                // Populate self.info
                 self.etw.fill_info::<$t>(&self.data.name, &self.data.properties, &self.data.providers);
+                // Call StartTrace(..., self.info.properties)
                 self.etw.register_trace(&self.data)?;
+                // Call EnableTraceEx2 for each provider
                 <$t>::enable_provider(&self);
                 self.etw.open(&self.data)?;
 
@@ -336,8 +340,15 @@ impl TraceTrait for UserTrace {
             providers.iter().for_each(|prov| {
                 // Should always be Some but just in case
                 if let Some(prov_guid) = prov.guid {
+
+                    let owned_event_filter_descriptors: Vec<EventFilterDescriptor> = prov.filters()
+                        .iter()
+                        .filter_map(|filter| filter.to_event_filter_descriptor().ok()) // Silently ignoring invalid filters (basically, empty ones)
+                        .collect();
+
                     let parameters =
-                        EnableTraceParameters::create(prov_guid, prov.trace_flags);
+                        EnableTraceParameters::create(prov_guid, prov.trace_flags, &owned_event_filter_descriptors);
+
                     // Fixme: return error if this fails
                     self.etw.enable_trace(
                         prov_guid,

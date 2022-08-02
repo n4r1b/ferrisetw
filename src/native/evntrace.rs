@@ -228,7 +228,7 @@ impl NativeEtw {
                 any,
                 all,
                 0,
-                &*parameters,
+                parameters.as_ptr(),
             ) != 0
             {
                 return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
