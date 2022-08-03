@@ -12,6 +12,7 @@ use crate::trace::{TraceData, TraceProperties, TraceTrait};
 use crate::utils;
 use std::ffi::c_void;
 use std::fmt::Formatter;
+use std::marker::PhantomData;
 use std::sync::RwLock;
 use windows::core::GUID;
 use windows::core::PSTR;
@@ -189,48 +190,47 @@ impl Default for TraceInfo {
 /// [EVENT_TRACE_LOGFILEA]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.EVENT_TRACE_LOGFILEA.html
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct EventTraceLogfile(Etw::EVENT_TRACE_LOGFILEA);
+pub struct EventTraceLogfile<'tracedata> {
+    native: Etw::EVENT_TRACE_LOGFILEA,
+    lifetime: PhantomData<&'tracedata TraceData>,
+}
 
-impl EventTraceLogfile {
+impl<'tracedata> EventTraceLogfile<'tracedata> {
     /// Create a new instance
-    ///
-    /// # Safety
-    ///
-    /// Note that the returned structure contains pointers to the given `TraceData`, that should thus stay valid (and constant) during its lifetime
-    pub fn create(trace_data: &Box<TraceData>, callback: unsafe extern "system" fn(*mut EventRecord)) -> Self {
+    pub fn create(trace_data: &'tracedata Box<TraceData>, callback: unsafe extern "system" fn(*mut EventRecord)) -> Self {
         let mut log_file = EventTraceLogfile::default();
 
         let not_really_mut_ptr = trace_data.name.as_ptr() as *mut _; // That's kind-of fine because the logger name is _not supposed_ to be changed by Windows APIs
-        log_file.0.LoggerName = PSTR(not_really_mut_ptr);
-        log_file.0.Anonymous1.ProcessTraceMode =
+        log_file.native.LoggerName = PSTR(not_really_mut_ptr);
+        log_file.native.Anonymous1.ProcessTraceMode =
             u32::from(ProcessTraceMode::RealTime) | u32::from(ProcessTraceMode::EventRecord);
 
-        log_file.0.Anonymous2.EventRecordCallback = Some(callback);
+        log_file.native.Anonymous2.EventRecordCallback = Some(callback);
 
         let not_really_mut_ptr = trace_data.as_ref() as *const TraceData as *const c_void as *mut c_void; // That's kind-of fine because the user context is _not supposed_ to be changed by Windows APIs
-        log_file.0.Context = not_really_mut_ptr;
+        log_file.native.Context = not_really_mut_ptr;
 
         log_file
     }
 }
 
-impl Default for EventTraceLogfile {
+impl<'tracedata> Default for EventTraceLogfile<'tracedata> {
     fn default() -> Self {
         unsafe { std::mem::zeroed::<EventTraceLogfile>() }
     }
 }
 
-impl std::ops::Deref for EventTraceLogfile {
+impl<'tracedata> std::ops::Deref for EventTraceLogfile<'tracedata> {
     type Target = Etw::EVENT_TRACE_LOGFILEA;
 
     fn deref(&self) -> &self::Etw::EVENT_TRACE_LOGFILEA {
-        &self.0
+        &self.native
     }
 }
 
-impl std::ops::DerefMut for EventTraceLogfile {
+impl<'tracedata> std::ops::DerefMut for EventTraceLogfile<'tracedata> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.native
     }
 }
 
