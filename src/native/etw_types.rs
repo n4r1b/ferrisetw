@@ -212,25 +212,20 @@ impl<'tracedata> EventTraceLogfile<'tracedata> {
 
         log_file
     }
+
+    /// Retrieve the windows-rs compatible pointer to the contained `EVENT_TRACE_LOGFILEA`
+    ///
+    /// # Safety
+    ///
+    /// This pointer is valid as long as [`Self`] is alive (and not modified elsewhere)
+    pub unsafe fn as_mut_ptr(&mut self) -> *mut Etw::EVENT_TRACE_LOGFILEA {
+        &mut self.native as *mut Etw::EVENT_TRACE_LOGFILEA
+    }
 }
 
 impl<'tracedata> Default for EventTraceLogfile<'tracedata> {
     fn default() -> Self {
         unsafe { std::mem::zeroed::<EventTraceLogfile>() }
-    }
-}
-
-impl<'tracedata> std::ops::Deref for EventTraceLogfile<'tracedata> {
-    type Target = Etw::EVENT_TRACE_LOGFILEA;
-
-    fn deref(&self) -> &self::Etw::EVENT_TRACE_LOGFILEA {
-        &self.native
-    }
-}
-
-impl<'tracedata> std::ops::DerefMut for EventTraceLogfile<'tracedata> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.native
     }
 }
 
