@@ -1,6 +1,6 @@
 [package]
 name = "ferrisetw"
-version = "0.1.1"
+version = "1.0.0"
 license = "MIT OR Apache-2.0"
 description = "Basically a KrabsETW rip-off written in Rust"
 authors = ["n4r1b"]
