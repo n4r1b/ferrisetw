@@ -123,10 +123,7 @@ impl TraceData {
 pub trait TraceBaseTrait {
     /// Internal function to set TraceName. See [TraceTrait::named]
     fn set_trace_name(&mut self, name: &str);
-    /// The `set_trace_properties` function sets the ETW session configuration properties
-    ///
-    /// # Arguments
-    /// * `props` - [TraceProperties] to set
+    /// Sets the ETW session configuration properties
     ///
     /// # Example
     /// ```rust
@@ -135,10 +132,7 @@ pub trait TraceBaseTrait {
     /// let my_trace = UserTrace::new().set_trace_properties(props);
     /// ```
     fn set_trace_properties(self, props: TraceProperties) -> Self;
-    /// The `enable` function enables a [Provider] for the Trace
-    ///
-    /// # Arguments
-    /// * `provider` - [Provider] to enable
+    /// Enables a [Provider] for the Trace
     ///
     /// # Remarks
     /// Multiple providers can be enabled for the same trace, as long as they are from the same CPU privilege
@@ -152,54 +146,30 @@ pub trait TraceBaseTrait {
     /// let my_trace = UserTrace::new().enable(provider);
     /// ```
     fn enable(self, provider: provider::Provider) -> Self;
-    /// The `open` function opens a Trace session
-    ///
-    /// # Remark
-    /// This function can fail, if it does it will return a [TraceError] accordingly
-    ///
-    /// # Example
-    /// ```rust
-    /// let my_trace = UserTrace::new().open()?;
-    /// ```
+    /// Opens a Trace session
     fn open(self) -> TraceResult<Self>
     where
         Self: Sized;
-    /// The `start` function starts a Trace session, this includes open and process the trace
+    /// Starts a Trace session (which includes `open`ing and `process`ing  the trace)
     ///
-    /// # Safety Note
+    /// # Note
     /// This function will spawn a new thread, ETW blocks the thread listening to events, so we need
     /// a new thread to which delegate this process.
-    ///
-    ///
-    /// This function can fail, if it does it will return a [TraceError]
-    ///
-    /// # Example
-    /// ```rust
-    /// let my_trace = UserTrace::new().start()?;
-    /// ```
     fn start(self) -> TraceResult<Self>
     where
         Self: Sized;
-    /// The `process` function will start processing a Trace session
+    /// Start processing a Trace session
     ///
-    /// # Safety Note
+    /// # Note
     /// This function will spawn the new thread which starts listening for events.
     ///
     /// See [ProcessTrace](https://docs.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-processtrace#remarks)
-    ///
-    /// # Remarks
-    /// This function can fail, if it does it will return a [TraceError]
-    ///
-    /// # Example
-    /// ```rust
-    /// UserTrace::new().open()?.process()?;
-    /// ```
     fn process(self) -> TraceResult<Self>
     where
         Self: Sized;
-    /// The `stop` function stops a Trace session
+    /// Stops a Trace session
     ///
-    /// # Safety Note
+    /// # Note
     /// Since a call to `start` will block thread and in case we want to execute it within a thread
     /// we would -- for now -- have to move it to the context of the new thread, this function is
     /// called from the [Drop] implementation.
@@ -275,12 +245,14 @@ macro_rules! impl_base_trace {
 }
 
 /// User Trace struct
+#[derive(Debug)]
 pub struct UserTrace {
     data: TraceData,
     etw: evntrace::NativeEtw,
 }
 
 /// Kernel Trace struct
+#[derive(Debug)]
 pub struct KernelTrace {
     data: TraceData,
     etw: evntrace::NativeEtw,
@@ -290,20 +262,12 @@ impl_base_trace!(for UserTrace, KernelTrace);
 
 /// Specific trait for a Trace
 ///
-/// This trait define the specific methods that differentiate from a Kernel to a User Trace
+/// This trait defines the specific methods that differentiate from a Kernel to a User Trace
 pub trait TraceTrait: TraceBaseTrait {
-    /// Use the `named` function to set the trace name
-    ///
-    /// # Arguments
-    /// * `name` - Trace name to set
+    /// Set the trace name
     ///
     /// # Remarks
     /// If this function is not called during the process of building the trace a random name will be generated
-    ///
-    /// # Example
-    /// ```rust
-    /// let my_trace = UserTrace::new().named("TestTrace".to_string());
-    /// ```
     fn named(self, name: String) -> Self;
     fn enable_provider(&self) {}
     fn augmented_file_mode() -> u32 {
@@ -318,12 +282,7 @@ pub trait TraceTrait: TraceBaseTrait {
 }
 
 impl UserTrace {
-    /// Use the `new` function to create a UserTrace builder
-    ///
-    /// # Example
-    /// ```rust
-    /// let user_trace = UserTrace::new();
-    /// ```
+    /// Create a UserTrace builder
     pub fn new() -> Self {
         let data = TraceData::new();
         UserTrace {
@@ -334,12 +293,7 @@ impl UserTrace {
 }
 
 impl KernelTrace {
-    /// Use the `new` function to create a KernelTrace builder
-    ///
-    /// # Example
-    /// ```rust
-    /// let user_trace = KernelTrace::new();
-    /// ```
+    /// Create a KernelTrace builder
     pub fn new() -> Self {
         let data = TraceData::new();
 
@@ -373,12 +327,12 @@ impl TraceTrait for UserTrace {
         if let Ok(providers) = self.data.providers.read() {
             providers.iter().for_each(|prov| {
                 // Should always be Some but just in case
-                if prov.guid.is_some() {
+                if let Some(prov_guid) = prov.guid {
                     let parameters =
-                        EnableTraceParameters::create(prov.guid.unwrap(), prov.trace_flags);
+                        EnableTraceParameters::create(prov_guid, prov.trace_flags);
                     // Fixme: return error if this fails
                     self.etw.enable_trace(
-                        prov.guid.unwrap().clone(),
+                        prov_guid.clone(),
                         prov.any,
                         prov.all,
                         prov.level,

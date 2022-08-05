@@ -27,14 +27,30 @@ impl From<tdh::TdhNativeError> for SchemaError {
 
 type SchemaResult<T> = Result<T, SchemaError>;
 
+/// A way to group events that share the same [`Schema`]
+///
+/// From the [docs](https://docs.microsoft.com/en-us/windows/win32/api/evntprov/ns-evntprov-event_descriptor):
+/// > For manifest-based ETW, the combination Provider.DecodeGuid + Event.Id + Event.Version should uniquely identify an event,
+/// > i.e. all events with the same DecodeGuid, Id, and Version should have the same set of fields with no changes in field names, field types, or field ordering.
 #[derive(Debug, Eq, PartialEq, Hash)]
 struct SchemaKey {
     // For now, lazy to wrap Guid around an implement Hash
     // TODO: wrap Guid and implement hash
     provider: String,
+    /// From the [docs](https://docs.microsoft.com/en-us/windows/win32/api/evntprov/ns-evntprov-event_descriptor): A 16-bit number used to identify manifest-based events
     id: u16,
-    opcode: u8,
+    /// From the [docs](https://docs.microsoft.com/en-us/windows/win32/api/evntprov/ns-evntprov-event_descriptor): An 8-bit number used to specify the version of a manifest-based event.
+    // The version indicates a revision to the definition of an event with a particular Id.
+    // All events with a given Id should have similar semantics, but a change in version
+    // can be used to indicate a minor modification of the event details, e.g. a change to
+    // the type of a field or the addition of a new field.
     version: u8,
+
+    // TODO: not sure why these ones are required in a SchemaKey. If they are, document why.
+    //       note that krabsetw also uses these fields (without an explanation)
+    //       however, krabsetw's `schema::operator==` do not use them to compare schemas for equality.
+    //       see https://github.com/microsoft/krabsetw/issues/195
+    opcode: u8,
     level: u8,
 }
 
@@ -61,7 +77,8 @@ impl SchemaKey {
 /// * EventHeader.EventDescriptor.Version
 /// * EventHeader.EventDescriptor.Level
 ///
-/// Credits: [KrabsETW::schema_locator](https://github.com/microsoft/krabsetw/blob/master/krabs/krabs/schema_locator.hpp)
+/// Credits: [KrabsETW::schema_locator](https://github.com/microsoft/krabsetw/blob/master/krabs/krabs/schema_locator.hpp).
+/// See also the [`SchemaKey`] for more info
 #[derive(Default)]
 pub struct SchemaLocator {
     schemas: HashMap<SchemaKey, Arc<TraceEventInfoRaw>>,
@@ -80,17 +97,15 @@ impl SchemaLocator {
         }
     }
 
-    /// Use the `event_schema` function to retrieve the Schema of an ETW Event
+    /// Retrieve the Schema of an ETW Event
     ///
     /// # Arguments
     /// * `event` - The [EventRecord] that's passed to the callback
     ///
     /// # Remark
-    /// This is the first function that should be called within a Provider callback, if everything
-    /// works as expected this function will return a Result with the [Schema] that represents
-    /// the ETW event that triggered the callback
-    ///
-    /// This function can fail, if it does it will return a [SchemaError]
+    /// This is the first function that should be called within a Provider callback.
+    /// It consumes the ETW event and wrap it into a [Schema] that represents it
+    /// and provides a way to access its fields.
     ///
     /// # Example
     /// ```rust
@@ -114,10 +129,12 @@ impl SchemaLocator {
     }
 }
 
-/// Represents a Schema
+/// Represents an `EventRecord` along with its suitable Schema
+///
+/// It is usually built from [`SchemaLocator::event_schema`].
 ///
 /// This structure holds a [TraceEventInfo](https://docs.microsoft.com/en-us/windows/win32/api/tdh/ns-tdh-trace_event_info)
-/// which let us obtain information from the ETW event
+/// which let us obtain information from the ETW event.
 pub struct Schema {
     record: EventRecord,
     schema: Arc<TraceEventInfoRaw>,
@@ -144,9 +161,7 @@ impl Schema {
         self.record
     }
 
-    /// Use the `event_id` function to obtain the EventId of the Event Record
-    ///
-    /// This getter returns the EventId of the ETW Event that triggered the registered callback
+    /// Return the EventId of the ETW Event that triggered the registered callback
     ///
     /// # Example
     /// ```rust
@@ -159,9 +174,7 @@ impl Schema {
         self.record.EventHeader.EventDescriptor.Id
     }
 
-    /// Use the `opcode` function to obtain the Opcode of the Event Record
-    ///
-    /// This getter returns the opcode of the ETW Event that triggered the registered callback
+    /// Return the opcode of the ETW Event that triggered the registered callback
     ///
     /// # Example
     /// ```rust
@@ -174,9 +187,7 @@ impl Schema {
         self.record.EventHeader.EventDescriptor.Opcode
     }
 
-    /// Use the `event_flags` function to obtain the Event Flags of the [EventRecord]
-    ///
-    /// This getter returns the Event Flags of the ETW Event that triggered the registered callback
+    /// Returns the Event Flags of the ETW Event that triggered the registered callback
     ///
     /// # Example
     /// ```rust
@@ -189,9 +200,7 @@ impl Schema {
         self.record.EventHeader.Flags
     }
 
-    /// Use the `event_version` function to obtain the Version of the [EventRecord]
-    ///
-    /// This getter returns the Version of the ETW Event that triggered the registered callback
+    /// Returns the Version of the ETW Event that triggered the registered callback
     ///
     /// # Example
     /// ```rust
@@ -204,9 +213,7 @@ impl Schema {
         self.record.EventHeader.EventDescriptor.Version
     }
 
-    /// Use the `process_id` function to obtain the ProcessId of the [EventRecord]
-    ///
-    /// This getter returns the ProcessId of the process that triggered the ETW Event
+    /// Returns the ProcessId of the process that triggered the ETW Event
     ///
     /// # Example
     /// ```rust
@@ -219,9 +226,7 @@ impl Schema {
         self.record.EventHeader.ProcessId
     }
 
-    /// Use the `thread_id` function to obtain the ThreadId of the [EventRecord]
-    ///
-    /// This getter returns the ThreadId of the thread that triggered the ETW Event
+    /// Returns the ThreadId of the thread that triggered the ETW Event
     ///
     /// # Example
     /// ```rust
@@ -234,9 +239,7 @@ impl Schema {
         self.record.EventHeader.ThreadId
     }
 
-    /// Use the `timestamp` function to obtain the TimeStamp of the [EventRecord]
-    ///
-    /// This getter returns the TimeStamp of the ETW Event
+    /// Returns the TimeStamp of the ETW Event
     ///
     /// # Example
     /// ```rust
@@ -249,9 +252,7 @@ impl Schema {
         self.record.EventHeader.TimeStamp
     }
 
-    /// Use the `activity_id` function to obtain the ActivityId of the [EventRecord]
-    ///
-    /// This getter returns the ActivityId from the ETW Event, this value is used to related Two events
+    /// Returns the ActivityId from the ETW Event, this value is used to related Two events
     ///
     /// # Example
     /// ```rust

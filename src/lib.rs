@@ -83,6 +83,7 @@
 //!     let mut trace = UserTrace::new()
 //!         .named(String::from("MyProvider"))
 //!         .enable(process_provider)
+//!         // .enable(other_provider) // it is possible to enable multiple providers on the same trace
 //!         .start()
 //!         .unwrap();
 //!

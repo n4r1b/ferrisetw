@@ -132,6 +132,7 @@ pub mod kernel_providers {
     }
 
     /// Represents a Kernel Provider structure which can be used to create a Kernel Provider
+    #[derive(Debug)]
     pub struct KernelProvider {
         /// Kernel Provider GUID
         pub guid: GUID,
@@ -294,14 +295,9 @@ impl std::fmt::Debug for Provider {
 }
 
 impl Provider {
-    /// Use the `new` function to create a Provider builder
+    /// Create a default Provider
     ///
-    /// This function will create a by-default provider which can be tweaked afterwards
-    ///
-    /// # Example
-    /// ```rust
-    /// let my_provider = Provider::new();
-    /// ```
+    /// It is expected to be tweaked afterwards, using the other methods for this sctruct (see the [`crate`] doc examples)
     pub fn new() -> Self {
         Provider {
             guid: None,
@@ -314,15 +310,10 @@ impl Provider {
         }
     }
 
-    /// Use the `new_kernel` function to create a Provider builder wrapping a Kernel Provider
+    /// Create a Provider builder wrapping a Kernel Provider
     ///
     /// # Arguments
     /// * `kernel_provider` - Reference to a KernelProvider which will be tied to the Provider struct
-    ///
-    /// # Example
-    /// ```rust
-    /// let my_provider = Provider::kernel(&kernel_providers::IMAGE_LOAD_PROVIDER);
-    /// ```
     pub fn kernel(kernel_provider: &kernel_providers::KernelProvider) -> Self {
         Provider {
             guid: Some(kernel_provider.guid),
@@ -335,7 +326,7 @@ impl Provider {
         }
     }
 
-    /// Use the `by_guid` function to bind a GUID with a Provider
+    /// Bind a GUID with a Provider
     ///
     /// # Arguments
     /// * `guid` - A string representation of the GUID, without curly braces, that is being binded to the Provider
@@ -349,7 +340,7 @@ impl Provider {
         self
     }
 
-    /// Use the `by_name` function to bind a GUID with a Provider
+    /// Bind a GUID with a Provider
     ///
     /// This function will look for the Provider GUID by means of the [ITraceDataProviderCollection](https://docs.microsoft.com/en-us/windows/win32/api/pla/nn-pla-itracedataprovidercollection)
     /// interface.
@@ -357,10 +348,7 @@ impl Provider {
     /// # Remark
     /// This function is considerably slow, prefer using the `by_guid` function when possible
     ///
-    /// # Arguments
-    /// * `name` - Provider name to find
-    ///
-    /// # Safety Note
+    /// # Errors
     /// This function won't fail if the Provider GUID can't be found, it will log the event and set the Guid field to None. This behavior might change in the future
     ///
     /// # Example
@@ -380,11 +368,8 @@ impl Provider {
         self
     }
 
-    /// Use the `any` function to set the `any` flag in the Provider instance
+    /// Set the `any` flag in the Provider instance
     /// [More info](https://docs.microsoft.com/en-us/message-analyzer/system-etw-provider-event-keyword-level-settings#filtering-with-system-etw-provider-event-keywords-and-levels)
-    ///
-    /// # Arguments
-    /// * `any` - Any flag value to set
     ///
     /// # Example
     /// ```rust
@@ -395,11 +380,8 @@ impl Provider {
         self
     }
 
-    /// Use the `all` function to set the `all` flag in the Provider instance
+    /// Set the `all` flag in the Provider instance
     /// [More info](https://docs.microsoft.com/en-us/message-analyzer/system-etw-provider-event-keyword-level-settings#filtering-with-system-etw-provider-event-keywords-and-levels)
-    ///
-    /// # Arguments
-    /// * `all` - All flag value to set
     ///
     /// # Example
     /// ```rust
@@ -410,10 +392,7 @@ impl Provider {
         self
     }
 
-    /// Use the `level` function to set the `level` flag in the Provider instance
-    ///
-    /// # Arguments
-    /// * `level` - Level flag value to set
+    /// Set the `level` flag in the Provider instance
     ///
     /// # Example
     /// ```rust
@@ -430,11 +409,8 @@ impl Provider {
         self
     }
 
-    /// Use the `trace_flags` function to set the `trace_flags` flag in the Provider instance
+    /// Set the `trace_flags` flag in the Provider instance
     /// [More info](https://docs.microsoft.com/en-us/windows-hardware/drivers/devtest/trace-flags)
-    ///
-    /// # Arguments
-    /// * `trace_flags` - TraceFlags value to set
     ///
     /// # Example
     /// ```rust
@@ -445,10 +421,7 @@ impl Provider {
         self
     }
 
-    /// Use the `add_callback` function to add a callback function that will be called when the Provider generates an Event
-    ///
-    /// # Arguments
-    /// * `callback` - Callback to add
+    /// Add a callback function that will be called when the Provider generates an Event
     ///
     /// # Remarks
     /// The [SchemaLocator] has to be mutable because whenever we obtain a new Schema it will be saved
@@ -483,9 +456,9 @@ impl Provider {
     }
      */
 
-    /// Use the `build` function to build the provider
+    /// Build the provider
     ///
-    /// # Safety Note
+    /// # Errors
     /// This function might return an [ProviderError::NoGuid] if the GUID is not set in the Provider struct
     ///
     /// # Example

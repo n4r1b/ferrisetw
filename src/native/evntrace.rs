@@ -217,7 +217,7 @@ impl NativeEtw {
         any: u64,
         all: u64,
         level: u8,
-        mut paramaters: EnableTraceParameters,
+        mut parameters: EnableTraceParameters,
     ) -> EvntraceNativeResult<()> {
         unsafe {
             if Etw::EnableTraceEx2(
@@ -228,7 +228,7 @@ impl NativeEtw {
                 any,
                 all,
                 0,
-                &mut *paramaters,
+                &mut *parameters,
             ) != 0
             {
                 return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
