@@ -191,10 +191,16 @@ impl Default for TraceInfo {
 pub struct EventTraceLogfile(Etw::EVENT_TRACE_LOGFILEA);
 
 impl EventTraceLogfile {
+    /// Create a new instance
+    ///
+    /// # Safety
+    ///
+    /// Note that the returned structure contains pointers to the given `TraceData`, that should thus stay valid (and constant) during its lifetime
     pub fn create(trace_data: &TraceData, callback: unsafe extern "system" fn(*mut EventRecord)) -> Self {
         let mut log_file = EventTraceLogfile::default();
 
-        log_file.0.LoggerName = pstr_from(trace_data.name.clone());
+        let not_really_mut_ptr = trace_data.name.as_ptr() as *mut _; // That's kind-of fine because the logger name is _not supposed_ to be changed by Windows APIs
+        log_file.0.LoggerName = PSTR(not_really_mut_ptr);
         log_file.0.Anonymous1.ProcessTraceMode =
             u32::from(ProcessTraceMode::RealTime) | u32::from(ProcessTraceMode::EventRecord);
 
@@ -203,15 +209,6 @@ impl EventTraceLogfile {
 
         log_file
     }
-}
-
-fn pstr_from(val: String) -> PSTR {
-    PSTR(
-        val.bytes()
-            .chain(::std::iter::once(0))
-            .collect::<std::vec::Vec<u8>>()
-            .as_mut_ptr(),
-    )
 }
 
 impl Default for EventTraceLogfile {
