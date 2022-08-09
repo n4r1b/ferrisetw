@@ -35,7 +35,7 @@ fn verify_system_version(major: u8, minor: u8, sp_major: u16) -> VersionHelperRe
     let mut os_version = OsVersionInfo::default();
     os_version.dwOSVersionInfoSize = std::mem::size_of::<OsVersionInfo>() as u32;
     os_version.dwMajorVersion = major as u32;
-    os_version.dwMajorVersion = minor as u32;
+    os_version.dwMinorVersion = minor as u32;
     os_version.wServicePackMajor = sp_major;
 
     let mut condition_mask = 0;
