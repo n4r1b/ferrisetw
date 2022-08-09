@@ -7,7 +7,7 @@
 //! In most cases a user of the crate won't have to deal with this and can directly obtain the data
 //! needed by using the functions exposed by the modules at the crate level
 use crate::native::tdh_types::Property;
-use crate::provider::Provider;
+use crate::provider::{Provider, TraceFlags};
 use crate::trace::{TraceData, TraceProperties, TraceTrait};
 use crate::utils;
 use std::fmt::Formatter;
@@ -239,12 +239,12 @@ impl std::ops::DerefMut for EventTraceLogfile {
 pub struct EnableTraceParameters(Etw::ENABLE_TRACE_PARAMETERS);
 
 impl EnableTraceParameters {
-    pub fn create(guid: GUID, trace_flags: u32) -> Self {
+    pub fn create(guid: GUID, trace_flags: TraceFlags) -> Self {
         let mut params = EnableTraceParameters::default();
         params.0.ControlFlags = 0;
         params.0.Version = Etw::ENABLE_TRACE_PARAMETERS_VERSION_2;
         params.0.SourceId = guid;
-        params.0.EnableProperty = trace_flags;
+        params.0.EnableProperty = trace_flags.bits();
 
         // TODO: Add Filters option
         params.0.EnableFilterDesc = std::ptr::null_mut();

@@ -8,6 +8,9 @@ use crate::schema;
 use std::sync::{Arc, RwLock};
 use windows::core::GUID;
 
+mod trace_flags;
+pub use trace_flags::TraceFlags;
+
 /// Provider module errors
 #[derive(Debug)]
 pub enum ProviderError {
@@ -278,7 +281,9 @@ pub struct Provider {
     /// Provider level flag
     pub level: u8,
     /// Provider trace flags
-    pub trace_flags: u32,
+    ///
+    /// Used as `EnableParameters.EnableProperty` when starting the trace (using [EnableTraceEx2](https://docs.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-enabletraceex2))
+    pub trace_flags: TraceFlags,
     /// Provider kernel flags, only apply to KernelProvider
     pub flags: u32, // Only applies to KernelProviders
     // perfinfo
@@ -302,7 +307,7 @@ impl Provider {
             any: 0,
             all: 0,
             level: 5,
-            trace_flags: 0,
+            trace_flags: TraceFlags::empty(),
             flags: 0,
             callbacks: Arc::new(RwLock::new(Vec::new())),
         }
@@ -318,7 +323,7 @@ impl Provider {
             any: 0,
             all: 0,
             level: 5,
-            trace_flags: 0,
+            trace_flags: TraceFlags::empty(),
             flags: kernel_provider.flags,
             callbacks: Arc::new(RwLock::new(Vec::new())),
         }
@@ -417,11 +422,11 @@ impl Provider {
     ///
     /// # Example
     /// ```
-    /// # use ferrisetw::provider::Provider;
-    /// let my_provider = Provider::new().trace_flags(0x1);
+    /// # use ferrisetw::provider::{Provider, TraceFlags};
+    /// let my_provider = Provider::new().trace_flags(TraceFlags::EVENT_ENABLE_PROPERTY_SID);
     /// ```
-    pub fn trace_flags(mut self, trace_flag: u32) -> Self {
-        self.trace_flags = trace_flag;
+    pub fn trace_flags(mut self, trace_flags: TraceFlags) -> Self {
+        self.trace_flags = trace_flags;
         self
     }
 
@@ -538,8 +543,8 @@ mod test {
 
     #[test]
     fn test_set_trace_flags() {
-        let prov = Provider::new().trace_flags(100);
-        assert_eq!(100, prov.trace_flags);
+        let prov = Provider::new().trace_flags(TraceFlags::all());
+        assert_eq!(prov.trace_flags, TraceFlags::all());
     }
 
     #[test]
