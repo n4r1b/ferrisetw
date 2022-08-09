@@ -75,15 +75,15 @@ pub struct Variant {
 
 impl Variant {
     pub fn new(vt: u16, val: u32) -> Self {
-        let mut variant = Variant::default();
-        variant.vt = vt;
-        variant.val = val;
-
-        variant
+        Variant{
+            vt,
+            val,
+            ..Default::default()
+        }
     }
 
     pub fn increment_val(&mut self) {
-        self.val = self.val + 1;
+        self.val += 1;
     }
     pub fn get_val(&self) -> u32 {
         self.val

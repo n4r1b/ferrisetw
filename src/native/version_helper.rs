@@ -32,11 +32,13 @@ type OsVersionInfo = OSVERSIONINFOEXA;
 const VER_GREATER_OR_EQUAL: u8 = windows::Win32::System::SystemServices::VER_GREATER_EQUAL as u8;
 
 fn verify_system_version(major: u8, minor: u8, sp_major: u16) -> VersionHelperResult<bool> {
-    let mut os_version = OsVersionInfo::default();
-    os_version.dwOSVersionInfoSize = std::mem::size_of::<OsVersionInfo>() as u32;
-    os_version.dwMajorVersion = major as u32;
-    os_version.dwMinorVersion = minor as u32;
-    os_version.wServicePackMajor = sp_major;
+    let mut os_version = OsVersionInfo{
+        dwOSVersionInfoSize: std::mem::size_of::<OsVersionInfo>() as u32,
+        dwMajorVersion: major as u32,
+        dwMinorVersion: minor as u32,
+        wServicePackMajor: sp_major,
+        ..Default::default()
+    };
 
     let mut condition_mask = 0;
     unsafe {

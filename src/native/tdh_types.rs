@@ -58,7 +58,11 @@ impl Property {
     }
 
     pub fn len(&self) -> usize {
-        self.length.clone() as usize
+        self.length as usize
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.length == 0
     }
 }
 
@@ -162,7 +166,7 @@ bitflags! {
 
 impl From<Etw::PROPERTY_FLAGS> for PropertyFlags {
     fn from(val: Etw::PROPERTY_FLAGS) -> Self {
-        let flags: i32 = val.0.into();
+        let flags: i32 = val.0;
         // Should be a safe cast
         PropertyFlags::from_bits_truncate(flags as u32)
     }

@@ -63,7 +63,7 @@ impl NativeEtw {
     }
 
     pub(crate) fn session_handle(&self) -> TraceHandle {
-        self.session_handle.clone()
+        self.session_handle
     }
 
     // Not a big fan of this...
@@ -82,14 +82,14 @@ impl NativeEtw {
         if self.session_handle == INVALID_TRACE_HANDLE {
             return Err(EvntraceNativeError::InvalidHandle);
         }
-        Ok(self.process()?)
+        self.process()
     }
 
     pub(crate) fn open(
         &mut self,
         trace_data: &TraceData,
     ) -> EvntraceNativeResult<EventTraceLogfile> {
-        Ok(self.open_trace(trace_data)?)
+        self.open_trace(trace_data)
     }
 
     pub(crate) fn stop(&mut self, trace_data: &TraceData) -> EvntraceNativeResult<()> {
@@ -103,13 +103,13 @@ impl NativeEtw {
             return Err(EvntraceNativeError::InvalidHandle);
         }
 
-        let clone_handle = self.session_handle.clone();
+        let clone_handle = self.session_handle;
         std::thread::spawn(move || {
             let mut now = FILETIME::default();
             unsafe {
                 GetSystemTimeAsFileTime(&mut now);
 
-                Etw::ProcessTrace(&[clone_handle], &mut now, std::ptr::null_mut());
+                Etw::ProcessTrace(&[clone_handle], &now, std::ptr::null_mut());
                 // if Etw::ProcessTrace(&[clone_handlee], &mut now, std::ptr::null_mut()) != 0 {
                 //     return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
                 // }
@@ -213,22 +213,22 @@ impl NativeEtw {
 
     pub(crate) fn enable_trace(
         &self,
-        mut guid: GUID,
+        guid: GUID,
         any: u64,
         all: u64,
         level: u8,
-        mut parameters: EnableTraceParameters,
+        parameters: EnableTraceParameters,
     ) -> EvntraceNativeResult<()> {
         unsafe {
             if Etw::EnableTraceEx2(
                 self.registration_handle,
-                &mut guid,
+                &guid,
                 1, // Fixme: EVENT_CONTROL_CODE_ENABLE_PROVIDER
                 level,
                 any,
                 all,
                 0,
-                &mut *parameters,
+                &*parameters,
             ) != 0
             {
                 return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
