@@ -8,6 +8,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use windows::core::GUID;
 
+pub mod extended_data;
+use extended_data::EventHeaderExtendedDataItem;
+
 /// Schema module errors
 #[derive(Debug)]
 pub enum SchemaError {
@@ -265,6 +268,38 @@ impl Schema {
     pub fn activity_id(&self) -> GUID {
         self.record.EventHeader.ActivityId
     }
+
+    /// Returns the ExtendedData from the ETW Event
+    ///
+    /// Their availability is mostly determined by the the traces passed to [`Provider::trace_flags`](crate::provider::Provider::trace_flags)
+    ///
+    /// # Example
+    /// ```rust
+    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    ///     let schema = schema_locator.event_schema(record)?;
+    ///     let activity_id = schema
+    ///         .extended_data()
+    ///         .iter()
+    ///         .find(|edata| edata.data_type() as u32 == EVENT_HEADER_EXT_TYPE_RELATED_ACTIVITYID)
+    ///         .map(|edata| edata.to_extended_data_item())
+    /// };
+    /// ```
+    pub fn extended_data(&self) -> &[EventHeaderExtendedDataItem] {
+        let n_extended_data = self.record.ExtendedDataCount;
+        let p_ed_array = self.record.ExtendedData;
+        if n_extended_data == 0 || p_ed_array.is_null() {
+            return &[];
+        }
+
+        // Safety: * we're building a slice from an array pointer size given by Windows
+        //         * the pointed data is not supposed to be mutated during the lifetime of `Self`
+        unsafe {
+            std::slice::from_raw_parts(
+                p_ed_array as *const EventHeaderExtendedDataItem,
+                n_extended_data as usize)
+        }
+    }
+
 
     /// Use the `decoding_source` function to obtain the [DecodingSource] from the [TraceEventInfo]
     ///
