@@ -119,7 +119,7 @@ impl SchemaLocator {
 
         if !self.schemas.contains_key(&key) {
             // TODO: Cloning for now, should be a reference at some point...
-            info = Arc::from(tdh::schema_from_tdh(event.clone())?);
+            info = Arc::from(tdh::schema_from_tdh(event)?);
             self.schemas.insert(key, Arc::clone(&info));
         } else {
             info = Arc::clone(self.schemas.get(&key).unwrap());

@@ -144,7 +144,7 @@ pub mod kernel_providers {
         /// Use the `new` function to create a Kernel Provider which can be then tied into a Provider
         pub const fn new(guid: GUID, flags: u32) -> KernelProvider {
             KernelProvider {
-                guid: guid,
+                guid,
                 flags,
             }
         }
@@ -265,6 +265,8 @@ pub mod kernel_providers {
         KernelProvider::new(kernel_guids::ALPC_GUID, kernel_flags::EVENT_TRACE_FLAG_ALPC);
 }
 
+type EtwCallback = Box<dyn FnMut(EventRecord, &mut schema::SchemaLocator) + Send + Sync + 'static>;
+
 /// Main Provider structure
 pub struct Provider {
     /// Option that represents a Provider GUID
@@ -280,11 +282,7 @@ pub struct Provider {
     /// Provider kernel flags, only apply to KernelProvider
     pub flags: u32, // Only applies to KernelProviders
     // perfinfo
-    callbacks: Arc<
-        RwLock<
-            Vec<Box<dyn FnMut(EventRecord, &mut schema::SchemaLocator) + Send + Sync + 'static>>,
-        >,
-    >,
+    callbacks: Arc<RwLock<Vec<EtwCallback>>>,
     // filters: RwLock<Vec<F>>,
 }
 

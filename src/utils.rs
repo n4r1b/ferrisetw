@@ -19,7 +19,6 @@ pub fn parse_unk_size_null_utf16_string(v: &[u8]) -> String {
             .collect::<Vec<u16>>()
             .as_slice(),
     )
-    .to_string()
 }
 
 pub fn parse_null_utf16_string(v: &[u8]) -> String {

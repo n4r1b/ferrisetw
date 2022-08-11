@@ -31,9 +31,9 @@ pub const INVALID_TRACE_HANDLE: TraceHandle = u64::MAX;
 
 #[allow(dead_code)]
 pub(crate) enum ControlValues {
-    ControlQuery = 0,
-    ControlStop = 1,
-    ControlUpdate = 2,
+    Query = 0,
+    Stop = 1,
+    Update = 2,
 }
 
 #[allow(dead_code)]

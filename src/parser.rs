@@ -119,6 +119,7 @@ impl<'a> Parser<'a> {
     }
 
     // TODO: Find a cleaner way to do this, not very happy with it rn
+    #[allow(clippy::len_zero)]
     fn find_property_size(&self, property: &Property) -> ParserResult<usize> {
         // There are several cases
         //  * regular case, where property.len() directly makes sense
@@ -129,20 +130,18 @@ impl<'a> Parser<'a> {
         if property
             .flags
             .intersects(PropertyFlags::PROPERTY_PARAM_LENGTH) == false
-            && property.len() > 0
+            && (property.len() > 0)
         {
-            let size;
-            if property.in_type() != TdhInType::InTypePointer {
-                size = property.len() as usize;
-            } else {
-                // There is an exception regarding pointer size though
-                // When reading captures from another architecture, we should take care of the _source_ pointer size, not the current architecture's pointer size.
-                size = if (self.schema.event_flags() & EVENT_HEADER_FLAG_32_BIT_HEADER) != 0 {
-                    4
-                } else {
-                    8
-                };
-            }
+            let size = match property.in_type() {
+                TdhInType::InTypePointer => property.len() as usize,
+                _ => {
+                    if (self.schema.event_flags() & EVENT_HEADER_FLAG_32_BIT_HEADER) != 0 {
+                        4
+                    } else {
+                        8
+                    }
+                }
+            };
             return Ok(size);
         }
 
@@ -171,7 +170,7 @@ impl<'a> Parser<'a> {
                 None => return Err(ParserError::PropertyError("Index out of bounds".to_owned())),
             };
 
-            let prop_size = self.find_property_size(&curr_prop)?;
+            let prop_size = self.find_property_size(curr_prop)?;
 
             if self.buffer.len() < prop_size {
                 return Err(ParserError::PropertyError(

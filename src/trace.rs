@@ -101,7 +101,7 @@ impl TraceData {
     }
 
     pub(crate) fn on_event(&mut self, record: EventRecord) {
-        self.events_handled = self.events_handled + 1;
+        self.events_handled += 1;
         let locator = &mut self.schema_locator;
         // We need a mutable reference to be able to modify the data it refers, which is actually
         // done within the Callback (The schema locator is modified)
@@ -216,7 +216,7 @@ macro_rules! impl_base_trace {
                 if let Err(err) = self.etw.start() {
                     match err {
                         evntrace::EvntraceNativeError::InvalidHandle => {
-                            return Ok(self.open()?.process()?);
+                            return self.open()?.process();
                         },
                         _=> return Err(TraceError::EtwNativeError(err)),
                     };
@@ -332,7 +332,7 @@ impl TraceTrait for UserTrace {
                         EnableTraceParameters::create(prov_guid, prov.trace_flags);
                     // Fixme: return error if this fails
                     self.etw.enable_trace(
-                        prov_guid.clone(),
+                        prov_guid,
                         prov.any,
                         prov.all,
                         prov.level,
