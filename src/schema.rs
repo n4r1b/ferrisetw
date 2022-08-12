@@ -111,9 +111,11 @@ impl SchemaLocator {
     /// and provides a way to access its fields.
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
     /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record)?;
+    ///     let schema = schema_locator.event_schema(record).unwrap();
     /// };
     /// ```
     pub fn event_schema(&mut self, event: EventRecord) -> SchemaResult<Schema> {
@@ -167,9 +169,11 @@ impl Schema {
     /// Return the EventId of the ETW Event that triggered the registered callback
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
     /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record)?;
+    ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let event_id = schema.event_id();
     /// };
     /// ```
@@ -180,9 +184,11 @@ impl Schema {
     /// Return the opcode of the ETW Event that triggered the registered callback
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
     /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record)?;
+    ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let event_id = schema.opcode();
     /// };
     /// ```
@@ -193,9 +199,11 @@ impl Schema {
     /// Returns the Event Flags of the ETW Event that triggered the registered callback
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
     /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record)?;
+    ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let event_flags = schema.event_flags();
     /// };
     /// ```
@@ -206,9 +214,11 @@ impl Schema {
     /// Returns the Version of the ETW Event that triggered the registered callback
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
     /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record)?;
+    ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let event_version = schema.event_version();
     /// };
     /// ```
@@ -219,9 +229,11 @@ impl Schema {
     /// Returns the ProcessId of the process that triggered the ETW Event
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
     /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record)?;
+    ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let pid = schema.process_id();
     /// };
     /// ```
@@ -232,9 +244,11 @@ impl Schema {
     /// Returns the ThreadId of the thread that triggered the ETW Event
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
     /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record)?;
+    ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let tid = schema.thread_id();
     /// };
     /// ```
@@ -245,9 +259,11 @@ impl Schema {
     /// Returns the TimeStamp of the ETW Event
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
     /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record)?;
+    ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let timestamp = schema.timestamp();
     /// };
     /// ```
@@ -258,9 +274,12 @@ impl Schema {
     /// Returns the ActivityId from the ETW Event, this value is used to related Two events
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
+    ///
     /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record)?;
+    ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let activity_id = schema.activity_id();
     /// };
     /// ```
@@ -274,14 +293,18 @@ impl Schema {
     /// Their availability is mostly determined by the the traces passed to [`Provider::trace_flags`](crate::provider::Provider::trace_flags)
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
+    /// use windows::Win32::System::Diagnostics::Etw::EVENT_HEADER_EXT_TYPE_RELATED_ACTIVITYID;
+    ///
     /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record)?;
+    ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let activity_id = schema
     ///         .extended_data()
     ///         .iter()
     ///         .find(|edata| edata.data_type() as u32 == EVENT_HEADER_EXT_TYPE_RELATED_ACTIVITYID)
-    ///         .map(|edata| edata.to_extended_data_item())
+    ///         .map(|edata| edata.to_extended_data_item());
     /// };
     /// ```
     pub fn extended_data(&self) -> &[EventHeaderExtendedDataItem] {
@@ -307,9 +330,12 @@ impl Schema {
     /// parse the event data
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
+
     /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record)?;
+    ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let decoding_source = schema.decoding_source();
     /// };
     /// ```
@@ -321,9 +347,11 @@ impl Schema {
     /// Use the `provider_name` function to obtain the Provider name from the [TraceEventInfo]
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
     /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record)?;
+    ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let provider_name = schema.provider_name();
     /// };
     /// ```
@@ -336,9 +364,11 @@ impl Schema {
     ///
     /// See: [TaskType](https://docs.microsoft.com/en-us/windows/win32/wes/eventmanifestschema-tasktype-complextype)
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
     /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record)?;
+    ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let task_name = schema.task_name();
     /// };
     /// ```
@@ -351,9 +381,11 @@ impl Schema {
     ///
     /// See: [OpcodeType](https://docs.microsoft.com/en-us/windows/win32/wes/eventmanifestschema-opcodetype-complextype)
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
     /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record)?;
+    ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let opcode_name = schema.opcode_name();
     /// };
     /// ```

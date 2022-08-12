@@ -126,7 +126,8 @@ pub trait TraceBaseTrait {
     /// Sets the ETW session configuration properties
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::trace::{UserTrace, TraceProperties, TraceBaseTrait};
     /// let mut props = TraceProperties::default();
     /// props.flush_timer = 60;
     /// let my_trace = UserTrace::new().set_trace_properties(props);
@@ -138,11 +139,14 @@ pub trait TraceBaseTrait {
     /// Multiple providers can be enabled for the same trace, as long as they are from the same CPU privilege
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::trace::{UserTrace, TraceBaseTrait};
+    /// # use ferrisetw::provider::Provider;
     /// let provider = Provider::new()
-    ///     .by_name("Microsoft-Windows-DistributedCOM")
+    ///     .by_name(String::from("Microsoft-Windows-DistributedCOM"))
     ///     .add_callback(|record, schema| { println!("{}", record.EventHeader.ProcessId); })
-    ///     .build()?;
+    ///     .build()
+    ///     .unwrap();
     /// let my_trace = UserTrace::new().enable(provider);
     /// ```
     fn enable(self, provider: provider::Provider) -> Self;

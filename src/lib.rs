@@ -44,12 +44,17 @@
 //! familiar with it the following example shows the basics on how to build a provider, start a trace
 //! and handle the Event in the callback
 //!
-//! ```rust
-//! fn callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
+//! ```
+//! use ferrisetw::native::etw_types::EventRecord;
+//! use ferrisetw::schema::SchemaLocator;
+//! use ferrisetw::parser::Parser;
+//! use ferrisetw::parser::TryParse;
+//! use ferrisetw::provider::Provider;
+//! use ferrisetw::trace::{UserTrace, TraceTrait, TraceBaseTrait};
 //!
+//! fn process_callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
 //!     // Within the callback we first locate the proper Schema for the event
-//!     match schema_locator.event_schema(record)
-//!     {
+//!     match schema_locator.event_schema(record) {
 //!         Ok(schema) => {
 //!             // At the moment we can only filter by checking the event_id
 //!             if schema.event_id() == 2 {
@@ -87,7 +92,7 @@
 //!         .start()
 //!         .unwrap();
 //!
-//!     std::thread::sleep(Duration::new(20, 0));
+//!     std::thread::sleep(std::time::Duration::from_secs(3));
 //!   
 //!     // We stop the trace
 //!     trace.stop();
