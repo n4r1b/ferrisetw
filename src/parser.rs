@@ -135,6 +135,9 @@ impl<'a> Parser<'a> {
             let size = match property.in_type() {
                 TdhInType::InTypePointer => property.len() as usize,
                 _ => {
+                    // There is an exception regarding pointer size though
+                    // When reading captures, we should take care of the pointer size at the _source_, rather than the current architecture's pointer size.
+                    // Note that a 32-bit program on a 64-bit OS would still send 32-bit pointers
                     if (self.schema.event_flags() & EVENT_HEADER_FLAG_32_BIT_HEADER) != 0 {
                         4
                     } else {
