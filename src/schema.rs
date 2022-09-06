@@ -8,8 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use windows::core::GUID;
 
-pub mod extended_data;
-use extended_data::EventHeaderExtendedDataItem;
+use crate::native::etw_types::EventHeaderExtendedDataItem;
 
 /// Schema module errors
 #[derive(Debug)]

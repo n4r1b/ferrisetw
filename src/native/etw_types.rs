@@ -24,6 +24,9 @@ mod event_record;
 pub use event_record::EventRecord;
 pub(crate) use event_record::PEventRecord;
 
+mod extended_data;
+pub use extended_data::{ExtendedDataItem, EventHeaderExtendedDataItem};
+
 // typedef ULONG64 TRACEHANDLE, *PTRACEHANDLE;
 pub(crate) type TraceHandle = u64;
 pub(crate) type EvenTraceControl = Etw::EVENT_TRACE_CONTROL;
