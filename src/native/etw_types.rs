@@ -22,7 +22,6 @@ use windows::Win32::System::Diagnostics::Etw::EVENT_FILTER_DESCRIPTOR;
 
 mod event_record;
 pub use event_record::EventRecord;
-pub(crate) use event_record::PEventRecord;
 
 mod extended_data;
 pub use extended_data::{ExtendedDataItem, EventHeaderExtendedDataItem};
@@ -199,7 +198,7 @@ pub struct EventTraceLogfile<'tracedata> {
 
 impl<'tracedata> EventTraceLogfile<'tracedata> {
     /// Create a new instance
-    pub fn create(trace_data: &'tracedata Box<TraceData>, callback: unsafe extern "system" fn(*mut EventRecord)) -> Self {
+    pub fn create(trace_data: &'tracedata Box<TraceData>, callback: unsafe extern "system" fn(*mut Etw::EVENT_RECORD)) -> Self {
         let mut log_file = EventTraceLogfile::default();
 
         let not_really_mut_ptr = trace_data.name.as_ptr() as *mut _; // That's kind-of fine because the logger name is _not supposed_ to be changed by Windows APIs

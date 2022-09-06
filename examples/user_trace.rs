@@ -7,11 +7,11 @@ use std::time::Duration;
 
 fn main() {
     let process_callback =
-        |record: EventRecord, schema_locator: &mut SchemaLocator| match schema_locator
+        |record: &EventRecord, schema_locator: &mut SchemaLocator| match schema_locator
             .event_schema(record)
         {
             Ok(schema) => {
-                let event_id = schema.event_id();
+                let event_id = schema.record().event_id();
                 if event_id == 2 {
                     let name = schema.provider_name();
                     println!("Name: {}", name);
