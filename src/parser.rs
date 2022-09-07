@@ -102,10 +102,13 @@ impl<'a> Parser<'a> {
     /// * `schema` - The [Schema] from the ETW Event we want to parse
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
+    /// # use ferrisetw::parser::Parser;
     /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record)?;
-    ///     let parser = Parse::create(&schema);
+    ///     let schema = schema_locator.event_schema(record).unwrap();
+    ///     let parser = Parser::create(&schema);
     /// };
     /// ```
     pub fn create(schema: &'a Schema) -> Self {
@@ -235,13 +238,16 @@ impl_try_parse_primitive!(isize);
 ///
 /// # Arguments
 /// * `name` - Name of the property to be found in the Schema
-
+///
 /// # Example
-/// ```rust
+/// ```
+/// # use ferrisetw::native::etw_types::EventRecord;
+/// # use ferrisetw::schema::SchemaLocator;
+/// # use ferrisetw::parser::{Parser, TryParse};
 /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-///     let schema = schema_locator.event_schema(record)?;
-///     let parser = Parse::create(&schema);
-///     let image_name: String = parser.try_parse("ImageName")?;
+///     let schema = schema_locator.event_schema(record).unwrap();
+///     let mut parser = Parser::create(&schema);
+///     let image_name: String = parser.try_parse("ImageName").unwrap();
 /// };
 /// ```
 ///

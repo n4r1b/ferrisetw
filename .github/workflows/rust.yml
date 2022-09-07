@@ -25,6 +25,10 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: test
+    - uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: --doc
 
   clippy-on-diffs:
     runs-on: windows-2022

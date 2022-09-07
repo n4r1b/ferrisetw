@@ -330,7 +330,8 @@ impl Provider {
     /// * `guid` - A string representation of the GUID, without curly braces, that is being binded to the Provider
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::provider::Provider;
     /// let my_provider = Provider::new().by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716");
     /// ```
     pub fn by_guid(mut self, guid: &str) -> Self {
@@ -350,7 +351,8 @@ impl Provider {
     /// This function won't fail if the Provider GUID can't be found, it will log the event and set the Guid field to None. This behavior might change in the future
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::provider::Provider;
     /// let my_provider = Provider::new().by_name(String::from("Microsoft-Windows-WinINet"));
     /// ```
     pub fn by_name(mut self, name: String) -> Self {
@@ -370,7 +372,8 @@ impl Provider {
     /// [More info](https://docs.microsoft.com/en-us/message-analyzer/system-etw-provider-event-keyword-level-settings#filtering-with-system-etw-provider-event-keywords-and-levels)
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::provider::Provider;
     /// let my_provider = Provider::new().any(0xf0010000000003ff);
     /// ```
     pub fn any(mut self, any: u64) -> Self {
@@ -382,7 +385,8 @@ impl Provider {
     /// [More info](https://docs.microsoft.com/en-us/message-analyzer/system-etw-provider-event-keyword-level-settings#filtering-with-system-etw-provider-event-keywords-and-levels)
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::provider::Provider;
     /// let my_provider = Provider::new().all(0x4000000000000000);
     /// ```
     pub fn all(mut self, all: u64) -> Self {
@@ -393,7 +397,8 @@ impl Provider {
     /// Set the `level` flag in the Provider instance
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::provider::{Provider};
     /// // LogAlways (0x0)
     /// // Critical (0x1)
     /// // Error (0x2)
@@ -411,7 +416,8 @@ impl Provider {
     /// [More info](https://docs.microsoft.com/en-us/windows-hardware/drivers/devtest/trace-flags)
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::provider::Provider;
     /// let my_provider = Provider::new().trace_flags(0x1);
     /// ```
     pub fn trace_flags(mut self, trace_flag: u32) -> Self {
@@ -426,7 +432,10 @@ impl Provider {
     /// into the [SchemaLocator] instance cache
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::provider::Provider;
+    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::schema::SchemaLocator;
     /// Provider::new().add_callback(|record: EventRecord, schema_locator: &mut SchemaLocator| {
     ///     // Handle Event
     /// });
@@ -460,11 +469,13 @@ impl Provider {
     /// This function might return an [ProviderError::NoGuid] if the GUID is not set in the Provider struct
     ///
     /// # Example
-    /// ```rust
+    /// ```
+    /// # use ferrisetw::provider::Provider;
     /// Provider::new()
     ///   .by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716")
-    ///   .add_callback(process_callback)
-    ///   .build()?
+    ///   // .add_callback(process_callback)
+    ///   .build()
+    ///   .unwrap();
     /// ```
     // TODO: should we check if callbacks is empty ???
     pub fn build(self) -> ProviderResult<Self> {

@@ -29,7 +29,7 @@
 //! Since lately I've been working very closely with ETW and Rust, I thought that having a tool that
 //! would simplify ETW management written in Rust and available as a crate for other to consume would
 //! be pretty neat and that's where this crate comes into play 🔥
-//!  
+//!
 //! # Disclaimer
 //! This project is still WIP. There's still plenty of things to evaluate/investigate and things to
 //! fix and do better. Any help would be greatly appreciated, also any issues you may have!
@@ -44,16 +44,21 @@
 //! familiar with it the following example shows the basics on how to build a provider, start a trace
 //! and handle the Event in the callback
 //!
-//! ```rust
-//! fn callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
+//! ```
+//! use ferrisetw::native::etw_types::EventRecord;
+//! use ferrisetw::schema::SchemaLocator;
+//! use ferrisetw::parser::Parser;
+//! use ferrisetw::parser::TryParse;
+//! use ferrisetw::provider::Provider;
+//! use ferrisetw::trace::{UserTrace, TraceTrait, TraceBaseTrait};
 //!
+//! fn process_callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
 //!     // Within the callback we first locate the proper Schema for the event
-//!     match schema_locator.event_schema(record)
-//!     {
+//!     match schema_locator.event_schema(record) {
 //!         Ok(schema) => {
 //!             // At the moment we can only filter by checking the event_id
 //!             if schema.event_id() == 2 {
-//!                 
+//!
 //!                 // We build the Parser based on the Schema
 //!                 let mut parser = Parser::create(&schema);
 //!
@@ -69,7 +74,7 @@
 //!         Err(err) => println!("Error {:?}", err),
 //!     };
 //! }
-//!   
+//!
 //! fn main() {
 //!     // First we build a Provider
 //!     let process_provider = Provider::new()
@@ -77,7 +82,7 @@
 //!         .add_callback(process_callback)
 //!         .build()
 //!         .unwrap();
-//!   
+//!
 //!     // We start a trace session for the previously registered provider
 //!     // This call will spawn a new thread which listens to the events
 //!     let mut trace = UserTrace::new()
@@ -87,8 +92,8 @@
 //!         .start()
 //!         .unwrap();
 //!
-//!     std::thread::sleep(Duration::new(20, 0));
-//!   
+//!     std::thread::sleep(std::time::Duration::from_secs(3));
+//!
 //!     // We stop the trace
 //!     trace.stop();
 //! }
