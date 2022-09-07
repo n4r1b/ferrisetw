@@ -258,6 +258,13 @@ impl Schema {
 
     /// Returns the TimeStamp of the ETW Event
     ///
+    /// As per [Microsoft's documentation](https://docs.microsoft.com/en-us/windows/win32/api/evntcons/ns-evntcons-event_header):
+    /// > Contains the time that the event occurred.
+    /// > The resolution is system time unless the ProcessTraceMode member of EVENT_TRACE_LOGFILE
+    /// > contains the PROCESS_TRACE_MODE_RAW_TIMESTAMP flag, in which case the resolution depends
+    /// > on the value of the Wnode.ClientContext member of EVENT_TRACE_PROPERTIES at the time the
+    /// > controller created the session.
+    ///
     /// # Example
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
@@ -283,7 +290,6 @@ impl Schema {
     ///     let activity_id = schema.activity_id();
     /// };
     /// ```
-    /// [TraceEventInfo]: crate::native::etw_types::TraceEventInfo
     pub fn activity_id(&self) -> GUID {
         self.record.EventHeader.ActivityId
     }
