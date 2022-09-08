@@ -104,7 +104,7 @@ impl<'a> Parser<'a> {
     /// # Example
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
-    /// # use ferrisetw::schema::SchemaLocator;
+    /// # use ferrisetw::schema_locator::SchemaLocator;
     /// # use ferrisetw::parser::Parser;
     /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
@@ -244,7 +244,7 @@ impl_try_parse_primitive!(isize);
 /// # Example
 /// ```
 /// # use ferrisetw::native::etw_types::EventRecord;
-/// # use ferrisetw::schema::SchemaLocator;
+/// # use ferrisetw::schema_locator::SchemaLocator;
 /// # use ferrisetw::parser::{Parser, TryParse};
 /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
 ///     let schema = schema_locator.event_schema(record).unwrap();

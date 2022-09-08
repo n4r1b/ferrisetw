@@ -4,7 +4,8 @@
 use super::traits::*;
 use crate::native::etw_types::EventRecord;
 use crate::native::pla;
-use crate::schema;
+use crate::schema_locator::SchemaLocator;
+
 use std::sync::{Arc, RwLock};
 use windows::core::GUID;
 
@@ -271,7 +272,7 @@ pub mod kernel_providers {
         KernelProvider::new(kernel_guids::ALPC_GUID, kernel_flags::EVENT_TRACE_FLAG_ALPC);
 }
 
-type EtwCallback = Box<dyn FnMut(&EventRecord, &mut schema::SchemaLocator) + Send + Sync + 'static>;
+type EtwCallback = Box<dyn FnMut(&EventRecord, &mut SchemaLocator) + Send + Sync + 'static>;
 
 /// Main Provider structure
 pub struct Provider {
@@ -446,16 +447,16 @@ impl Provider {
     /// ```
     /// # use ferrisetw::provider::Provider;
     /// # use ferrisetw::native::etw_types::EventRecord;
-    /// # use ferrisetw::schema::SchemaLocator;
+    /// # use ferrisetw::schema_locator::SchemaLocator;
     /// Provider::new().add_callback(|record: &EventRecord, schema_locator: &mut SchemaLocator| {
     ///     // Handle Event
     /// });
     /// ```
     ///
-    /// [SchemaLocator]: crate::schema::SchemaLocator
+    /// [SchemaLocator]: crate::schema_locator::SchemaLocator
     pub fn add_callback<T>(self, callback: T) -> Self
     where
-        T: FnMut(&EventRecord, &mut schema::SchemaLocator) + Send + Sync + 'static,
+        T: FnMut(&EventRecord, &mut SchemaLocator) + Send + Sync + 'static,
     {
         if let Ok(mut callbacks) = self.callbacks.write() {
             callbacks.push(Box::new(callback));
@@ -509,7 +510,7 @@ impl Provider {
         &self.filters
     }
 
-    pub(crate) fn on_event(&self, record: &EventRecord, locator: &mut schema::SchemaLocator) {
+    pub(crate) fn on_event(&self, record: &EventRecord, locator: &mut SchemaLocator) {
         // Has to be mutable because the SchemaLocator will be mutated when locating the schema
         // within the cb creating a clone of the whole SchemaLocator HashMap doesn't
         // sound like a plan still needs to think more about this thou...

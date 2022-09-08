@@ -46,7 +46,7 @@
 //!
 //! ```
 //! use ferrisetw::native::etw_types::EventRecord;
-//! use ferrisetw::schema::SchemaLocator;
+//! use ferrisetw::schema_locator::SchemaLocator;
 //! use ferrisetw::parser::Parser;
 //! use ferrisetw::parser::TryParse;
 //! use ferrisetw::provider::Provider;
@@ -118,6 +118,7 @@ pub mod parser;
 pub mod property;
 pub mod provider;
 pub mod schema;
+pub mod schema_locator;
 pub mod trace;
 mod traits;
 mod utils;

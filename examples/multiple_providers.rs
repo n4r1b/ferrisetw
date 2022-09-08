@@ -1,7 +1,7 @@
 use ferrisetw::native::etw_types::EventRecord;
 use ferrisetw::parser::{Parser, Pointer, TryParse};
 use ferrisetw::provider::*;
-use ferrisetw::schema::SchemaLocator;
+use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::*;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
