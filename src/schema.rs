@@ -138,12 +138,12 @@ impl SchemaLocator {
 /// which let us obtain information from the ETW event.
 pub struct Schema {
     record: EventRecord,
-    schema: Arc<TraceEventInfoRaw>,
+    te_info: Arc<TraceEventInfoRaw>,
 }
 
 impl Schema {
-    pub(crate) fn new(record: &EventRecord, schema: Arc<TraceEventInfoRaw>) -> Self {
-        Schema { record: EventRecord::clone(record), schema }
+    pub(crate) fn new(record: &EventRecord, te_info: Arc<TraceEventInfoRaw>) -> Self {
+        Schema { record: EventRecord::clone(record), te_info }
     }
 
     // This is temporary and will be removed in a later commit
@@ -168,7 +168,7 @@ impl Schema {
     /// ```
     /// [TraceEventInfo]: crate::native::etw_types::TraceEventInfo
     pub fn decoding_source(&self) -> DecodingSource {
-        self.schema.decoding_source()
+        self.te_info.decoding_source()
     }
 
     /// Use the `provider_name` function to obtain the Provider name from the [TraceEventInfo]
@@ -184,7 +184,7 @@ impl Schema {
     /// ```
     /// [TraceEventInfo]: crate::native::etw_types::TraceEventInfo
     pub fn provider_name(&self) -> String {
-        self.schema.provider_name()
+        self.te_info.provider_name()
     }
 
     /// Use the `task_name` function to obtain the Task name from the [TraceEventInfo]
@@ -201,7 +201,7 @@ impl Schema {
     /// ```
     /// [TraceEventInfo]: crate::native::etw_types::TraceEventInfo
     pub fn task_name(&self) -> String {
-        self.schema.task_name()
+        self.te_info.task_name()
     }
 
     /// Use the `opcode_name` function to obtain the Opcode name from the [TraceEventInfo]
@@ -218,23 +218,23 @@ impl Schema {
     /// ```
     /// [TraceEventInfo]: crate::native::etw_types::TraceEventInfo
     pub fn opcode_name(&self) -> String {
-        self.schema.opcode_name()
+        self.te_info.opcode_name()
     }
 
     pub(crate) fn property_count(&self) -> u32 {
-        self.schema.property_count()
+        self.te_info.property_count()
     }
 
     pub(crate) fn property(&self, index: u32) -> Property {
-        self.schema.property(index)
+        self.te_info.property(index)
     }
 }
 
 impl PartialEq for Schema {
     fn eq(&self, other: &Self) -> bool {
-        self.schema.event_id() == other.schema.event_id()
-            && self.schema.provider_guid() == other.schema.provider_guid()
-            && self.schema.event_version() == other.schema.event_version()
+        self.te_info.event_id() == other.te_info.event_id()
+            && self.te_info.provider_guid() == other.te_info.provider_guid()
+            && self.te_info.event_version() == other.te_info.event_version()
     }
 }
 
