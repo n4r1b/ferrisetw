@@ -14,7 +14,6 @@ use crate::utils;
 use std::ffi::c_void;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
-use std::sync::RwLock;
 use windows::core::GUID;
 use windows::core::PSTR;
 use windows::Win32::Foundation::MAX_PATH;
@@ -148,7 +147,7 @@ impl TraceInfo {
         &mut self,
         trace_name: &str,
         trace_properties: &TraceProperties,
-        providers: &RwLock<Vec<Provider>>,
+        providers: &[Provider],
     ) where
         T: TraceTrait,
     {

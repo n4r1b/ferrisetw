@@ -7,7 +7,6 @@ use crate::native::{evntrace, version_helper};
 use crate::provider::Provider;
 use crate::provider::event_filter::EventFilterDescriptor;
 use crate::{provider, schema, utils};
-use std::sync::RwLock;
 use windows::core::GUID;
 
 const KERNEL_LOGGER_NAME: &str = "NT Kernel Logger";
@@ -72,7 +71,7 @@ pub struct TraceData {
     /// Represents the current events handled
     pub events_handled: isize,
     /// List of Providers associated with the Trace
-    pub providers: RwLock<Vec<provider::Provider>>,
+    providers: Vec<provider::Provider>,
     schema_locator: schema::SchemaLocator,
     // buffers_read : isize
 }
@@ -84,16 +83,14 @@ impl TraceData {
             name,
             events_handled: 0,
             properties: TraceProperties::default(),
-            providers: RwLock::new(Vec::new()),
+            providers: Vec::new(),
             schema_locator: schema::SchemaLocator::new(),
         }
     }
 
     // TODO: Should be void???
     fn insert_provider(&mut self, provider: provider::Provider) {
-        if let Ok(mut prov) = self.providers.write() {
-            prov.push(provider);
-        }
+        self.providers.push(provider);
     }
 
     // TODO: Evaluate Multi-threading
@@ -106,15 +103,13 @@ impl TraceData {
         let locator = &mut self.schema_locator;
         // We need a mutable reference to be able to modify the data it refers, which is actually
         // done within the Callback (The schema locator is modified)
-        if let Ok(providers) = self.providers.read() {
-            providers.iter().for_each(|prov| {
-                // We can unwrap safely, provider builder wouldn't accept a provider without guid
-                // so we must have Some(Guid)
-                if prov.guid.unwrap() == record.EventHeader.ProviderId {
-                    prov.on_event(record, locator);
-                }
-            });
-        };
+        for prov in &self.providers {
+            // We can unwrap safely, provider builder wouldn't accept a provider without guid
+            // so we must have Some(Guid)
+            if prov.guid.unwrap() == record.EventHeader.ProviderId {
+                prov.on_event(record, locator);
+            }
+        }
     }
 }
 
@@ -285,7 +280,7 @@ pub trait TraceTrait: TraceBaseTrait {
     fn augmented_file_mode() -> u32 {
         0
     }
-    fn enable_flags(_providers: &RwLock<Vec<Provider>>) -> u32 {
+    fn enable_flags(_providers: &[Provider]) -> u32 {
         0
     }
     fn trace_guid() -> GUID {
@@ -336,29 +331,27 @@ impl TraceTrait for UserTrace {
     // TODO: Add option to enable same provider twice with different flags
     #[allow(unused_must_use)]
     fn enable_provider(&self) {
-        if let Ok(providers) = self.data.providers.read() {
-            providers.iter().for_each(|prov| {
-                // Should always be Some but just in case
-                if let Some(prov_guid) = prov.guid {
+        for prov in &self.data.providers {
+            // Should always be Some but just in case
+            if let Some(prov_guid) = prov.guid {
 
-                    let owned_event_filter_descriptors: Vec<EventFilterDescriptor> = prov.filters()
-                        .iter()
-                        .filter_map(|filter| filter.to_event_filter_descriptor().ok()) // Silently ignoring invalid filters (basically, empty ones)
-                        .collect();
+                let owned_event_filter_descriptors: Vec<EventFilterDescriptor> = prov.filters()
+                    .iter()
+                    .filter_map(|filter| filter.to_event_filter_descriptor().ok()) // Silently ignoring invalid filters (basically, empty ones)
+                    .collect();
 
-                    let parameters =
-                        EnableTraceParameters::create(prov_guid, prov.trace_flags, &owned_event_filter_descriptors);
+                let parameters =
+                    EnableTraceParameters::create(prov_guid, prov.trace_flags, &owned_event_filter_descriptors);
 
-                    // Fixme: return error if this fails
-                    self.etw.enable_trace(
-                        prov_guid,
-                        prov.any,
-                        prov.all,
-                        prov.level,
-                        parameters,
-                    );
-                }
-            });
+                // Fixme: return error if this fails
+                self.etw.enable_trace(
+                    prov_guid,
+                    prov.any,
+                    prov.all,
+                    prov.level,
+                    parameters,
+                );
+            }
         }
     }
 }
@@ -384,12 +377,8 @@ impl TraceTrait for KernelTrace {
         }
     }
 
-    fn enable_flags(providers: &RwLock<Vec<Provider>>) -> u32 {
-        let mut flags = 0;
-        if let Ok(prov) = providers.read() {
-            flags = prov.iter().fold(0, |acc, x| acc | x.flags)
-        }
-        flags
+    fn enable_flags(providers: &[Provider]) -> u32 {
+        providers.iter().fold(0, |acc, x| acc | x.flags)
     }
 
     fn trace_guid() -> GUID {
@@ -458,7 +447,7 @@ mod test {
 
         let trace = UserTrace::new().enable(prov).enable(prov1);
 
-        assert_eq!(trace.data.providers.read().unwrap().len(), 2);
+        assert_eq!(trace.data.providers.len(), 2);
     }
 
     #[test]
