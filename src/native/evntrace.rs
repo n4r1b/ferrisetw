@@ -87,7 +87,7 @@ impl NativeEtw {
 
     pub(crate) fn open(
         &mut self,
-        trace_data: &TraceData,
+        trace_data: &Box<TraceData>,
     ) -> EvntraceNativeResult<EventTraceLogfile> {
         self.open_trace(trace_data)
     }
@@ -149,7 +149,7 @@ impl NativeEtw {
         Ok(())
     }
 
-    fn open_trace(&mut self, trace_data: &TraceData) -> EvntraceNativeResult<EventTraceLogfile> {
+    fn open_trace(&mut self, trace_data: &Box<TraceData>) -> EvntraceNativeResult<EventTraceLogfile> {
         let mut log_file = EventTraceLogfile::create(trace_data, trace_callback_thunk);
 
         unsafe {

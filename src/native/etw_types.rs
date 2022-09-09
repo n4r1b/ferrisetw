@@ -10,6 +10,7 @@ use crate::native::tdh_types::Property;
 use crate::provider::Provider;
 use crate::trace::{TraceData, TraceProperties, TraceTrait};
 use crate::utils;
+use std::ffi::c_void;
 use std::fmt::Formatter;
 use std::sync::RwLock;
 use windows::core::GUID;
@@ -196,7 +197,7 @@ impl EventTraceLogfile {
     /// # Safety
     ///
     /// Note that the returned structure contains pointers to the given `TraceData`, that should thus stay valid (and constant) during its lifetime
-    pub fn create(trace_data: &TraceData, callback: unsafe extern "system" fn(*mut EventRecord)) -> Self {
+    pub fn create(trace_data: &Box<TraceData>, callback: unsafe extern "system" fn(*mut EventRecord)) -> Self {
         let mut log_file = EventTraceLogfile::default();
 
         let not_really_mut_ptr = trace_data.name.as_ptr() as *mut _; // That's kind-of fine because the logger name is _not supposed_ to be changed by Windows APIs
@@ -205,7 +206,9 @@ impl EventTraceLogfile {
             u32::from(ProcessTraceMode::RealTime) | u32::from(ProcessTraceMode::EventRecord);
 
         log_file.0.Anonymous2.EventRecordCallback = Some(callback);
-        log_file.0.Context = unsafe { std::mem::transmute(trace_data as *const _) };
+
+        let not_really_mut_ptr = trace_data.as_ref() as *const TraceData as *const c_void as *mut c_void; // That's kind-of fine because the user context is _not supposed_ to be changed by Windows APIs
+        log_file.0.Context = not_really_mut_ptr;
 
         log_file
     }

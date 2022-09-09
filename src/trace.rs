@@ -251,14 +251,18 @@ macro_rules! impl_base_trace {
 /// User Trace struct
 #[derive(Debug)]
 pub struct UserTrace {
-    data: TraceData,
+    // This is `Box`ed so that it does not move around the stack in case the `UserTrace` is moved
+    // This is important, because we give a pointer to it to Windows, so that it passes it back to us on callbacks
+    data: Box<TraceData>,
     etw: evntrace::NativeEtw,
 }
 
 /// Kernel Trace struct
 #[derive(Debug)]
 pub struct KernelTrace {
-    data: TraceData,
+    // This is `Box`ed so that it does not move around the stack in case the `UserTrace` is moved
+    // This is important, because we give a pointer to it to Windows, so that it passes it back to us on callbacks
+    data: Box<TraceData>,
     etw: evntrace::NativeEtw,
 }
 
@@ -288,7 +292,7 @@ pub trait TraceTrait: TraceBaseTrait {
 impl UserTrace {
     /// Create a UserTrace builder
     pub fn new() -> Self {
-        let data = TraceData::new();
+        let data = Box::new(TraceData::new());
         UserTrace {
             data,
             etw: evntrace::NativeEtw::new(),
@@ -299,7 +303,7 @@ impl UserTrace {
 impl KernelTrace {
     /// Create a KernelTrace builder
     pub fn new() -> Self {
-        let data = TraceData::new();
+        let data = Box::new(TraceData::new());
 
         let mut kt = KernelTrace {
             data,
