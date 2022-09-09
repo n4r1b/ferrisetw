@@ -110,7 +110,7 @@ impl SchemaLocator {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     /// };
     /// ```
@@ -161,7 +161,7 @@ impl Schema {
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
 
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let decoding_source = schema.decoding_source();
     /// };
@@ -177,7 +177,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let provider_name = schema.provider_name();
     /// };
@@ -194,7 +194,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let task_name = schema.task_name();
     /// };
@@ -211,7 +211,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let opcode_name = schema.opcode_name();
     /// };

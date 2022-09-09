@@ -447,7 +447,7 @@ impl Provider {
     /// # use ferrisetw::provider::Provider;
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// Provider::new().add_callback(|record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// Provider::new().add_callback(|record: &EventRecord, schema_locator: &mut SchemaLocator| {
     ///     // Handle Event
     /// });
     /// ```

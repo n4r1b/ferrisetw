@@ -140,7 +140,7 @@ pub trait TraceBaseTrait {
     /// # use ferrisetw::provider::Provider;
     /// let provider = Provider::new()
     ///     .by_name(String::from("Microsoft-Windows-DistributedCOM"))
-    ///     .add_callback(|record, schema| { println!("{}", record.EventHeader.ProcessId); })
+    ///     .add_callback(|record, schema| { println!("{}", record.process_id()); })
     ///     .build()
     ///     .unwrap();
     /// let my_trace = UserTrace::new().enable(provider);
