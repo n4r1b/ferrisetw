@@ -191,7 +191,7 @@ impl<'info> PropertyIterator<'info> {
 }
 
 impl<'info> Iterator for PropertyIterator<'info> {
-    type Item = Property;
+    type Item = Result<Property, crate::native::tdh_types::PropertyError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.next_index == self.count {

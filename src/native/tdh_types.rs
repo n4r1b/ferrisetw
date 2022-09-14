@@ -13,6 +13,13 @@ use num_traits::FromPrimitive;
 
 use windows::Win32::System::Diagnostics::Etw;
 
+#[derive(Debug)]
+pub enum PropertyError{
+    /// Parsing complex types in properties is not supported in this crate
+    /// (yet? See <https://github.com/n4r1b/ferrisetw/issues/76>)
+    UnimplementedType
+}
+
 
 /// Attributes of a property
 #[derive(Debug, Clone, Default)]
@@ -30,23 +37,40 @@ pub struct Property {
 
 #[doc(hidden)]
 impl Property {
-    pub fn new(name: String, property: &Etw::EVENT_PROPERTY_INFO) -> Self {
-        // Fixme: Check flags to see which values to get for the in_type
-        unsafe {
-            let out_type = FromPrimitive::from_u16(property.Anonymous1.nonStructType.OutType)
+    pub fn new(name: String, property: &Etw::EVENT_PROPERTY_INFO) -> Result<Self, PropertyError> {
+        let flags = PropertyFlags::from(property.Flags);
+
+        if flags.contains(PropertyFlags::PROPERTY_STRUCT) == false {
+            // The property is a non-struct type. It makes sense to access these fields of the unions
+            let ot = unsafe { property.Anonymous1.nonStructType.OutType };
+            let it = unsafe { property.Anonymous1.nonStructType.InType };
+
+            let length = if flags.contains(PropertyFlags::PROPERTY_PARAM_LENGTH) {
+                // TODO: support properties that point at sibling property to tell the length of the property
+                return Err(PropertyError::UnimplementedType);
+            } else {
+                // The property has no param for its length, it makes sense to access this field of the union
+                unsafe { property.Anonymous3.length }
+            };
+
+            let out_type = FromPrimitive::from_u16(ot)
                 .unwrap_or(TdhOutType::OutTypeNull);
-            let in_type = FromPrimitive::from_u16(property.Anonymous1.nonStructType.InType)
+
+            let in_type = FromPrimitive::from_u16(it)
                 .unwrap_or(TdhInType::InTypeNull);
 
-            Property {
+            return Ok(Property {
                 name,
-                flags: PropertyFlags::from(property.Flags),
-                length: property.Anonymous3.length,
+                flags,
+                length,
                 in_type,
                 out_type,
-            }
+            });
         }
+
+        Err(PropertyError::UnimplementedType)
     }
+
     pub fn in_type(&self) -> TdhInType {
         self.in_type
     }
