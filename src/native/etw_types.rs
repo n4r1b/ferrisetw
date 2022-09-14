@@ -6,11 +6,9 @@
 //!
 //! In most cases a user of the crate won't have to deal with this and can directly obtain the data
 //! needed by using the functions exposed by the modules at the crate level
-use crate::native::tdh_types::Property;
 use crate::provider::event_filter::EventFilterDescriptor;
 use crate::provider::{Provider, TraceFlags};
 use crate::trace::{TraceData, TraceProperties, TraceTrait};
-use crate::utils;
 use std::ffi::c_void;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
@@ -273,67 +271,6 @@ impl<'filters> EnableTraceParameters<'filters> {
     }
 }
 
-
-/// Newtype wrapper over an [TRACE_EVENT_INFO]
-///
-/// [TRACE_EVENT_INFO]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.TRACE_EVENT_INFO.html
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct TraceEventInfo(Etw::TRACE_EVENT_INFO);
-
-impl std::ops::Deref for TraceEventInfo {
-    type Target = Etw::TRACE_EVENT_INFO;
-
-    fn deref(&self) -> &self::Etw::TRACE_EVENT_INFO {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for TraceEventInfo {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl From<&TraceEventInfoRaw> for TraceEventInfo {
-    fn from(val: &TraceEventInfoRaw) -> Self {
-        unsafe { *(val.info.as_ptr() as *mut TraceEventInfo) }
-    }
-}
-
-/// Newtype wrapper over an [EVENT_PROPERTY_INFO]
-///
-/// [EVENT_PROPERTY_INFO]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.EVENT_PROPERTY_INFO.html
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct EventPropertyInfo(Etw::EVENT_PROPERTY_INFO);
-
-impl std::ops::Deref for EventPropertyInfo {
-    type Target = Etw::EVENT_PROPERTY_INFO;
-
-    fn deref(&self) -> &self::Etw::EVENT_PROPERTY_INFO {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for EventPropertyInfo {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl From<&[u8]> for EventPropertyInfo {
-    fn from(val: &[u8]) -> Self {
-        unsafe { *(val.as_ptr() as *mut EventPropertyInfo) }
-    }
-}
-
-impl Default for EventPropertyInfo {
-    fn default() -> Self {
-        unsafe { std::mem::zeroed::<EventPropertyInfo>() }
-    }
-}
-
 /// Wrapper over the [DECODING_SOURCE] type
 ///
 /// [DECODING_SOURCE]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.DECODING_SOURCE.html
@@ -360,77 +297,3 @@ impl From<Etw::DECODING_SOURCE> for DecodingSource {
 // Safe cast (EVENT_HEADER_FLAG_32_BIT_HEADER = 32)
 #[doc(hidden)]
 pub const EVENT_HEADER_FLAG_32_BIT_HEADER: u16 = Etw::EVENT_HEADER_FLAG_32_BIT_HEADER as u16;
-
-#[repr(C)]
-#[derive(Debug, Clone, Default)]
-pub(crate) struct TraceEventInfoRaw {
-    info: Vec<u8>,
-}
-
-impl TraceEventInfoRaw {
-    pub(crate) fn alloc(len: u32) -> Self {
-        TraceEventInfoRaw {
-            info: vec![0; len as usize],
-        }
-    }
-
-    pub(crate) fn info_as_ptr(&mut self) -> *mut u8 {
-        self.info.as_mut_ptr()
-    }
-
-    pub(crate) fn provider_guid(&self) -> GUID {
-        TraceEventInfo::from(self).ProviderGuid
-    }
-
-    pub(crate) fn event_id(&self) -> u16 {
-        TraceEventInfo::from(self).EventDescriptor.Id
-    }
-
-    pub(crate) fn event_version(&self) -> u8 {
-        TraceEventInfo::from(self).EventDescriptor.Version
-    }
-
-    pub(crate) fn decoding_source(&self) -> DecodingSource {
-        DecodingSource::from(TraceEventInfo::from(self).DecodingSource)
-    }
-
-    pub(crate) fn provider_name(&self) -> String {
-        let provider_name_offset = TraceEventInfo::from(self).ProviderNameOffset as usize;
-        // TODO: Evaluate performance, but this sounds better than creating a whole Vec<u16> and getting the string from the offset/2
-        utils::parse_unk_size_null_utf16_string(&self.info[provider_name_offset..])
-    }
-
-    pub(crate) fn task_name(&self) -> String {
-        let task_name_offset = TraceEventInfo::from(self).TaskNameOffset as usize;
-        utils::parse_unk_size_null_utf16_string(&self.info[task_name_offset..])
-    }
-
-    pub(crate) fn opcode_name(&self) -> String {
-        let opcode_name_offset = TraceEventInfo::from(self).OpcodeNameOffset as usize;
-        if opcode_name_offset == 0 {
-            return String::from("");
-        }
-        utils::parse_unk_size_null_utf16_string(&self.info[opcode_name_offset..])
-    }
-
-    pub(crate) fn property_count(&self) -> u32 {
-        TraceEventInfo::from(self).PropertyCount
-    }
-
-    pub(crate) fn property(&self, index: u32) -> Property {
-        // let's make sure index is not bigger thant the PropertyCount
-        assert!(index <= self.property_count());
-
-        // We need to subtract the sizeof(EVENT_PROPERTY_INFO) due to how TRACE_EVENT_INFO is declared
-        // in the bindings, the last field `EventPropertyInfoArray[ANYSIZE_ARRAY]` is declared as
-        // [EVENT_PROPERTY_INFO; 1]
-        // https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.TRACE_EVENT_INFO.html#structfield.EventPropertyInfoArray
-        let curr_prop_offset = index as usize * std::mem::size_of::<EventPropertyInfo>()
-            + (std::mem::size_of::<TraceEventInfo>() - std::mem::size_of::<EventPropertyInfo>());
-
-        let curr_prop = EventPropertyInfo::from(&self.info[curr_prop_offset..]);
-        let name =
-            utils::parse_unk_size_null_utf16_string(&self.info[curr_prop.NameOffset as usize..]);
-        Property::new(name, &curr_prop)
-    }
-}

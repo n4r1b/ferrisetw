@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::native::tdh;
-use crate::native::etw_types::TraceEventInfoRaw;
+use crate::native::tdh::TraceEventInfo;
 use crate::native::etw_types::EventRecord;
 use crate::schema::Schema;
 
@@ -81,7 +81,7 @@ impl SchemaKey {
 /// See also the code of `SchemaKey` for more info
 #[derive(Default)]
 pub struct SchemaLocator {
-    schemas: HashMap<SchemaKey, Arc<TraceEventInfoRaw>>,
+    schemas: HashMap<SchemaKey, Arc<TraceEventInfo>>,
 }
 
 impl std::fmt::Debug for SchemaLocator {
@@ -121,7 +121,7 @@ impl SchemaLocator {
 
         if !self.schemas.contains_key(&key) {
             // TODO: Cloning for now, should be a reference at some point...
-            info = Arc::from(tdh::schema_from_tdh(event)?);
+            info = Arc::from(TraceEventInfo::build_from_event(event)?);
             self.schemas.insert(key, Arc::clone(&info));
         } else {
             info = Arc::clone(self.schemas.get(&key).unwrap());

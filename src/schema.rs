@@ -1,8 +1,9 @@
 //! ETW Event Schema and handler
 //!
 //! This module contains the means needed to interact with the Schema of an ETW event
-use crate::native::etw_types::{DecodingSource, EventRecord, TraceEventInfoRaw};
+use crate::native::etw_types::{DecodingSource, EventRecord};
 use crate::native::tdh_types::Property;
+use crate::native::tdh::TraceEventInfo;
 use std::sync::Arc;
 
 /// Represents an `EventRecord` along with its suitable Schema
@@ -13,11 +14,11 @@ use std::sync::Arc;
 /// which let us obtain information from the ETW event.
 pub struct Schema {
     record: EventRecord,
-    te_info: Arc<TraceEventInfoRaw>,
+    te_info: Arc<TraceEventInfo>,
 }
 
 impl Schema {
-    pub(crate) fn new(record: &EventRecord, te_info: Arc<TraceEventInfoRaw>) -> Self {
+    pub(crate) fn new(record: &EventRecord, te_info: Arc<TraceEventInfo>) -> Self {
         Schema { record: EventRecord::clone(record), te_info }
     }
 
@@ -41,7 +42,7 @@ impl Schema {
     ///     let decoding_source = schema.decoding_source();
     /// };
     /// ```
-    /// [TraceEventInfo]: crate::native::etw_types::TraceEventInfo
+    /// [TraceEventInfo]: crate::native::tdh::TraceEventInfo
     pub fn decoding_source(&self) -> DecodingSource {
         self.te_info.decoding_source()
     }
@@ -57,7 +58,7 @@ impl Schema {
     ///     let provider_name = schema.provider_name();
     /// };
     /// ```
-    /// [TraceEventInfo]: crate::native::etw_types::TraceEventInfo
+    /// [TraceEventInfo]: crate::native::tdh::TraceEventInfo
     pub fn provider_name(&self) -> String {
         self.te_info.provider_name()
     }
@@ -74,7 +75,7 @@ impl Schema {
     ///     let task_name = schema.task_name();
     /// };
     /// ```
-    /// [TraceEventInfo]: crate::native::etw_types::TraceEventInfo
+    /// [TraceEventInfo]: crate::native::tdh::TraceEventInfo
     pub fn task_name(&self) -> String {
         self.te_info.task_name()
     }
@@ -91,7 +92,7 @@ impl Schema {
     ///     let opcode_name = schema.opcode_name();
     /// };
     /// ```
-    /// [TraceEventInfo]: crate::native::etw_types::TraceEventInfo
+    /// [TraceEventInfo]: crate::native::tdh::TraceEventInfo
     pub fn opcode_name(&self) -> String {
         self.te_info.opcode_name()
     }
@@ -101,7 +102,7 @@ impl Schema {
     }
 
     pub(crate) fn property(&self, index: u32) -> Property {
-        self.te_info.property(index)
+        self.te_info.property(index).unwrap()
     }
 }
 
