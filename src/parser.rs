@@ -18,6 +18,8 @@ use windows::core::GUID;
 /// Parser module errors
 #[derive(Debug)]
 pub enum ParserError {
+    /// No property has this name
+    NotFound,
     /// An invalid type...
     InvalidType,
     /// Error parsing
@@ -189,11 +191,11 @@ impl<'a> Parser<'a> {
 
             if name == prop_name {
                 self.last_property += 1;
-                break;
+                return Ok(prop_info)
             }
         }
 
-        Ok(prop_info)
+        Err(ParserError::NotFound)
     }
 }
 
