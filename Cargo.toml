@@ -22,6 +22,7 @@ windows = { version = "0.39", features = [
 com = "0.4.0"
 memoffset = "0.6"
 rand = "~0.8.0"
+once_cell = "1.14"
 num = "0.4"
 num-traits = "0.2"
 num-derive = "0.3"

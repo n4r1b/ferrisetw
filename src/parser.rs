@@ -89,15 +89,15 @@ pub trait TryParse<T> {
 /// This structure holds the necessary data to parse the ETW event and retrieve the data from the
 /// event
 #[allow(dead_code)]
-pub struct Parser<'a> {
-    schema: &'a Schema,
-    properties: Vec<Property>,
+pub struct Parser<'schema> {
+    schema: &'schema Schema,
+    properties: &'schema [Property],
     buffer: Vec<u8>,
     last_property: usize,
     cache: HashMap<String, Rc<PropertyInfo>>,
 }
 
-impl<'a> Parser<'a> {
+impl<'schema> Parser<'schema> {
     /// Use the `create` function to create an instance of a Parser
     ///
     /// # Arguments
@@ -113,7 +113,7 @@ impl<'a> Parser<'a> {
     ///     let parser = Parser::create(&schema);
     /// };
     /// ```
-    pub fn create(schema: &'a Schema) -> Self {
+    pub fn create(schema: &'schema Schema) -> Self {
         Parser {
             schema,
             buffer: schema.record().user_buffer(),

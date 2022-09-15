@@ -5,21 +5,27 @@ use crate::native::etw_types::{DecodingSource, EventRecord};
 use crate::native::tdh::TraceEventInfo;
 use crate::native::tdh_types::Property;
 use std::sync::Arc;
+use once_cell::sync::OnceCell;
 
 /// Represents an `EventRecord` along with its suitable Schema
 ///
 /// It is usually built from [`crate::schema_locator::SchemaLocator::event_schema`].
 ///
-/// This structure holds a [TraceEventInfo](https://docs.microsoft.com/en-us/windows/win32/api/tdh/ns-tdh-trace_event_info)
-/// which let us obtain information from the ETW event.
+/// This structure is basically a wrapper over a [TraceEventInfo](https://docs.microsoft.com/en-us/windows/win32/api/tdh/ns-tdh-trace_event_info),
+/// with a few info parsed (and cached) out of it
 pub struct Schema {
     record: EventRecord,
     te_info: Arc<TraceEventInfo>,
+    cached_properties: OnceCell<Vec<Property>>,
 }
 
 impl Schema {
     pub(crate) fn new(record: &EventRecord, te_info: Arc<TraceEventInfo>) -> Self {
-        Schema { record: EventRecord::clone(record), te_info }
+        Schema {
+            record: EventRecord::clone(record),
+            te_info,
+            cached_properties: OnceCell::new()
+        }
     }
 
     // This is temporary and will be removed in a later commit
@@ -97,8 +103,13 @@ impl Schema {
         self.te_info.opcode_name()
     }
 
-    pub(crate) fn properties(&self) -> Vec<Property> {
-        self.te_info.properties().collect()
+    /// Parses the list of properties of the wrapped `TRACE_EVENT_INFO`
+    ///
+    /// This is parsed on first call, and cached for later use
+    pub(crate) fn properties(&self) -> &[Property] {
+        self.cached_properties.get_or_init(|| {
+            self.te_info.properties().collect()
+        })
     }
 }
 
