@@ -161,24 +161,49 @@ impl TraceEventInfo {
         extract_utf16_string!(self, OpcodeNameOffset);
     }
 
-    pub(crate) fn property_count(&self) -> u32 {
-        self.as_raw().PropertyCount
+    pub(crate) fn properties<'info>(&'info self) -> PropertyIterator<'info> {
+        PropertyIterator::new(self)
     }
+}
 
-    /// Get a property given its index
-    ///
-    /// This returns `None` in case the index is out of bounds
-    pub(crate) fn property(&self, index: u32) -> Option<Property> {
-        if index >= self.property_count() {
+impl Drop for TraceEventInfo {
+    fn drop(&mut self) {
+        unsafe {
+            // Safety:
+            // * ptr is a block of memory currently allocated via alloc::alloc
+            // * layout is th one that was used to allocate that block of memory
+            std::alloc::dealloc(self.mut_data_for_dealloc, self.layout);
+        }
+    }
+}
+
+pub(crate) struct PropertyIterator<'info> {
+    next_index: u32,
+    count: u32,
+    te_info: &'info TraceEventInfo,
+}
+
+impl<'info> PropertyIterator<'info> {
+    fn new(te_info: &'info TraceEventInfo) -> Self {
+        let count = te_info.as_raw().PropertyCount;
+        Self { next_index: 0, count, te_info }
+    }
+}
+
+impl<'info> Iterator for PropertyIterator<'info> {
+    type Item = Property;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next_index == self.count {
             return None;
         }
 
-        let properties_array = &self.as_raw().EventPropertyInfoArray;
+        let properties_array = &self.te_info.as_raw().EventPropertyInfoArray;
         let properties_array = properties_array as *const EVENT_PROPERTY_INFO;
         let cur_property_ptr = unsafe {
             // Safety:
             //  * index being in the right bounds, this guarantees the resulting pointer lies in the same allocated object
-            properties_array.offset(index as isize)
+            properties_array.offset(self.next_index as isize)   // we assume there will not be more than 2 billion properties for an event
         };
         let curr_prop = unsafe {
             // Safety:
@@ -193,10 +218,11 @@ impl TraceEventInfo {
             }
         };
 
+        let te_info_data = self.te_info.as_raw() as *const TRACE_EVENT_INFO as *const u8;
         let property_name_offset = curr_prop.NameOffset;
         let property_name_ptr = unsafe {
             // Safety: offset comes from a Microsoft API
-            self.data.offset(property_name_offset as isize)
+            te_info_data.offset(property_name_offset as isize)
         };
         if property_name_ptr.is_null() {
             // This is really a safety net, there is no reason the offset nullifies the base pointer
@@ -212,18 +238,8 @@ impl TraceEventInfo {
         };
         let property_name = property_name.to_string_lossy();
 
+        self.next_index += 1;
         Some(Property::new(property_name, curr_prop))
-    }
-}
-
-impl Drop for TraceEventInfo {
-    fn drop(&mut self) {
-        unsafe {
-            // Safety:
-            // * ptr is a block of memory currently allocated via alloc::alloc
-            // * layout is th one that was used to allocate that block of memory
-            std::alloc::dealloc(self.mut_data_for_dealloc, self.layout);
-        }
     }
 }
 

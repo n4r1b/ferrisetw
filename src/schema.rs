@@ -2,8 +2,8 @@
 //!
 //! This module contains the means needed to interact with the Schema of an ETW event
 use crate::native::etw_types::{DecodingSource, EventRecord};
-use crate::native::tdh_types::Property;
 use crate::native::tdh::TraceEventInfo;
+use crate::native::tdh_types::Property;
 use std::sync::Arc;
 
 /// Represents an `EventRecord` along with its suitable Schema
@@ -97,12 +97,8 @@ impl Schema {
         self.te_info.opcode_name()
     }
 
-    pub(crate) fn property_count(&self) -> u32 {
-        self.te_info.property_count()
-    }
-
-    pub(crate) fn property(&self, index: u32) -> Property {
-        self.te_info.property(index).unwrap()
+    pub(crate) fn properties(&self) -> Vec<Property> {
+        self.te_info.properties().collect()
     }
 }
 

@@ -5,7 +5,7 @@ use crate::native::etw_types::EVENT_HEADER_FLAG_32_BIT_HEADER;
 use crate::native::sddl;
 use crate::native::tdh;
 use crate::native::tdh_types::{Property, PropertyFlags, TdhInType, TdhOutType};
-use crate::property::{PropertyInfo, PropertyIter};
+use crate::property::PropertyInfo;
 use crate::schema::Schema;
 use crate::utils;
 use std::borrow::Borrow;
@@ -89,9 +89,9 @@ pub trait TryParse<T> {
 #[allow(dead_code)]
 pub struct Parser<'a> {
     schema: &'a Schema,
-    properties: PropertyIter,
+    properties: Vec<Property>,
     buffer: Vec<u8>,
-    last_property: u32,
+    last_property: usize,
     cache: HashMap<String, Rc<PropertyInfo>>,
 }
 
@@ -115,7 +115,7 @@ impl<'a> Parser<'a> {
         Parser {
             schema,
             buffer: schema.record().user_buffer(),
-            properties: PropertyIter::new(schema),
+            properties: schema.properties(),
             last_property: 0,
             cache: HashMap::new(), // We could fill the cache on creation
         }
@@ -166,16 +166,10 @@ impl<'a> Parser<'a> {
         }
 
         let mut prop_info = Rc::new(PropertyInfo::default());
-
-        // TODO: Find a way to do this with an iter, try_find looks promising but is not stable yet
-        // TODO: Clean this a bit, not a big fan of this loop
-        for i in self.last_property..self.schema.property_count() {
-            let curr_prop = match self.properties.property(i) {
-                Some(prop) => prop,
-                None => return Err(ParserError::PropertyError("Index out of bounds".to_owned())),
-            };
-
-            let prop_size = self.find_property_size(curr_prop)?;
+        // TODO: avoid this clone
+        let props = self.properties.clone();
+        for property in props.iter().skip(self.last_property) {
+            let prop_size = self.find_property_size(&property)?;
 
             if self.buffer.len() < prop_size {
                 return Err(ParserError::PropertyError(
@@ -183,16 +177,18 @@ impl<'a> Parser<'a> {
                 ));
             }
 
+            let prop_name = String::clone(&property.name);
+
             // TODO: Evaluate not cloning the Property nor the buffer
             // We drain the buffer, if everything works correctly in the end the buffer will be empty
             // and we should have all properties in the cache
             let prop_buffer = self.buffer.drain(..prop_size).collect();
-            prop_info = Rc::from(PropertyInfo::create(curr_prop.clone(), prop_buffer));
+            prop_info = Rc::from(PropertyInfo::create(property.clone(), prop_buffer));
             self.cache
-                .insert(String::from(&curr_prop.name), Rc::clone(&prop_info));
+                .insert(String::from(&prop_name), Rc::clone(&prop_info));
 
-            if name == curr_prop.name {
-                self.last_property = i + 1;
+            if name == prop_name {
+                self.last_property += 1;
                 break;
             }
         }
