@@ -7,7 +7,6 @@ use crate::native::etw_types::EventHeaderExtendedDataItem;
 
 /// A read-only wrapper over an [EVENT_RECORD](https://docs.microsoft.com/en-us/windows/win32/api/evntcons/ns-evntcons-event_record)
 #[repr(transparent)]
-#[derive(Clone)] // Temporary used, will be removed in an upcoming commit
 pub struct EventRecord(EVENT_RECORD);
 
 impl EventRecord {

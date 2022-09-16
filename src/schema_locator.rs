@@ -102,11 +102,6 @@ impl SchemaLocator {
     /// # Arguments
     /// * `event` - The [EventRecord] that's passed to the callback
     ///
-    /// # Remark
-    /// This is the first function that should be called within a Provider callback.
-    /// It consumes the ETW event and wrap it into a [Schema] that represents it
-    /// and provides a way to access its fields.
-    ///
     /// # Example
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
@@ -127,6 +122,6 @@ impl SchemaLocator {
             info = Arc::clone(self.schemas.get(&key).unwrap());
         }
 
-        Ok(Schema::new(event, info))
+        Ok(Schema::new(info))
     }
 }

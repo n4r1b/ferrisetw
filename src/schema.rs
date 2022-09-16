@@ -1,36 +1,29 @@
 //! ETW Event Schema and handler
 //!
 //! This module contains the means needed to interact with the Schema of an ETW event
-use crate::native::etw_types::{DecodingSource, EventRecord};
+use crate::native::etw_types::DecodingSource;
 use crate::native::tdh::TraceEventInfo;
 use crate::native::tdh_types::Property;
 use std::sync::Arc;
 use once_cell::sync::OnceCell;
 
-/// Represents an `EventRecord` along with its suitable Schema
+/// A schema suitable for parsing a given kind of event.
 ///
-/// It is usually built from [`crate::schema_locator::SchemaLocator::event_schema`].
+/// It is usually retrieved from [`crate::schema_locator::SchemaLocator::event_schema`].
 ///
 /// This structure is basically a wrapper over a [TraceEventInfo](https://docs.microsoft.com/en-us/windows/win32/api/tdh/ns-tdh-trace_event_info),
 /// with a few info parsed (and cached) out of it
 pub struct Schema {
-    record: EventRecord,
     te_info: Arc<TraceEventInfo>,
     cached_properties: OnceCell<Vec<Property>>,
 }
 
 impl Schema {
-    pub(crate) fn new(record: &EventRecord, te_info: Arc<TraceEventInfo>) -> Self {
+    pub(crate) fn new(te_info: Arc<TraceEventInfo>) -> Self {
         Schema {
-            record: EventRecord::clone(record),
             te_info,
             cached_properties: OnceCell::new()
         }
-    }
-
-    // This is temporary and will be removed in a later commit
-    pub fn record(&self) -> &EventRecord {
-        &self.record
     }
 
     /// Use the `decoding_source` function to obtain the [DecodingSource] from the [TraceEventInfo]

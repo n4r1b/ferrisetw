@@ -11,7 +11,7 @@ fn main() {
             .event_schema(record)
         {
             Ok(schema) => {
-                let opcode = schema.record().opcode();
+                let opcode = record.opcode();
                 if opcode == 10 {
                     let name = schema.provider_name();
                     println!("ProviderName: {}", name);

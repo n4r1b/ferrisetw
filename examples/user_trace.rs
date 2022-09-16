@@ -11,7 +11,7 @@ fn main() {
             .event_schema(record)
         {
             Ok(schema) => {
-                let event_id = schema.record().event_id();
+                let event_id = record.event_id();
                 if event_id == 2 {
                     let name = schema.provider_name();
                     println!("Name: {}", name);
