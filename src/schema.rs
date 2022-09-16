@@ -81,7 +81,7 @@ impl SchemaKey {
 /// * EventHeader.EventDescriptor.Level
 ///
 /// Credits: [KrabsETW::schema_locator](https://github.com/microsoft/krabsetw/blob/master/krabs/krabs/schema_locator.hpp).
-/// See also the [`SchemaKey`] for more info
+/// See also the code of `SchemaKey` for more info
 #[derive(Default)]
 pub struct SchemaLocator {
     schemas: HashMap<SchemaKey, Arc<TraceEventInfoRaw>>,
