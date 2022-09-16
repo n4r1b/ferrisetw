@@ -11,7 +11,7 @@ would simplify ETW management written in Rust and available as a crate for other
 be pretty neat and that's where this crate comes into play 🔥
 
 ## Examples
-You can find a few examples within the [Examples](./examples) folder. If you are familiar with KrabsETW you'll see that is very similar
+You can find a few examples within the [examples](./examples) or the [tests](./tests) folders. If you are familiar with KrabsETW you'll see that is very similar
 In case you've never used KrabsETW before, the examples are very straight forward and should be easy to follow. If you have
 any issues don't hesitate in asking.
 
