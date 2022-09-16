@@ -3,6 +3,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use windows::core::GUID;
+
 use crate::native::tdh;
 use crate::native::tdh::TraceEventInfo;
 use crate::native::etw_types::EventRecord;
@@ -32,9 +34,7 @@ type SchemaResult<T> = Result<T, SchemaError>;
 /// > i.e. all events with the same DecodeGuid, Id, and Version should have the same set of fields with no changes in field names, field types, or field ordering.
 #[derive(Debug, Eq, PartialEq, Hash)]
 struct SchemaKey {
-    // For now, lazy to wrap Guid around an implement Hash
-    // TODO: wrap Guid and implement hash
-    provider: String,
+    provider: GUID,
     /// From the [docs](https://docs.microsoft.com/en-us/windows/win32/api/evntprov/ns-evntprov-event_descriptor): A 16-bit number used to identify manifest-based events
     id: u16,
     /// From the [docs](https://docs.microsoft.com/en-us/windows/win32/api/evntprov/ns-evntprov-event_descriptor): An 8-bit number used to specify the version of a manifest-based event.
@@ -54,9 +54,8 @@ struct SchemaKey {
 
 impl SchemaKey {
     pub fn new(event: &EventRecord) -> Self {
-        let provider = format!("{:?}", event.provider_id());
         SchemaKey {
-            provider,
+            provider: event.provider_id(),
             id: event.event_id(),
             opcode: event.opcode(),
             version: event.version(),
