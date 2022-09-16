@@ -18,7 +18,6 @@ use super::etw_types::*;
 use crate::provider::Provider;
 use crate::trace::{TraceData, TraceProperties, TraceTrait};
 use crate::traits::*;
-use std::sync::RwLock;
 
 /// Evntrace native module errors
 #[derive(Debug)]
@@ -71,7 +70,7 @@ impl NativeEtw {
         &mut self,
         name: &str,
         properties: &TraceProperties,
-        providers: &RwLock<Vec<Provider>>,
+        providers: &[Provider],
     ) where
         T: TraceTrait,
     {
@@ -228,7 +227,7 @@ impl NativeEtw {
                 any,
                 all,
                 0,
-                &*parameters,
+                parameters.as_ptr(),
             ) != 0
             {
                 return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));

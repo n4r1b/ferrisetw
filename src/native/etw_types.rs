@@ -7,17 +7,18 @@
 //! In most cases a user of the crate won't have to deal with this and can directly obtain the data
 //! needed by using the functions exposed by the modules at the crate level
 use crate::native::tdh_types::Property;
+use crate::provider::event_filter::EventFilterDescriptor;
 use crate::provider::{Provider, TraceFlags};
 use crate::trace::{TraceData, TraceProperties, TraceTrait};
 use crate::utils;
 use std::ffi::c_void;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
-use std::sync::RwLock;
 use windows::core::GUID;
 use windows::core::PSTR;
 use windows::Win32::Foundation::MAX_PATH;
 use windows::Win32::System::Diagnostics::Etw;
+use windows::Win32::System::Diagnostics::Etw::EVENT_FILTER_DESCRIPTOR;
 
 // typedef ULONG64 TRACEHANDLE, *PTRACEHANDLE;
 pub(crate) type TraceHandle = u64;
@@ -146,7 +147,7 @@ impl TraceInfo {
         &mut self,
         trace_name: &str,
         trace_properties: &TraceProperties,
-        providers: &RwLock<Vec<Provider>>,
+        providers: &[Provider],
     ) where
         T: TraceTrait,
     {
@@ -234,37 +235,44 @@ impl<'tracedata> Default for EventTraceLogfile<'tracedata> {
 /// [ENABLE_TRACE_PARAMETERS]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.ENABLE_TRACE_PARAMETERS.html
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-pub struct EnableTraceParameters(Etw::ENABLE_TRACE_PARAMETERS);
+pub struct EnableTraceParameters<'filters>{
+    native: Etw::ENABLE_TRACE_PARAMETERS,
+    lifetime: PhantomData<&'filters EventFilterDescriptor>,
+}
 
-impl EnableTraceParameters {
-    pub fn create(guid: GUID, trace_flags: TraceFlags) -> Self {
+impl<'filters> EnableTraceParameters<'filters> {
+    pub fn create(guid: GUID, trace_flags: TraceFlags, filters: &'filters [EventFilterDescriptor]) -> Self {
         let mut params = EnableTraceParameters::default();
-        params.0.ControlFlags = 0;
-        params.0.Version = Etw::ENABLE_TRACE_PARAMETERS_VERSION_2;
-        params.0.SourceId = guid;
-        params.0.EnableProperty = trace_flags.bits();
+        params.native.ControlFlags = 0;
+        params.native.Version = Etw::ENABLE_TRACE_PARAMETERS_VERSION_2;
+        params.native.SourceId = guid;
+        params.native.EnableProperty = trace_flags.bits();
 
-        // TODO: Add Filters option
-        params.0.EnableFilterDesc = std::ptr::null_mut();
-        params.0.FilterDescCount = 0;
+
+        let mut win_filter_descriptors: Vec<EVENT_FILTER_DESCRIPTOR> = filters
+            .iter()
+            .map(|efd| efd.as_event_filter_descriptor())
+            .collect();
+        params.native.FilterDescCount = win_filter_descriptors.len() as u32; // (let's assume we won't try to fit more than 4 billion filters)
+        if filters.is_empty() {
+            params.native.EnableFilterDesc = std::ptr::null_mut();
+        } else {
+            params.native.EnableFilterDesc = win_filter_descriptors.as_mut_ptr();
+        }
 
         params
     }
-}
 
-impl std::ops::Deref for EnableTraceParameters {
-    type Target = Etw::ENABLE_TRACE_PARAMETERS;
-
-    fn deref(&self) -> &self::Etw::ENABLE_TRACE_PARAMETERS {
-        &self.0
+    /// Returns an unsafe pointer over the wrapped `ENABLE_TRACE_PARAMETERS`
+    ///
+    /// # Safety
+    ///
+    /// This pointer is valid as long `self` is valid (and not mutated)
+    pub fn as_ptr(&self) -> *const Etw::ENABLE_TRACE_PARAMETERS {
+        &self.native as *const _
     }
 }
 
-impl std::ops::DerefMut for EnableTraceParameters {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
 
 /// Newtype wrapper over an [TRACE_EVENT_INFO]
 ///
