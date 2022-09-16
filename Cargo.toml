@@ -3,7 +3,9 @@ name = "ferrisetw"
 version = "1.0.0"
 license = "MIT OR Apache-2.0"
 description = "Basically a KrabsETW rip-off written in Rust"
-authors = ["n4r1b"]
+keywords = ["etw", "krabsetw", "event", "tracing", "windows"]
+categories = ["api-bindings", "parsing"]
+authors = ["n4r1b", "daladim"]
 edition = "2018"
 repository = "https://github.com/n4r1b/ferrisetw"
 
