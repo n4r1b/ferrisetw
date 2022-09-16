@@ -15,7 +15,7 @@ fn main() {
                 if opcode == 10 {
                     let name = schema.provider_name();
                     println!("ProviderName: {}", name);
-                    let mut parser = Parser::create(&schema);
+                    let mut parser = Parser::create(record, &schema);
                     // Fully Qualified Syntax for Disambiguation
                     match TryParse::<String>::try_parse(&mut parser, "FileName") {
                         Ok(filename) => println!("FileName: {}", filename),

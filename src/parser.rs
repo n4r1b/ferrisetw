@@ -2,17 +2,17 @@
 //!
 //! This module act as a helper to parse the Buffer from an ETW Event
 use crate::native::etw_types::EVENT_HEADER_FLAG_32_BIT_HEADER;
+use crate::native::etw_types::EventRecord;
 use crate::native::sddl;
 use crate::native::tdh;
 use crate::native::tdh_types::{Property, PropertyFlags, TdhInType, TdhOutType};
-use crate::property::PropertyInfo;
+use crate::property::PropertySlice;
 use crate::schema::Schema;
 use crate::utils;
-use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::rc::Rc;
+use std::sync::Mutex;
 use windows::core::GUID;
 
 /// Parser module errors
@@ -81,23 +81,31 @@ pub trait TryParse<T> {
     ///
     /// # Arguments
     /// * `name` - Name of the property to be found in the Schema
-    fn try_parse(&mut self, name: &str) -> Result<T, ParserError>;
+    fn try_parse(&self, name: &str) -> Result<T, ParserError>;
+}
+
+#[derive(Default)]
+/// Cache of the properties we've extracted already
+///
+/// This is useful because computing their offset can be costly
+struct CachedSlices<'schema, 'record> {
+    slices: HashMap<String, PropertySlice<'schema, 'record>>,
+    /// The user buffer index we've cached up to
+    last_cached_offset: usize,
 }
 
 /// Represents a Parser
 ///
-/// This structure holds the necessary data to parse the ETW event and retrieve the data from the
-/// event
+/// This structure provides a way to parse an ETW event (= extract its properties).
+/// Because properties may have variable length (e.g. strings), a `Parser` is only suited to a single [`EventRecord`]
 #[allow(dead_code)]
-pub struct Parser<'schema> {
-    schema: &'schema Schema,
+pub struct Parser<'schema, 'record> {
     properties: &'schema [Property],
-    buffer: Vec<u8>,
-    last_property: usize,
-    cache: HashMap<String, Rc<PropertyInfo>>,
+    record: &'record EventRecord,
+    cache: Mutex<CachedSlices<'schema, 'record>>,
 }
 
-impl<'schema> Parser<'schema> {
+impl<'schema, 'record> Parser<'schema, 'record> {
     /// Use the `create` function to create an instance of a Parser
     ///
     /// # Arguments
@@ -110,16 +118,14 @@ impl<'schema> Parser<'schema> {
     /// # use ferrisetw::parser::Parser;
     /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
-    ///     let parser = Parser::create(&schema);
+    ///     let parser = Parser::create(record, &schema);
     /// };
     /// ```
-    pub fn create(schema: &'schema Schema) -> Self {
+    pub fn create(event_record: &'record EventRecord, schema: &'schema Schema) -> Self {
         Parser {
-            schema,
-            buffer: schema.record().user_buffer(),
+            record: &event_record,
             properties: schema.properties(),
-            last_property: 0,
-            cache: HashMap::new(), // We could fill the cache on creation
+            cache: Mutex::new(CachedSlices::default())
         }
     }
 
@@ -143,7 +149,7 @@ impl<'schema> Parser<'schema> {
                 // There is an exception regarding pointer size though
                 // When reading captures, we should take care of the pointer size at the _source_, rather than the current architecture's pointer size.
                 // Note that a 32-bit program on a 64-bit OS would still send 32-bit pointers
-                if (self.schema.record().event_flags() & EVENT_HEADER_FLAG_32_BIT_HEADER) != 0 {
+                if (self.record.event_flags() & EVENT_HEADER_FLAG_32_BIT_HEADER) != 0 {
                     4
                 } else {
                     8
@@ -159,39 +165,42 @@ impl<'schema> Parser<'schema> {
             return Ok(property.len());
         }
 
-        Ok(tdh::property_size(self.schema.record(), &property.name)? as usize)
+        Ok(tdh::property_size(self.record, &property.name)? as usize)
     }
 
-    fn find_property(&mut self, name: &str) -> ParserResult<Rc<PropertyInfo>> {
-        if self.cache.contains_key(name) {
-            return Ok(Rc::clone(self.cache.get(name).unwrap()));
+    fn find_property(&self, name: &str) -> ParserResult<PropertySlice<'schema, 'record>> {
+        let mut cache = self.cache.lock().unwrap();
+
+        // We may have extracted this property already
+        if let Some(p) = cache.slices.get(name) {
+            return Ok(*p);
         }
 
-        let mut prop_info = Rc::new(PropertyInfo::default());
-        // TODO: avoid this clone
-        let props = self.properties.clone();
-        for property in props.iter().skip(self.last_property) {
+        let last_cached_property = cache.slices.len();
+        let properties_not_parsed_yet = match self.properties.get(last_cached_property..) {
+            Some(s) => s,
+            // If we've parsed every property already, that means no property matches this name
+            None => return Err(ParserError::NotFound)
+        };
+
+        for property in properties_not_parsed_yet {
             let prop_size = self.find_property_size(&property)?;
+            let end_offset = cache.last_cached_offset + prop_size;
 
-            if self.buffer.len() < prop_size {
-                return Err(ParserError::PropertyError(
-                    "Property length out of buffer bounds".to_owned(),
-                ));
-            }
+            let buffer = match self.record.user_buffer().get(cache.last_cached_offset..end_offset) {
+                None => return Err(ParserError::PropertyError("Property length out of buffer bounds".to_owned())),
+                Some(s) => s,
+            };
 
-            let prop_name = String::clone(&property.name);
+            let prop_slice = PropertySlice {
+                property,
+                buffer
+            };
+            cache.slices.insert(String::clone(&property.name), prop_slice);
+            cache.last_cached_offset += prop_size;
 
-            // TODO: Evaluate not cloning the Property nor the buffer
-            // We drain the buffer, if everything works correctly in the end the buffer will be empty
-            // and we should have all properties in the cache
-            let prop_buffer = self.buffer.drain(..prop_size).collect();
-            prop_info = Rc::from(PropertyInfo::create(property.clone(), prop_buffer));
-            self.cache
-                .insert(String::from(&prop_name), Rc::clone(&prop_info));
-
-            if name == prop_name {
-                self.last_property += 1;
-                return Ok(prop_info)
+            if &property.name == name {
+                return Ok(prop_slice);
             }
         }
 
@@ -201,16 +210,15 @@ impl<'schema> Parser<'schema> {
 
 macro_rules! impl_try_parse_primitive {
     ($T:ident) => {
-        impl TryParse<$T> for Parser<'_> {
-            fn try_parse(&mut self, name: &str) -> ParserResult<$T> {
-                let prop_info = self.find_property(name)?;
-                let prop_info: &PropertyInfo = prop_info.borrow();
+        impl TryParse<$T> for Parser<'_, '_> {
+            fn try_parse(&self, name: &str) -> ParserResult<$T> {
+                let prop_slice = self.find_property(name)?;
 
                 // TODO: Check In and Out type and do a better type checking
-                if std::mem::size_of::<$T>() != prop_info.buffer.len() {
+                if std::mem::size_of::<$T>() != prop_slice.buffer.len() {
                     return Err(ParserError::LengthMismatch);
                 }
-                Ok($T::from_ne_bytes(prop_info.buffer.as_slice().try_into()?))
+                Ok($T::from_ne_bytes(prop_slice.buffer.try_into()?))
             }
         }
     };
@@ -246,26 +254,26 @@ impl_try_parse_primitive!(isize);
 /// # use ferrisetw::parser::{Parser, TryParse};
 /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
 ///     let schema = schema_locator.event_schema(record).unwrap();
-///     let mut parser = Parser::create(&schema);
+///     let mut parser = Parser::create(record, &schema);
 ///     let image_name: String = parser.try_parse("ImageName").unwrap();
 /// };
 /// ```
 ///
 /// [TdhInTypes]: TdhInType
-impl TryParse<String> for Parser<'_> {
-    fn try_parse(&mut self, name: &str) -> ParserResult<String> {
-        let prop_info = self.find_property(name)?;
+impl TryParse<String> for Parser<'_, '_> {
+    fn try_parse(&self, name: &str) -> ParserResult<String> {
+        let prop_slice = self.find_property(name)?;
 
         // TODO: Handle errors and type checking better
-        let res = match prop_info.property.in_type() {
+        let res = match prop_slice.property.in_type() {
             TdhInType::InTypeUnicodeString => {
-                utils::parse_null_utf16_string(prop_info.buffer.as_slice())
+                utils::parse_null_utf16_string(prop_slice.buffer)
             }
-            TdhInType::InTypeAnsiString => String::from_utf8(prop_info.buffer.clone())?
+            TdhInType::InTypeAnsiString => String::from_utf8(prop_slice.buffer.to_vec())?
                 .trim_matches(char::default())
                 .to_string(),
             TdhInType::InTypeSid => {
-                sddl::convert_sid_to_string(prop_info.buffer.as_ptr() as *const _)?
+                sddl::convert_sid_to_string(prop_slice.buffer.as_ptr() as *const _)?
             }
             TdhInType::InTypeCountedString => unimplemented!(),
             _ => return Err(ParserError::InvalidType),
@@ -275,12 +283,11 @@ impl TryParse<String> for Parser<'_> {
     }
 }
 
-impl TryParse<GUID> for Parser<'_> {
-    fn try_parse(&mut self, name: &str) -> Result<GUID, ParserError> {
-        let prop_info = self.find_property(name)?;
-        let prop_info: &PropertyInfo = prop_info.borrow();
+impl TryParse<GUID> for Parser<'_, '_> {
+    fn try_parse(&self, name: &str) -> Result<GUID, ParserError> {
+        let prop_slice = self.find_property(name)?;
 
-        let guid_string = utils::parse_utf16_guid(prop_info.buffer.as_slice());
+        let guid_string = utils::parse_utf16_guid(prop_slice.buffer);
 
         if guid_string.len() != 36 {
             return Err(ParserError::LengthMismatch);
@@ -290,25 +297,24 @@ impl TryParse<GUID> for Parser<'_> {
     }
 }
 
-impl TryParse<IpAddr> for Parser<'_> {
-    fn try_parse(&mut self, name: &str) -> ParserResult<IpAddr> {
-        let prop_info = self.find_property(name)?;
-        let prop_info: &PropertyInfo = prop_info.borrow();
+impl TryParse<IpAddr> for Parser<'_, '_> {
+    fn try_parse(&self, name: &str) -> ParserResult<IpAddr> {
+        let prop_slice = self.find_property(name)?;
 
-        if prop_info.property.out_type() != TdhOutType::OutTypeIpv4
-            && prop_info.property.out_type() != TdhOutType::OutTypeIpv6
+        if prop_slice.property.out_type() != TdhOutType::OutTypeIpv4
+            && prop_slice.property.out_type() != TdhOutType::OutTypeIpv6
         {
             return Err(ParserError::InvalidType);
         }
 
         // Hardcoded values for now
-        let res = match prop_info.property.len() {
+        let res = match prop_slice.property.len() {
             16 => {
-                let tmp: [u8; 16] = prop_info.buffer.as_slice().try_into()?;
+                let tmp: [u8; 16] = prop_slice.buffer.try_into()?;
                 IpAddr::V6(Ipv6Addr::from(tmp))
             }
             4 => {
-                let tmp: [u8; 4] = prop_info.buffer.as_slice().try_into()?;
+                let tmp: [u8; 4] = prop_slice.buffer.try_into()?;
                 IpAddr::V4(Ipv4Addr::from(tmp))
             }
             _ => return Err(ParserError::LengthMismatch),
@@ -359,13 +365,12 @@ impl std::fmt::Display for Pointer {
     }
 }
 
-impl TryParse<Pointer> for Parser<'_> {
-    fn try_parse(&mut self, name: &str) -> ParserResult<Pointer> {
-        let prop_info = self.find_property(name)?;
-        let prop_info: &PropertyInfo = prop_info.borrow();
+impl TryParse<Pointer> for Parser<'_, '_> {
+    fn try_parse(&self, name: &str) -> ParserResult<Pointer> {
+        let prop_slice = self.find_property(name)?;
 
         let mut res = Pointer::default();
-        if prop_info.buffer.len() == std::mem::size_of::<u32>() {
+        if prop_slice.buffer.len() == std::mem::size_of::<u32>() {
             res.0 = TryParse::<u32>::try_parse(self, name)? as usize;
         } else {
             res.0 = TryParse::<u64>::try_parse(self, name)? as usize;
@@ -375,12 +380,10 @@ impl TryParse<Pointer> for Parser<'_> {
     }
 }
 
-impl TryParse<Vec<u8>> for Parser<'_> {
-    fn try_parse(&mut self, name: &str) -> Result<Vec<u8>, ParserError> {
-        let prop_info = self.find_property(name)?;
-        let prop_info: &PropertyInfo = prop_info.borrow();
-
-        Ok(prop_info.buffer.clone())
+impl TryParse<Vec<u8>> for Parser<'_, '_> {
+    fn try_parse(&self, name: &str) -> Result<Vec<u8>, ParserError> {
+        let prop_slice = self.find_property(name)?;
+        Ok(prop_slice.buffer.to_vec())
     }
 }
 

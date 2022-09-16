@@ -89,14 +89,12 @@ impl EventRecord {
         self.0.EventHeader.TimeStamp
     }
 
-    // Note: will be replaced with a `-> &[u8]` in an upcoming commit
-    pub(crate) fn user_buffer(&self) -> Vec<u8> {
+    pub(crate) fn user_buffer(&self) -> &[u8] {
         unsafe {
             std::slice::from_raw_parts(
                 self.0.UserData as *mut _,
                 self.0.UserDataLength.into(),
             )
-            .to_vec()
         }
     }
 
