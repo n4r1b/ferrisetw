@@ -272,7 +272,7 @@ pub mod kernel_providers {
         KernelProvider::new(kernel_guids::ALPC_GUID, kernel_flags::EVENT_TRACE_FLAG_ALPC);
 }
 
-type EtwCallback = Box<dyn FnMut(&EventRecord, &mut SchemaLocator) + Send + Sync + 'static>;
+type EtwCallback = Box<dyn FnMut(&EventRecord, &SchemaLocator) + Send + Sync + 'static>;
 
 /// Main Provider structure
 pub struct Provider {
@@ -439,16 +439,12 @@ impl Provider {
 
     /// Add a callback function that will be called when the Provider generates an Event
     ///
-    /// # Remarks
-    /// The [SchemaLocator] has to be mutable because whenever we obtain a new Schema it will be saved
-    /// into the [SchemaLocator] instance cache
-    ///
     /// # Example
     /// ```
     /// # use ferrisetw::provider::Provider;
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
-    /// Provider::new().add_callback(|record: &EventRecord, schema_locator: &mut SchemaLocator| {
+    /// Provider::new().add_callback(|record: &EventRecord, schema_locator: &SchemaLocator| {
     ///     // Handle Event
     /// });
     /// ```
@@ -456,7 +452,7 @@ impl Provider {
     /// [SchemaLocator]: crate::schema_locator::SchemaLocator
     pub fn add_callback<T>(self, callback: T) -> Self
     where
-        T: FnMut(&EventRecord, &mut SchemaLocator) + Send + Sync + 'static,
+        T: FnMut(&EventRecord, &SchemaLocator) + Send + Sync + 'static,
     {
         if let Ok(mut callbacks) = self.callbacks.write() {
             callbacks.push(Box::new(callback));
@@ -510,11 +506,7 @@ impl Provider {
         &self.filters
     }
 
-    pub(crate) fn on_event(&self, record: &EventRecord, locator: &mut SchemaLocator) {
-        // Has to be mutable because the SchemaLocator will be mutated when locating the schema
-        // within the cb creating a clone of the whole SchemaLocator HashMap doesn't
-        // sound like a plan still needs to think more about this thou...
-        // Could we locate the schema before calling the callback???
+    pub(crate) fn on_event(&self, record: &EventRecord, locator: &SchemaLocator) {
         if let Ok(mut callbacks) = self.callbacks.write() {
             callbacks.iter_mut().for_each(|cb| cb(record, locator))
         }
