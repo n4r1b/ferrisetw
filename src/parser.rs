@@ -130,9 +130,8 @@ impl<'schema, 'record> Parser<'schema, 'record> {
         }
     }
 
-    // TODO: Find a cleaner way to do this, not very happy with it rn
     #[allow(clippy::len_zero)]
-    fn find_property_size(&self, property: &Property) -> ParserResult<usize> {
+    fn find_property_size(&self, property: &Property, remaining_user_buffer: &[u8]) -> ParserResult<usize> {
         // There are several cases
         //  * regular case, where property.len() directly makes sense
         //  * but EVENT_PROPERTY_INFO.length is an union, and (in its lengthPropertyIndex form) can refeer to another field
@@ -159,11 +158,55 @@ impl<'schema, 'record> Parser<'schema, 'record> {
             return Ok(size);
         }
 
-        // Actually, before asking TDH for the right length, there are some cases where we could determine ourselves.
 
-        // TODO: Study heuristic method used in krabsetw :)
-        if property.flags.is_empty() && property.len() > 0 {
-            return Ok(property.len());
+        if property.flags.is_empty() {
+            if property.len() > 0 {
+                return Ok(property.len())
+            } else {
+                // Length is not set. We'll have to ask TDH for the right length.
+                // However, before doing so, there are some cases where we could determine ourselves.
+                // The following _very_ common property types can be short-circuited to prevent the expensive call.
+                // (that's taken from krabsetw)
+
+                // Strings that appear at the end of a record may not be null-terminated.
+                // If a string is null-terminated, propertyLength includes the null character.
+                // If a string is not-null terminated, propertyLength includes all bytes up
+                // to the end of the record buffer.
+                if property.flags.contains(PropertyFlags::PROPERTY_STRUCT) == false {
+                    if property.out_type() == TdhOutType::OutTypeString {
+                        match property.in_type() {
+                            TdhInType::InTypeAnsiString => {
+                                let mut l = 0;
+                                for char in remaining_user_buffer {
+                                    if char == &0 {
+                                        l += 1; // include the final null byte
+                                        break;
+                                    }
+                                    l += 1;
+                                }
+                                return Ok(l)
+                            },
+
+                            TdhInType::InTypeUnicodeString => {
+                                let wide_slice = slice_of_u16(remaining_user_buffer)?;
+
+                                let mut l = 0;
+                                for wchar in wide_slice {
+                                    if wchar == &0 {
+                                        l += 1; // include the final null wchar
+                                        break;
+                                    }
+                                    l += 1;
+                                }
+                                return Ok(2 * l)
+                            },
+
+                            _ => (),
+                        }
+                    }
+                }
+            }
+
         }
 
         Ok(tdh::property_size(self.record, &property.name)? as usize)
@@ -185,17 +228,20 @@ impl<'schema, 'record> Parser<'schema, 'record> {
         };
 
         for property in properties_not_parsed_yet {
-            let prop_size = self.find_property_size(&property)?;
-            let end_offset = cache.last_cached_offset + prop_size;
+            let remaining_user_buffer = match self.record.user_buffer().get(cache.last_cached_offset..) {
+                None => return Err(ParserError::PropertyError("Invalid buffer bounds".to_owned())),
+                Some(s) => s,
+            };
 
-            let buffer = match self.record.user_buffer().get(cache.last_cached_offset..end_offset) {
+            let prop_size = self.find_property_size(&property, remaining_user_buffer)?;
+            let property_buffer = match remaining_user_buffer.get(..prop_size) {
                 None => return Err(ParserError::PropertyError("Property length out of buffer bounds".to_owned())),
                 Some(s) => s,
             };
 
             let prop_slice = PropertySlice {
                 property,
-                buffer
+                buffer: property_buffer
             };
             cache.slices.insert(String::clone(&property.name), prop_slice);
             cache.last_cached_offset += prop_size;
