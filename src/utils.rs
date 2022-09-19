@@ -9,18 +9,6 @@ pub fn rand_string() -> String {
         .collect()
 }
 
-pub fn parse_null_utf16_string(v: &[u8]) -> String {
-    String::from_utf16_lossy(
-        v.chunks_exact(2)
-            .into_iter()
-            .map(|a| u16::from_ne_bytes([a[0], a[1]]))
-            .collect::<Vec<u16>>()
-            .as_slice(),
-    )
-    .trim_matches(char::default())
-    .to_string()
-}
-
 pub fn parse_utf16_guid(v: &[u8]) -> String {
     String::from_utf16_lossy(
         v.chunks_exact(2)

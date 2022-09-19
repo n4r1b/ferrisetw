@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::Mutex;
+use widestring::U16CStr;
 use windows::core::GUID;
 
 /// Parser module errors
@@ -28,7 +29,7 @@ pub enum ParserError {
     LengthMismatch,
     PropertyError(String),
     /// An error while transforming an Utf-8 buffer into String
-    Utf8Error(std::string::FromUtf8Error),
+    Utf8Error(std::str::Utf8Error),
     /// An error trying to get an slice as an array
     SliceError(std::array::TryFromSliceError),
     /// Represents an internal [SddlNativeError]
@@ -53,8 +54,8 @@ impl From<sddl::SddlNativeError> for ParserError {
     }
 }
 
-impl From<std::string::FromUtf8Error> for ParserError {
-    fn from(err: std::string::FromUtf8Error) -> Self {
+impl From<std::str::Utf8Error> for ParserError {
+    fn from(err: std::str::Utf8Error) -> Self {
         ParserError::Utf8Error(err)
     }
 }
@@ -267,9 +268,13 @@ impl TryParse<String> for Parser<'_, '_> {
         // TODO: Handle errors and type checking better
         let res = match prop_slice.property.in_type() {
             TdhInType::InTypeUnicodeString => {
-                utils::parse_null_utf16_string(prop_slice.buffer)
+                let wide_slice = slice_of_u16(prop_slice.buffer)?;
+                match U16CStr::from_slice(wide_slice) {
+                    Err(_) => return Err(ParserError::PropertyError("Widestring is not null-terminated".into())),
+                    Ok(s) => s.to_string_lossy()
+                }
             }
-            TdhInType::InTypeAnsiString => String::from_utf8(prop_slice.buffer.to_vec())?
+            TdhInType::InTypeAnsiString => std::str::from_utf8(prop_slice.buffer)?
                 .trim_matches(char::default())
                 .to_string(),
             TdhInType::InTypeSid => {
@@ -389,3 +394,72 @@ impl TryParse<Vec<u8>> for Parser<'_, '_> {
 
 // TODO: Implement SocketAddress
 // TODO: Study if we can use primitive types for HexInt64, HexInt32 and Pointer
+
+fn slice_of_u16(input: &[u8]) -> ParserResult<&[u16]> {
+    if input.len() % 2 != 0 {
+        return Err(ParserError::PropertyError("odd length in bytes for a widestring".into()));
+    }
+
+    let wide_ptr = input.as_ptr() as *const u16;
+    let wide_len = input.len() / 2;
+
+    if wide_ptr.is_null() || is_aligned_to_u16(wide_ptr) == false {
+        return Err(ParserError::PropertyError("Invalid widestring pointer".into()));
+    }
+
+    // Safety: we've just checked the pointer is
+    //  * non-null
+    //  * correctly aligned
+    // Note: that's OK to build zero-sized slices
+    let s = unsafe {
+        std::slice::from_raw_parts(wide_ptr, wide_len)
+    };
+    Ok(s)
+}
+
+fn is_aligned_to_u16<T>(p: *const T) -> bool {
+    // ptr::is_aligned is not stable. Let's implement our own
+    let addr = p as usize;
+    addr % 2 == 0
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::slice_of_u16;
+
+    // #[repr(align("16"))] does not support arrays
+    // Using a hack to make sure the array is aligned, inspired from https://users.rust-lang.org/t/aligning-a-u8-array-to-16-bytes/7560/2
+    struct My16BitAlignedU8Array<const N: usize> {
+        data: [u8; N],
+        _alignment: [u16; 0],
+    }
+    impl<const N: usize> My16BitAlignedU8Array<N> {
+        fn new(data: [u8;N]) -> Self {
+            Self { data, _alignment: [] }
+        }
+    }
+
+
+    #[test]
+    fn test_slice_of_u16() {
+        let unicode_array = My16BitAlignedU8Array::new(
+            [0xd8,0, 0x20,0, 0x8c,1, 0xeb,0, 0x61,0, 0x72,0, 0,0]
+        );
+        let expected_u16_array: [u16;7] = [0xd8,   0x20,   0x18c,  0xeb,   0x61,   0x72,   0];
+
+        let u16_slice = slice_of_u16(&unicode_array.data).unwrap();
+        let decoded_string = widestring::ucstr::U16CStr::from_slice(&u16_slice).unwrap().to_string().unwrap();
+
+        assert_eq!(slice_of_u16(&unicode_array.data).unwrap(), &expected_u16_array);
+        assert_eq!(&decoded_string, "Ø ƌëar");
+
+
+        let empty_array = My16BitAlignedU8Array::new([]);
+        assert_eq!(slice_of_u16(&empty_array.data).unwrap(), &[]);
+
+
+        let odd_length_array = My16BitAlignedU8Array::new([1,2,3]);
+        assert!(slice_of_u16(&odd_length_array.data).is_err());
+    }
+}
