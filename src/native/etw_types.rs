@@ -272,7 +272,7 @@ impl<'tracedata> Default for EventTraceLogfile<'tracedata> {
 
 /// Newtype wrapper over an [ENABLE_TRACE_PARAMETERS]
 ///
-/// [ENABLE_TRACE_PARAMETERS]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.ENABLE_TRACE_PARAMETERS.html
+/// [ENABLE_TRACE_PARAMETERS]: https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Diagnostics/Etw/struct.ENABLE_TRACE_PARAMETERS.html
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct EnableTraceParameters<'filters>{
@@ -318,7 +318,7 @@ impl<'filters> EnableTraceParameters<'filters> {
 
 /// Wrapper over the [DECODING_SOURCE] type
 ///
-/// [DECODING_SOURCE]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.DECODING_SOURCE.html
+/// [DECODING_SOURCE]: https://learn.microsoft.com/en-us/windows/win32/api/tdh/ne-tdh-decoding_source
 #[derive(Debug)]
 pub enum DecodingSource {
     DecodingSourceXMLFile,
