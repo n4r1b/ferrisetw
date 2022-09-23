@@ -1,5 +1,6 @@
 use ferrisetw::native::etw_types::EventRecord;
 use ferrisetw::parser::{Parser, TryParse};
+use ferrisetw::provider::kernel_providers::{kernel_flags, kernel_guids, KernelProvider};
 use ferrisetw::provider::*;
 use ferrisetw::schema::SchemaLocator;
 use ferrisetw::trace::*;
@@ -7,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 fn main() {
-    let image_load_callback =
+    let profile_callback =
         |record: EventRecord, schema_locator: &mut SchemaLocator| match schema_locator
             .event_schema(record)
         {
@@ -27,10 +28,13 @@ fn main() {
             Err(err) => println!("Error {:?}", err),
         };
 
-    let provider = Provider::kernel(&kernel_providers::IMAGE_LOAD_PROVIDER)
-        .add_callback(image_load_callback)
-        .build()
-        .unwrap();
+    let provider = Provider::kernel(&KernelProvider::new(
+        kernel_guids::STACK_WALK_GUID,
+        kernel_flags::EVENT_TRACE_FLAG_PROFILE,
+    ))
+    .add_callback(profile_callback)
+    .build()
+    .unwrap();
 
     let trace = Arc::new(
         KernelTraceBuilder::new()

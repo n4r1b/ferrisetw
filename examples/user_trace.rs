@@ -3,6 +3,7 @@ use ferrisetw::parser::{Parser, TryParse};
 use ferrisetw::provider::*;
 use ferrisetw::schema::SchemaLocator;
 use ferrisetw::trace::*;
+use std::sync::Arc;
 use std::time::Duration;
 
 fn main() {
@@ -34,12 +35,21 @@ fn main() {
         .build()
         .unwrap();
 
-    let mut trace = UserTrace::new()
-        .named(String::from("MyProvider"))
-        .enable(process_provider)
-        .start()
-        .unwrap();
+    let trace = Arc::new(
+        UserTraceBuilder::new()
+            .named(String::from("MyProvider"))
+            .enable(process_provider)
+            .open()
+            .unwrap(),
+    );
 
-    std::thread::sleep(Duration::new(20, 0));
-    trace.stop();
+    let hnd = trace.clone();
+    let thrd = std::thread::spawn(move || hnd.process());
+
+    std::thread::sleep(Duration::from_secs(20));
+
+    println!("stopping trace...");
+
+    trace.stop().unwrap();
+    thrd.join().unwrap().unwrap();
 }

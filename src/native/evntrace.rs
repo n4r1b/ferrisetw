@@ -6,19 +6,22 @@
 //! This module shouldn't be accessed directly. Modules from the crate level provide a safe API to interact
 //! with the crate
 use windows::core::{GUID, PCSTR};
-use windows::Win32::Foundation::FILETIME;
-use windows::Win32::System::Diagnostics::Etw;
-use windows::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
 use windows::Win32::Foundation::ERROR_ALREADY_EXISTS;
 use windows::Win32::Foundation::ERROR_CTX_CLOSE_PENDING;
 use windows::Win32::Foundation::ERROR_WMI_INSTANCE_NOT_FOUND;
+use windows::Win32::Foundation::FILETIME;
+use windows::Win32::System::Diagnostics::Etw::{
+    self, EVENT_CONTROL_CODE_ENABLE_PROVIDER, TRACE_QUERY_INFO_CLASS,
+};
+use windows::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
 
+use std::panic::AssertUnwindSafe;
+use std::sync::RwLock;
 
 use super::etw_types::*;
 use crate::provider::Provider;
 use crate::trace::{TraceData, TraceProperties, TraceTrait};
 use crate::traits::*;
-use std::sync::RwLock;
 
 /// Evntrace native module errors
 #[derive(Debug)]
@@ -42,11 +45,19 @@ impl From<std::io::Error> for EvntraceNativeError {
 pub(crate) type EvntraceNativeResult<T> = Result<T, EvntraceNativeError>;
 
 unsafe extern "system" fn trace_callback_thunk(event_record: PEventRecord) {
-    let ctx: &mut TraceData = TraceData::unsafe_get_callback_ctx((*event_record).UserContext);
-    ctx.on_event(*event_record);
+    match std::panic::catch_unwind(AssertUnwindSafe(|| {
+        let ctx: &TraceData = TraceData::unsafe_get_callback_ctx((*event_record).UserContext);
+        ctx.on_event(*event_record);
+    })) {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("UNIMPLEMENTED PANIC: {e:?}");
+            std::process::exit(1);
+        }
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct NativeEtw {
     info: TraceInfo,
     session_handle: TraceHandle,
@@ -78,13 +89,6 @@ impl NativeEtw {
         self.info.fill::<T>(name, properties, providers);
     }
 
-    pub(crate) fn start(&mut self) -> EvntraceNativeResult<()> {
-        if self.session_handle == INVALID_TRACE_HANDLE {
-            return Err(EvntraceNativeError::InvalidHandle);
-        }
-        self.process()
-    }
-
     pub(crate) fn open(
         &mut self,
         trace_data: &TraceData,
@@ -92,31 +96,34 @@ impl NativeEtw {
         self.open_trace(trace_data)
     }
 
-    pub(crate) fn stop(&mut self, trace_data: &TraceData) -> EvntraceNativeResult<()> {
-        self.stop_trace(trace_data)?;
-        self.close_trace()?;
-        Ok(())
+    pub(crate) fn close(&mut self) -> EvntraceNativeResult<()> {
+        self.close_trace()
     }
 
-    pub(crate) fn process(&mut self) -> EvntraceNativeResult<()> {
+    pub(crate) fn start(&mut self, trace_data: &TraceData) -> EvntraceNativeResult<()> {
+        self.start_trace(trace_data)
+    }
+
+    pub(crate) fn stop(&self, trace_data: &TraceData) -> EvntraceNativeResult<()> {
+        self.stop_trace(trace_data)
+    }
+
+    pub(crate) fn process(&self) -> EvntraceNativeResult<()> {
         if self.session_handle == INVALID_TRACE_HANDLE {
             return Err(EvntraceNativeError::InvalidHandle);
         }
 
-        let clone_handle = self.session_handle;
-        std::thread::spawn(move || {
-            let mut now = FILETIME::default();
-            unsafe {
-                GetSystemTimeAsFileTime(&mut now);
+        let mut now = FILETIME::default();
+        unsafe {
+            GetSystemTimeAsFileTime(&mut now);
 
-                Etw::ProcessTrace(&[clone_handle], &now, std::ptr::null_mut());
-                // if Etw::ProcessTrace(&[clone_handlee], &mut now, std::ptr::null_mut()) != 0 {
-                //     return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
-                // }
+            match Etw::ProcessTrace(&[self.session_handle], &mut now, std::ptr::null_mut()) {
+                0 => Ok(()),
+                e => Err(EvntraceNativeError::IoError(
+                    std::io::Error::from_raw_os_error(e as i32),
+                )),
             }
-        });
-
-        Ok(())
+        }
     }
 
     pub(crate) fn register_trace(&mut self, trace_data: &TraceData) -> EvntraceNativeResult<()> {
@@ -143,7 +150,9 @@ impl NativeEtw {
             if status == ERROR_ALREADY_EXISTS.0 {
                 return Err(EvntraceNativeError::AlreadyExist);
             } else if status != 0 {
-                return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
+                return Err(EvntraceNativeError::IoError(
+                    std::io::Error::from_raw_os_error(status as i32),
+                ));
             }
         }
         Ok(())
@@ -162,7 +171,8 @@ impl NativeEtw {
         Ok(log_file)
     }
 
-    fn stop_trace(&mut self, trace_data: &TraceData) -> EvntraceNativeResult<()> {
+    fn stop_trace(&self, trace_data: &TraceData) -> EvntraceNativeResult<()> {
+        // FIXME: The session handle is no longer valid after this call.
         self.control_trace(
             trace_data,
             windows::Win32::System::Diagnostics::Etw::EVENT_TRACE_CONTROL_STOP,
@@ -189,7 +199,7 @@ impl NativeEtw {
     }
 
     fn control_trace(
-        &mut self,
+        &self,
         trace_data: &TraceData,
         control_code: EvenTraceControl,
     ) -> EvntraceNativeResult<()> {
@@ -197,7 +207,7 @@ impl NativeEtw {
             let status = Etw::ControlTraceA(
                 0,
                 PCSTR::from_raw(trace_data.name.as_ptr()),
-                &mut *self.info.properties,
+                &*self.info.properties as *const _ as *mut _,
                 control_code,
             );
 
@@ -211,7 +221,7 @@ impl NativeEtw {
         Ok(())
     }
 
-    pub(crate) fn enable_trace(
+    pub(crate) fn enable_provider(
         &self,
         guid: GUID,
         any: u64,
@@ -219,21 +229,40 @@ impl NativeEtw {
         level: u8,
         parameters: EnableTraceParameters,
     ) -> EvntraceNativeResult<()> {
-        unsafe {
-            if Etw::EnableTraceEx2(
+        match unsafe {
+            Etw::EnableTraceEx2(
                 self.registration_handle,
                 &guid,
-                1, // Fixme: EVENT_CONTROL_CODE_ENABLE_PROVIDER
+                EVENT_CONTROL_CODE_ENABLE_PROVIDER.0,
                 level,
                 any,
                 all,
                 0,
                 &*parameters,
-            ) != 0
-            {
-                return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
-            }
+            )
+        } {
+            0 => Ok(()),
+            e => Err(EvntraceNativeError::IoError(
+                std::io::Error::from_raw_os_error(e as i32),
+            )),
         }
-        Ok(())
+    }
+}
+
+/// Queries the system for system-wide ETW information (that does not require an active session).
+pub(crate) fn query_info(class: TraceInformation, buf: &mut [u8]) -> EvntraceNativeResult<()> {
+    match unsafe {
+        Etw::TraceQueryInformation(
+            0,
+            TRACE_QUERY_INFO_CLASS(class as i32),
+            buf.as_mut_ptr() as *mut std::ffi::c_void,
+            buf.len() as u32,
+            std::ptr::null_mut(),
+        )
+    } {
+        0 => Ok(()),
+        e => Err(EvntraceNativeError::IoError(
+            std::io::Error::from_raw_os_error(e as i32),
+        )),
     }
 }

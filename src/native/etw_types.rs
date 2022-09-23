@@ -29,6 +29,45 @@ pub(crate) type PEventRecord = *mut EventRecord;
 
 pub const INVALID_TRACE_HANDLE: TraceHandle = u64::MAX;
 
+#[derive(Debug, Copy, Clone)]
+#[non_exhaustive]
+#[repr(i32)]
+pub enum TraceInformation {
+    TraceGuidQueryList,
+    TraceGuidQueryInfo,
+    TraceGuidQueryProcess,
+    TraceStackTracingInfo,
+    TraceSystemTraceEnableFlagsInfo,
+    TraceSampledProfileIntervalInfo,
+    TraceProfileSourceConfigInfo,
+    TraceProfileSourceListInfo,
+    TracePmcEventListInfo,
+    TracePmcCounterListInfo,
+    TraceSetDisallowList,
+    TraceVersionInfo,
+    TraceGroupQueryList,
+    TraceGroupQueryInfo,
+    TraceDisallowListQuery,
+    TraceInfoReserved15,
+    TracePeriodicCaptureStateListInfo,
+    TracePeriodicCaptureStateInfo,
+    TraceProviderBinaryTracking,
+    TraceMaxLoggersQuery,
+    TraceLbrConfigurationInfo,
+    TraceLbrEventListInfo,
+    /// Query the maximum PMC counters that can be specified simultaneously.
+    /// May be queried without an active ETW session.
+    ///
+    /// Output: u32
+    TraceMaxPmcCounterQuery,
+    TraceStreamCount,
+    TraceStackCachingInfo,
+    TracePmcCounterOwners,
+    TraceUnifiedStackCachingInfo,
+    TracePmcSessionInformation,
+    MaxTraceSetInfoClass,
+}
+
 #[allow(dead_code)]
 pub(crate) enum ControlValues {
     Query = 0,
@@ -196,7 +235,10 @@ impl EventTraceLogfile {
     /// # Safety
     ///
     /// Note that the returned structure contains pointers to the given `TraceData`, that should thus stay valid (and constant) during its lifetime
-    pub fn create(trace_data: &TraceData, callback: unsafe extern "system" fn(*mut EventRecord)) -> Self {
+    pub fn create(
+        trace_data: &TraceData,
+        callback: unsafe extern "system" fn(*mut EventRecord),
+    ) -> Self {
         let mut log_file = EventTraceLogfile::default();
 
         let not_really_mut_ptr = trace_data.name.as_ptr() as *mut _; // That's kind-of fine because the logger name is _not supposed_ to be changed by Windows APIs

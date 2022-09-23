@@ -4,6 +4,7 @@ use ferrisetw::provider::*;
 use ferrisetw::schema::SchemaLocator;
 use ferrisetw::trace::*;
 use std::net::{IpAddr, Ipv4Addr};
+use std::sync::Arc;
 use std::time::Duration;
 
 fn registry_callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
@@ -62,12 +63,21 @@ fn main() {
         .build()
         .unwrap();
 
-    let mut trace = UserTrace::new()
-        .enable(process_provider)
-        .enable(tcpip_provider)
-        .start()
-        .unwrap();
+    let trace = Arc::new(
+        UserTraceBuilder::new()
+            .enable(process_provider)
+            .enable(tcpip_provider)
+            .open()
+            .unwrap(),
+    );
+
+    let hnd = trace.clone();
+    let thrd = std::thread::spawn(move || hnd.process());
 
     std::thread::sleep(Duration::new(10, 0));
-    trace.stop();
+
+    println!("stopping trace...");
+
+    trace.stop().unwrap();
+    thrd.join().unwrap().unwrap();
 }
