@@ -11,7 +11,6 @@ use crate::provider::Provider;
 use crate::trace::{TraceData, TraceProperties, TraceTrait};
 use crate::utils;
 use std::fmt::Formatter;
-use std::sync::RwLock;
 use windows::core::GUID;
 use windows::core::PSTR;
 use windows::Win32::Foundation::MAX_PATH;
@@ -247,7 +246,7 @@ impl EventTraceLogfile {
             u32::from(ProcessTraceMode::RealTime) | u32::from(ProcessTraceMode::EventRecord);
 
         log_file.0.Anonymous2.EventRecordCallback = Some(callback);
-        log_file.0.Context = unsafe { std::mem::transmute(trace_data as *const _) };
+        log_file.0.Context = trace_data as *const _ as *mut _;
 
         log_file
     }

@@ -16,7 +16,6 @@ use windows::Win32::System::Diagnostics::Etw::{
 use windows::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
 
 use std::panic::AssertUnwindSafe;
-use std::sync::RwLock;
 
 use super::etw_types::*;
 use crate::provider::Provider;
@@ -223,6 +222,7 @@ impl NativeEtw {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub(crate) fn enable_provider(
         &self,
         guid: GUID,

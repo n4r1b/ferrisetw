@@ -15,7 +15,6 @@ use num_traits::FromPrimitive;
 
 use windows::Win32::System::Diagnostics::Etw;
 
-
 /// Attributes of a property
 #[derive(Debug, Clone, Default)]
 pub struct Property {

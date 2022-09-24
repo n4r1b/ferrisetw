@@ -7,7 +7,7 @@ use crate::native::{evntrace, version_helper};
 use crate::provider::Provider;
 use crate::{provider, schema, utils};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Mutex, RwLock};
+use std::sync::Mutex;
 use windows::core::GUID;
 
 const KERNEL_LOGGER_NAME: &str = "NT Kernel Logger";

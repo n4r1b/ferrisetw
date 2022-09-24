@@ -132,7 +132,8 @@ impl<'a> Parser<'a> {
 
         if property
             .flags
-            .intersects(PropertyFlags::PROPERTY_PARAM_LENGTH) == false
+            .intersects(PropertyFlags::PROPERTY_PARAM_LENGTH)
+            == false
             && (property.len() > 0)
         {
             let size = if property.in_type() != TdhInType::InTypePointer {

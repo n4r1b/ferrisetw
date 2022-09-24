@@ -5,8 +5,10 @@
 //!
 //! At the moment the only option available is to check if the actual System Version is greater than
 //! Win8, is the only check we need for the crate to work as expected
-use windows::Win32::System::SystemInformation::{OSVERSIONINFOEXA, VER_MAJORVERSION, VER_MINORVERSION, VER_SERVICEPACKMAJOR};
-use windows::Win32::System::SystemInformation::{VerifyVersionInfoA, VerSetConditionMask};
+use windows::Win32::System::SystemInformation::{VerSetConditionMask, VerifyVersionInfoA};
+use windows::Win32::System::SystemInformation::{
+    OSVERSIONINFOEXA, VER_MAJORVERSION, VER_MINORVERSION, VER_SERVICEPACKMAJOR,
+};
 
 use crate::traits::*;
 
@@ -32,7 +34,7 @@ type OsVersionInfo = OSVERSIONINFOEXA;
 const VER_GREATER_OR_EQUAL: u8 = windows::Win32::System::SystemServices::VER_GREATER_EQUAL as u8;
 
 fn verify_system_version(major: u8, minor: u8, sp_major: u16) -> VersionHelperResult<bool> {
-    let mut os_version = OsVersionInfo{
+    let mut os_version = OsVersionInfo {
         dwOSVersionInfoSize: std::mem::size_of::<OsVersionInfo>() as u32,
         dwMajorVersion: major as u32,
         dwMinorVersion: minor as u32,
@@ -42,27 +44,16 @@ fn verify_system_version(major: u8, minor: u8, sp_major: u16) -> VersionHelperRe
 
     let mut condition_mask = 0;
     unsafe {
-        condition_mask = VerSetConditionMask(
-            condition_mask,
-            VER_MAJORVERSION,
-            VER_GREATER_OR_EQUAL,
-        );
-        condition_mask = VerSetConditionMask(
-            condition_mask,
-            VER_MINORVERSION,
-            VER_GREATER_OR_EQUAL,
-        );
-        condition_mask = VerSetConditionMask(
-            condition_mask,
-            VER_SERVICEPACKMAJOR,
-            VER_GREATER_OR_EQUAL,
-        );
+        condition_mask =
+            VerSetConditionMask(condition_mask, VER_MAJORVERSION, VER_GREATER_OR_EQUAL);
+        condition_mask =
+            VerSetConditionMask(condition_mask, VER_MINORVERSION, VER_GREATER_OR_EQUAL);
+        condition_mask =
+            VerSetConditionMask(condition_mask, VER_SERVICEPACKMAJOR, VER_GREATER_OR_EQUAL);
 
         Ok(VerifyVersionInfoA(
             &mut os_version,
-            VER_MAJORVERSION
-                | VER_MINORVERSION
-                | VER_SERVICEPACKMAJOR,
+            VER_MAJORVERSION | VER_MINORVERSION | VER_SERVICEPACKMAJOR,
             condition_mask,
         ) != false)
     }

@@ -1,10 +1,10 @@
 use crate::traits::*;
-use std::str::Utf8Error;
 use core::ffi::c_void;
+use std::str::Utf8Error;
 use windows::core::PSTR;
 use windows::Win32::Foundation::PSID;
-use windows::Win32::System::Memory::LocalFree;
 use windows::Win32::Security::Authorization::ConvertSidToStringSidA;
+use windows::Win32::System::Memory::LocalFree;
 
 /// SDDL native error
 #[derive(Debug)]

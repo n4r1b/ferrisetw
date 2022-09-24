@@ -325,10 +325,10 @@ impl Schema {
         unsafe {
             std::slice::from_raw_parts(
                 p_ed_array as *const EventHeaderExtendedDataItem,
-                n_extended_data as usize)
+                n_extended_data as usize,
+            )
         }
     }
-
 
     /// Use the `decoding_source` function to obtain the [DecodingSource] from the [TraceEventInfo]
     ///

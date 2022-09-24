@@ -75,7 +75,7 @@ pub struct Variant {
 
 impl Variant {
     pub fn new(vt: u16, val: u32) -> Self {
-        Variant{
+        Variant {
             vt,
             val,
             ..Default::default()
@@ -151,7 +151,7 @@ pub(crate) unsafe fn get_provider_guid(name: &str) -> ProvidersComResult<GUID> {
 }
 
 mod pla_interfaces {
-    use super::{GUID, Variant, BSTR};
+    use super::{Variant, BSTR, GUID};
     use com::sys::IID;
     use com::{interfaces, interfaces::iunknown::IUnknown, sys::HRESULT};
 
