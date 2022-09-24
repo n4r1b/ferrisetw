@@ -98,11 +98,6 @@ impl TraceData {
         self.providers.push(provider);
     }
 
-    // TODO: Evaluate Multi-threading
-    pub(crate) unsafe fn unsafe_get_callback_ctx<'a>(ctx: *mut std::ffi::c_void) -> &'a Self {
-        &*(ctx as *mut TraceData)
-    }
-
     pub(crate) fn on_event(&self, record: EventRecord) {
         self.events_handled.fetch_add(1, Ordering::Relaxed);
         let mut locator = self.schema_locator.lock().unwrap();

@@ -45,8 +45,10 @@ impl From<std::io::Error> for EvntraceNativeError {
 pub(crate) type EvntraceNativeResult<T> = Result<T, EvntraceNativeError>;
 
 unsafe extern "system" fn trace_callback_thunk(event_record: PEventRecord) {
-    match std::panic::catch_unwind(AssertUnwindSafe(|| {
-        let ctx: &TraceData = TraceData::unsafe_get_callback_ctx((*event_record).UserContext);
+    // SAFETY: This is immutably shared with the main thread still.
+    let ctx: &TraceData = unsafe { &*((*event_record).UserContext as *const _) };
+
+    match std::panic::catch_unwind(AssertUnwindSafe(move || {
         ctx.on_event(*event_record);
     })) {
         Ok(_) => {}
