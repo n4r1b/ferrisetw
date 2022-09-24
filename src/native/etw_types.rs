@@ -183,7 +183,7 @@ impl TraceInfo {
         &mut self,
         trace_name: &str,
         trace_properties: &TraceProperties,
-        providers: &RwLock<Vec<Provider>>,
+        providers: &Vec<Provider>,
     ) where
         T: TraceTrait,
     {

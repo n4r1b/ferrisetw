@@ -82,7 +82,7 @@ impl NativeEtw {
         &mut self,
         name: &str,
         properties: &TraceProperties,
-        providers: &RwLock<Vec<Provider>>,
+        providers: &Vec<Provider>,
     ) where
         T: TraceTrait,
     {

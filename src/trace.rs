@@ -72,7 +72,7 @@ pub struct TraceData {
     /// Represents the current events handled
     pub events_handled: AtomicUsize,
     /// List of Providers associated with the Trace
-    pub providers: RwLock<Vec<provider::Provider>>,
+    pub providers: Vec<provider::Provider>,
     schema_locator: Mutex<schema::SchemaLocator>,
     // buffers_read : isize
 }
@@ -88,16 +88,14 @@ impl TraceData {
             name,
             events_handled: AtomicUsize::new(0),
             properties: TraceProperties::default(),
-            providers: RwLock::new(Vec::new()),
+            providers: Vec::new(),
             schema_locator: Mutex::new(schema::SchemaLocator::new()),
         }
     }
 
     // TODO: Should be void???
     fn insert_provider(&mut self, provider: provider::Provider) {
-        if let Ok(mut prov) = self.providers.write() {
-            prov.push(provider);
-        }
+        self.providers.push(provider);
     }
 
     // TODO: Evaluate Multi-threading
@@ -111,15 +109,13 @@ impl TraceData {
 
         // We need a mutable reference to be able to modify the data it refers, which is actually
         // done within the Callback (The schema locator is modified)
-        if let Ok(providers) = self.providers.read() {
-            providers.iter().for_each(|prov| {
-                // We can unwrap safely, provider builder wouldn't accept a provider without guid
-                // so we must have Some(Guid)
-                if prov.guid.unwrap() == record.EventHeader.ProviderId {
-                    prov.on_event(record, &mut locator);
-                }
-            });
-        };
+        self.providers.iter().for_each(|prov| {
+            // We can unwrap safely, provider builder wouldn't accept a provider without guid
+            // so we must have Some(Guid)
+            if prov.guid.unwrap() == record.EventHeader.ProviderId {
+                prov.on_event(record, &mut locator);
+            }
+        });
     }
 }
 
@@ -152,7 +148,7 @@ pub trait TraceTrait: TraceBaseTrait {
     fn augmented_file_mode() -> u32 {
         0
     }
-    fn enable_flags(_providers: &RwLock<Vec<Provider>>) -> u32 {
+    fn enable_flags(_providers: &Vec<Provider>) -> u32 {
         0
     }
     fn trace_guid() -> GUID {
@@ -340,12 +336,8 @@ impl TraceTrait for KernelTrace {
         }
     }
 
-    fn enable_flags(providers: &RwLock<Vec<Provider>>) -> u32 {
-        let mut flags = 0;
-        if let Ok(prov) = providers.read() {
-            flags = prov.iter().fold(0, |acc, x| acc | x.flags)
-        }
-        flags
+    fn enable_flags(providers: &Vec<Provider>) -> u32 {
+        providers.iter().fold(0, |acc, x| acc | x.flags)
     }
 
     fn trace_guid() -> GUID {
@@ -416,7 +408,7 @@ mod test {
 
         let trace = UserTraceBuilder::new().enable(prov).enable(prov1);
 
-        assert_eq!(trace.data.providers.read().unwrap().len(), 2);
+        assert_eq!(trace.data.providers.len(), 2);
     }
 
     #[test]
