@@ -44,15 +44,16 @@
 //! familiar with it the following example shows the basics on how to build a provider, start a trace
 //! and handle the Event in the callback
 //!
-//! ```
+//! ```no_run
 //! use ferrisetw::native::etw_types::EventRecord;
 //! use ferrisetw::schema::SchemaLocator;
 //! use ferrisetw::parser::Parser;
 //! use ferrisetw::parser::TryParse;
 //! use ferrisetw::provider::Provider;
-//! use ferrisetw::trace::{UserTrace, TraceTrait, TraceBaseTrait};
+//! use ferrisetw::trace::{UserTraceBuilder, TraceTrait, TraceBaseTrait};
+//! use std::sync::Arc;
 //!
-//! fn process_callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
+//! fn process_callback(record: &mut EventRecord, schema_locator: &mut SchemaLocator) {
 //!     // Within the callback we first locate the proper Schema for the event
 //!     match schema_locator.event_schema(record) {
 //!         Ok(schema) => {
@@ -84,18 +85,26 @@
 //!         .unwrap();
 //!
 //!     // We start a trace session for the previously registered provider
-//!     // This call will spawn a new thread which listens to the events
-//!     let mut trace = UserTrace::new()
-//!         .named(String::from("MyProvider"))
-//!         .enable(process_provider)
-//!         // .enable(other_provider) // it is possible to enable multiple providers on the same trace
-//!         .start()
-//!         .unwrap();
+//!     let mut trace = Arc::new(
+//!         UserTraceBuilder::new()
+//!             .named(String::from("MyProvider"))
+//!             .enable(process_provider)
+//!             // .enable(other_provider) // it is possible to enable multiple providers on the same trace
+//!             .open()
+//!             .unwrap()
+//!     );
 //!
+//!     // Spawn a new thread to process the trace events as they come in
+//!     let hnd = trace.clone();
+//!     let thrd = std::thread::spawn(move || hnd.process());
+//!     
 //!     std::thread::sleep(std::time::Duration::from_secs(3));
-//!
+//!     
+//!     println!("stopping trace...");
+//!     
 //!     // We stop the trace
-//!     trace.stop();
+//!     trace.stop().unwrap();
+//!     thrd.join().unwrap().unwrap();
 //! }
 //! ```
 //!

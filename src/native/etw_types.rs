@@ -288,6 +288,12 @@ impl std::ops::DerefMut for EventTraceLogfile {
     }
 }
 
+impl std::ops::Drop for EventTraceLogfile {
+    fn drop(&mut self) {
+        // FIXME: How do we drop the callback context?
+    }
+}
+
 /// Newtype wrapper over an [ENABLE_TRACE_PARAMETERS]
 ///
 /// [ENABLE_TRACE_PARAMETERS]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.ENABLE_TRACE_PARAMETERS.html

@@ -114,7 +114,7 @@ impl SchemaLocator {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &mut EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     /// };
     /// ```
@@ -172,7 +172,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &mut EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let event_id = schema.event_id();
     /// };
@@ -187,7 +187,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &mut EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let event_id = schema.opcode();
     /// };
@@ -202,7 +202,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &mut EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let event_flags = schema.event_flags();
     /// };
@@ -217,7 +217,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &mut EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let event_version = schema.event_version();
     /// };
@@ -232,7 +232,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &mut EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let pid = schema.process_id();
     /// };
@@ -247,7 +247,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &mut EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let tid = schema.thread_id();
     /// };
@@ -269,7 +269,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &mut EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let timestamp = schema.timestamp();
     /// };
@@ -285,7 +285,7 @@ impl Schema {
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
     ///
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &mut EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let activity_id = schema.activity_id();
     /// };
@@ -304,7 +304,7 @@ impl Schema {
     /// # use ferrisetw::schema::SchemaLocator;
     /// use windows::Win32::System::Diagnostics::Etw::EVENT_HEADER_EXT_TYPE_RELATED_ACTIVITYID;
     ///
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &mut EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let activity_id = schema
     ///         .extended_data()
@@ -340,7 +340,7 @@ impl Schema {
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
 
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &mut EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let decoding_source = schema.decoding_source();
     /// };
@@ -356,7 +356,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &mut EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let provider_name = schema.provider_name();
     /// };
@@ -373,7 +373,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &mut EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let task_name = schema.task_name();
     /// };
@@ -390,7 +390,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &mut EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let opcode_name = schema.opcode_name();
     /// };
