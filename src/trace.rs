@@ -405,7 +405,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "Can't enable Provider with no GUID")]
+    #[should_panic(expected = "Attempted to enable provider with no GUID")]
     fn test_provider_no_guid_should_panic() {
         let prov = Provider::new();
 
