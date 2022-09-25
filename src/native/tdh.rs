@@ -27,22 +27,18 @@ impl From<std::io::Error> for TdhNativeError {
 
 pub(crate) type TdhNativeResult<T> = Result<T, TdhNativeError>;
 
-pub(crate) fn schema_from_tdh(event: EventRecord) -> TdhNativeResult<TraceEventInfoRaw> {
+pub(crate) fn schema_from_tdh(event: &EventRecord) -> TdhNativeResult<TraceEventInfoRaw> {
     let mut buffer_size = 0;
     unsafe {
-        if Etw::TdhGetEventInformation(&event, &[], std::ptr::null_mut(), &mut buffer_size)
+        if Etw::TdhGetEventInformation(event, &[], std::ptr::null_mut(), &mut buffer_size)
             != ERROR_INSUFFICIENT_BUFFER.0
         {
             return Err(TdhNativeError::IoError(std::io::Error::last_os_error()));
         }
 
         let mut buffer = TraceEventInfoRaw::alloc(buffer_size);
-        if Etw::TdhGetEventInformation(
-            &event,
-            &[],
-            buffer.info_as_ptr() as *mut _,
-            &mut buffer_size,
-        ) != 0
+        if Etw::TdhGetEventInformation(event, &[], buffer.info_as_ptr() as *mut _, &mut buffer_size)
+            != 0
         {
             return Err(TdhNativeError::IoError(std::io::Error::last_os_error()));
         }
@@ -51,7 +47,7 @@ pub(crate) fn schema_from_tdh(event: EventRecord) -> TdhNativeResult<TraceEventI
     }
 }
 
-pub(crate) fn property_size(event: EventRecord, name: &str) -> TdhNativeResult<u32> {
+pub(crate) fn property_size(event: &EventRecord, name: &str) -> TdhNativeResult<u32> {
     let mut property_size = 0;
 
     let name = name.into_utf16();
@@ -62,7 +58,7 @@ pub(crate) fn property_size(event: EventRecord, name: &str) -> TdhNativeResult<u
     };
 
     unsafe {
-        let status = Etw::TdhGetPropertySize(&event, &[], &[desc], &mut property_size);
+        let status = Etw::TdhGetPropertySize(event, &[], &[desc], &mut property_size);
         if status != 0 {
             return Err(TdhNativeError::IoError(std::io::Error::from_raw_os_error(
                 status as i32,

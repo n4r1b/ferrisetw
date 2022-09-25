@@ -118,7 +118,7 @@ impl SchemaLocator {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     /// };
     /// ```
-    pub fn event_schema(&mut self, event: EventRecord) -> SchemaResult<Schema> {
+    pub fn event_schema(&mut self, event: &mut EventRecord) -> SchemaResult<Schema> {
         let key = SchemaKey::new(&event);
         let info: Arc<_>;
 
@@ -130,7 +130,7 @@ impl SchemaLocator {
             info = Arc::clone(self.schemas.get(&key).unwrap());
         }
 
-        Ok(Schema::new(event, info))
+        Ok(Schema::new(event.clone(), info))
     }
 }
 

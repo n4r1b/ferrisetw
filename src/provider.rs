@@ -364,7 +364,8 @@ pub mod kernel_providers {
         KernelProvider::new(kernel_guids::ALPC_GUID, kernel_flags::EVENT_TRACE_FLAG_ALPC);
 }
 
-type EtwCallback = Box<dyn FnMut(EventRecord, &mut schema::SchemaLocator) + Send + Sync + 'static>;
+type EtwCallback =
+    Box<dyn FnMut(&mut EventRecord, &mut schema::SchemaLocator) + Send + Sync + 'static>;
 
 /// Main Provider structure
 pub struct Provider {
@@ -543,7 +544,7 @@ impl Provider {
     /// [SchemaLocator]: crate::schema::SchemaLocator
     pub fn add_callback<T>(self, callback: T) -> Self
     where
-        T: FnMut(EventRecord, &mut schema::SchemaLocator) + Send + Sync + 'static,
+        T: FnMut(&mut EventRecord, &mut schema::SchemaLocator) + Send + Sync + 'static,
     {
         if let Ok(mut callbacks) = self.callbacks.write() {
             callbacks.push(Box::new(callback));
@@ -584,7 +585,7 @@ impl Provider {
         Ok(self)
     }
 
-    pub(crate) fn on_event(&self, record: EventRecord, locator: &mut schema::SchemaLocator) {
+    pub(crate) fn on_event(&self, record: &mut EventRecord, locator: &mut schema::SchemaLocator) {
         // Has to be mutable because the SchemaLocator will be mutated when locating the schema
         // within the cb creating a clone of the whole SchemaLocator HashMap doesn't
         // sound like a plan still needs to think more about this thou...

@@ -158,7 +158,7 @@ impl<'a> Parser<'a> {
             return Ok(property.len());
         }
 
-        Ok(tdh::property_size(self.schema.record(), &property.name)? as usize)
+        Ok(tdh::property_size(&self.schema.record(), &property.name)? as usize)
     }
 
     fn find_property(&mut self, name: &str) -> ParserResult<Rc<PropertyInfo>> {

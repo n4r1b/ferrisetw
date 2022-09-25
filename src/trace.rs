@@ -7,7 +7,7 @@ use crate::native::{evntrace, version_helper};
 use crate::provider::Provider;
 use crate::{provider, schema, utils};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use windows::core::GUID;
 
 const KERNEL_LOGGER_NAME: &str = "NT Kernel Logger";
@@ -98,7 +98,7 @@ impl TraceData {
         self.providers.push(provider);
     }
 
-    pub(crate) fn on_event(&self, record: EventRecord) {
+    pub(crate) fn on_event(&self, record: &mut EventRecord) {
         self.events_handled.fetch_add(1, Ordering::Relaxed);
         let mut locator = self.schema_locator.lock().unwrap();
 
@@ -247,12 +247,11 @@ impl KernelTraceBuilder {
 
         etw.fill_info::<KernelTrace>(&self.data.name, &self.data.properties, &self.data.providers);
         etw.register_trace(&self.data)?;
-        etw.open(&self.data)?;
 
-        Ok(KernelTrace {
-            data: self.data,
-            etw,
-        })
+        let data = Arc::new(self.data);
+        etw.open(data.clone())?;
+
+        Ok(KernelTrace { data, etw })
     }
 }
 
@@ -296,26 +295,25 @@ impl UserTraceBuilder {
 
         etw.fill_info::<UserTrace>(&self.data.name, &self.data.properties, &self.data.providers);
         etw.register_trace(&self.data)?;
-        etw.open(&self.data)?;
 
-        Ok(UserTrace {
-            data: self.data,
-            etw,
-        })
+        let data = Arc::new(self.data);
+        etw.open(data.clone())?;
+
+        Ok(UserTrace { data, etw })
     }
 }
 
 /// User Trace struct
 #[derive(Debug)]
 pub struct UserTrace {
-    data: TraceData,
+    data: Arc<TraceData>,
     etw: evntrace::NativeEtw,
 }
 
 /// Kernel Trace struct
 #[derive(Debug)]
 pub struct KernelTrace {
-    data: TraceData,
+    data: Arc<TraceData>,
     etw: evntrace::NativeEtw,
 }
 

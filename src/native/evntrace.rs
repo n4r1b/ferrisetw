@@ -15,7 +15,7 @@ use windows::Win32::System::Diagnostics::Etw::{
 };
 use windows::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
 
-use std::panic::AssertUnwindSafe;
+use std::sync::Arc;
 
 use super::etw_types::*;
 use crate::provider::Provider;
@@ -42,21 +42,6 @@ impl From<std::io::Error> for EvntraceNativeError {
 }
 
 pub(crate) type EvntraceNativeResult<T> = Result<T, EvntraceNativeError>;
-
-unsafe extern "system" fn trace_callback_thunk(event_record: PEventRecord) {
-    // SAFETY: This is immutably shared with the main thread still.
-    let ctx: &TraceData = unsafe { &*((*event_record).UserContext as *const _) };
-
-    match std::panic::catch_unwind(AssertUnwindSafe(move || {
-        ctx.on_event(*event_record);
-    })) {
-        Ok(_) => {}
-        Err(e) => {
-            eprintln!("UNIMPLEMENTED PANIC: {e:?}");
-            std::process::exit(1);
-        }
-    }
-}
 
 #[derive(Debug)]
 pub(crate) struct NativeEtw {
@@ -92,7 +77,7 @@ impl NativeEtw {
 
     pub(crate) fn open(
         &mut self,
-        trace_data: &TraceData,
+        trace_data: Arc<TraceData>,
     ) -> EvntraceNativeResult<EventTraceLogfile> {
         self.open_trace(trace_data)
     }
@@ -159,8 +144,14 @@ impl NativeEtw {
         Ok(())
     }
 
-    fn open_trace(&mut self, trace_data: &TraceData) -> EvntraceNativeResult<EventTraceLogfile> {
-        let mut log_file = EventTraceLogfile::create(trace_data, trace_callback_thunk);
+    fn open_trace(
+        &mut self,
+        trace_data: Arc<TraceData>,
+    ) -> EvntraceNativeResult<EventTraceLogfile> {
+        let data = trace_data.clone();
+        let mut log_file = EventTraceLogfile::create(&trace_data.name, move |record| {
+            data.on_event(record);
+        });
 
         unsafe {
             self.session_handle = Etw::OpenTraceA(&mut *log_file);

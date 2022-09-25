@@ -8,9 +8,10 @@
 //! needed by using the functions exposed by the modules at the crate level
 use crate::native::tdh_types::Property;
 use crate::provider::Provider;
-use crate::trace::{TraceData, TraceProperties, TraceTrait};
+use crate::trace::{TraceProperties, TraceTrait};
 use crate::utils;
 use std::fmt::Formatter;
+use std::panic::AssertUnwindSafe;
 use windows::core::GUID;
 use windows::core::PSTR;
 use windows::Win32::Foundation::MAX_PATH;
@@ -24,7 +25,6 @@ pub(crate) type EvenTraceControl = Etw::EVENT_TRACE_CONTROL;
 ///
 /// [EVENT_RECORD]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.EVENT_RECORD.html
 pub type EventRecord = Etw::EVENT_RECORD;
-pub(crate) type PEventRecord = *mut EventRecord;
 
 pub const INVALID_TRACE_HANDLE: TraceHandle = u64::MAX;
 
@@ -221,12 +221,32 @@ impl Default for TraceInfo {
     }
 }
 
+extern "system" fn event_callback<T: FnMut(&mut EventRecord)>(record: *mut EventRecord) {
+    match std::panic::catch_unwind(AssertUnwindSafe(move || {
+        let record = unsafe { record.as_mut().unwrap() };
+        let mut callback = unsafe { Box::from_raw(record.UserContext as *mut T) };
+
+        (callback)(record);
+        let _ = Box::into_raw(callback);
+    })) {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("UNIMPLEMENTED PANIC: {e:?}");
+            std::process::exit(1);
+        }
+    }
+}
+
 /// Newtype wrapper over an [EVENT_TRACE_LOGFILEA]
 ///
 /// [EVENT_TRACE_LOGFILEA]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.EVENT_TRACE_LOGFILEA.html
 #[repr(C)]
-#[derive(Clone, Copy)]
-pub struct EventTraceLogfile(Etw::EVENT_TRACE_LOGFILEA);
+#[derive(Clone)]
+pub struct EventTraceLogfile {
+    inner: Etw::EVENT_TRACE_LOGFILEA,
+    /// The name of the log file. Referenced in `inner` - do not mutate!
+    name: std::ffi::CString,
+}
 
 impl EventTraceLogfile {
     /// Create a new instance
@@ -234,27 +254,23 @@ impl EventTraceLogfile {
     /// # Safety
     ///
     /// Note that the returned structure contains pointers to the given `TraceData`, that should thus stay valid (and constant) during its lifetime
-    pub fn create(
-        trace_data: &TraceData,
-        callback: unsafe extern "system" fn(*mut EventRecord),
-    ) -> Self {
-        let mut log_file = EventTraceLogfile::default();
+    pub fn create<T: FnMut(&mut EventRecord)>(name: impl AsRef<str>, callback: T) -> Self {
+        let mut log_file = Etw::EVENT_TRACE_LOGFILEA::default();
 
-        let not_really_mut_ptr = trace_data.name.as_ptr() as *mut _; // That's kind-of fine because the logger name is _not supposed_ to be changed by Windows APIs
-        log_file.0.LoggerName = PSTR(not_really_mut_ptr);
-        log_file.0.Anonymous1.ProcessTraceMode =
+        let name = std::ffi::CString::new(name.as_ref().as_bytes()).unwrap();
+        log_file.LoggerName = PSTR(name.as_ptr() as *mut _);
+        log_file.Anonymous1.ProcessTraceMode =
             u32::from(ProcessTraceMode::RealTime) | u32::from(ProcessTraceMode::EventRecord);
 
-        log_file.0.Anonymous2.EventRecordCallback = Some(callback);
-        log_file.0.Context = trace_data as *const _ as *mut _;
+        let callback = Box::new(callback);
 
-        log_file
-    }
-}
+        log_file.Anonymous2.EventRecordCallback = Some(event_callback::<T>);
+        log_file.Context = Box::into_raw(callback) as *mut _;
 
-impl Default for EventTraceLogfile {
-    fn default() -> Self {
-        unsafe { std::mem::zeroed::<EventTraceLogfile>() }
+        Self {
+            inner: log_file,
+            name,
+        }
     }
 }
 
@@ -262,13 +278,13 @@ impl std::ops::Deref for EventTraceLogfile {
     type Target = Etw::EVENT_TRACE_LOGFILEA;
 
     fn deref(&self) -> &self::Etw::EVENT_TRACE_LOGFILEA {
-        &self.0
+        &self.inner
     }
 }
 
 impl std::ops::DerefMut for EventTraceLogfile {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.inner
     }
 }
 
