@@ -6,10 +6,15 @@ use windows::Win32::System::Diagnostics::Etw::{EVENT_FILTER_DESCRIPTOR, EVENT_FI
 use windows::Win32::System::Diagnostics::Etw::{MAX_EVENT_FILTER_EVENT_ID_COUNT, MAX_EVENT_FILTER_PID_COUNT};
 
 /// Specifies how this provider will filter its events
+///
+/// Some filters are not effective prior to Windows 8.1 ([source](https://learn.microsoft.com/en-us/windows/win32/api/evntprov/ns-evntprov-event_filter_descriptor#remarks))
 #[derive(Debug)]
 pub enum EventFilter {
     /// Filter by PID.
     /// This is only effective on kernel mode logger session.
+    /// TODO: even for `KernelTrace`, this does not seem to work.
+    ///       Maybe there's a distinction between "a trace run in kernel-mode" and a "System trace"?
+    ///       See <https://github.com/n4r1b/ferrisetw/issues/51>
     ByPids(Vec<u16>),
     /// Filter by ETW Event ID.
     ByEventIds(Vec<u16>),

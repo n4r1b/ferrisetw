@@ -289,6 +289,9 @@ impl<'filters> EnableTraceParameters<'filters> {
         params.native.EnableProperty = trace_flags.bits();
 
 
+        // Note: > Each type of filter (a specific Type member) may only appear once in a call to the EnableTraceEx2 function.
+        //       https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-enabletraceex2#remarks
+        //       > The maximum number of filters that can be included in a call to EnableTraceEx2 is set by MAX_EVENT_FILTERS_COUNT
         let mut win_filter_descriptors: Vec<EVENT_FILTER_DESCRIPTOR> = filters
             .iter()
             .map(|efd| efd.as_event_filter_descriptor())
