@@ -151,11 +151,10 @@ impl NativeEtw {
     fn open_trace<'a>(&mut self, trace_data: &'a Box<TraceData>) -> EvntraceNativeResult<EventTraceLogfile<'a>> {
         let mut log_file = EventTraceLogfile::create(trace_data, trace_callback_thunk);
 
-        unsafe {
-            self.session_handle = Etw::OpenTraceA(log_file.as_mut_ptr());
-            if self.session_handle == INVALID_TRACE_HANDLE {
-                return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
-            }
+        self.session_handle = unsafe { Etw::OpenTraceA(log_file.as_mut_ptr()) };
+
+        if self.session_handle == INVALID_TRACE_HANDLE {
+            return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
         }
 
         Ok(log_file)
