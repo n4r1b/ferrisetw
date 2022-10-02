@@ -243,17 +243,19 @@ impl NativeEtw {
 }
 
 /// Queries the system for system-wide ETW information (that does not require an active session).
-pub(crate) fn query_info(class: TraceInformation, buf: &mut [u8]) -> EvntraceNativeResult<()> {
+pub(crate) fn query_info(class: TraceInformation, buf: &mut [u8]) -> EvntraceNativeResult<usize> {
+    let mut ret_len = 0u32;
+
     match unsafe {
         Etw::TraceQueryInformation(
             0,
             TRACE_QUERY_INFO_CLASS(class as i32),
             buf.as_mut_ptr() as *mut std::ffi::c_void,
             buf.len() as u32,
-            std::ptr::null_mut(),
+            &mut ret_len,
         )
     } {
-        0 => Ok(()),
+        0 => Ok(ret_len as usize),
         e => Err(EvntraceNativeError::IoError(
             std::io::Error::from_raw_os_error(e as i32),
         )),
