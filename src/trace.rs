@@ -1,6 +1,8 @@
 //! ETW Tracing/Session abstraction
 //!
 //! Provides both a Kernel and User trace that allows to start an ETW session
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use super::traits::*;
 use crate::native::etw_types::{EnableTraceParameters, EventRecord, INVALID_TRACE_HANDLE};
 use crate::native::{evntrace, version_helper};
@@ -70,7 +72,7 @@ pub struct TraceData {
     /// Represents the [TraceProperties]
     pub properties: TraceProperties,
     /// Represents the current events handled
-    pub events_handled: isize,
+    events_handled: AtomicUsize,
     /// List of Providers associated with the Trace
     providers: Vec<provider::Provider>,
     schema_locator: SchemaLocator,
@@ -82,11 +84,16 @@ impl TraceData {
         let name = format!("n4r1b-trace-{}", utils::rand_string());
         TraceData {
             name,
-            events_handled: 0,
+            events_handled: AtomicUsize::new(0),
             properties: TraceProperties::default(),
             providers: Vec::new(),
             schema_locator: SchemaLocator::new(),
         }
+    }
+
+    /// How many events have been handled so far
+    pub fn events_handled(&self) -> usize {
+        self.events_handled.load(Ordering::Relaxed)
     }
 
     // TODO: Should be void???
@@ -94,21 +101,16 @@ impl TraceData {
         self.providers.push(provider);
     }
 
-    // TODO: Evaluate Multi-threading
-    pub(crate) unsafe fn unsafe_get_callback_ctx<'a>(ctx: *mut std::ffi::c_void) -> &'a mut Self {
-        &mut *(ctx as *mut TraceData)
-    }
+    pub(crate) fn on_event(&self, record: &EventRecord) {
+        self.events_handled.fetch_add(1, Ordering::Relaxed);
 
-    pub(crate) fn on_event(&mut self, record: &EventRecord) {
-        self.events_handled += 1;
-        let locator = &mut self.schema_locator;
         // We need a mutable reference to be able to modify the data it refers, which is actually
         // done within the Callback (The schema locator is modified)
         for prov in &self.providers {
             // We can unwrap safely, provider builder wouldn't accept a provider without guid
             // so we must have Some(Guid)
             if prov.guid.unwrap() == record.provider_id() {
-                prov.on_event(record, locator);
+                prov.on_event(record, &self.schema_locator);
             }
         }
     }
@@ -202,7 +204,7 @@ macro_rules! impl_base_trace {
             }
 
             fn open(mut self) -> TraceResult<Self> {
-                self.data.events_handled = 0;
+                self.data.events_handled.store(0, Ordering::Relaxed);
 
                 // Populate self.info
                 self.etw.fill_info::<$t>(&self.data.name, &self.data.properties, &self.data.providers);
@@ -216,7 +218,8 @@ macro_rules! impl_base_trace {
             }
 
             fn start(mut self) -> TraceResult<Self> {
-                self.data.events_handled = 0;
+                self.data.events_handled.store(0, Ordering::Relaxed);
+
                 if let Err(err) = self.etw.start() {
                     match err {
                         evntrace::EvntraceNativeError::InvalidHandle => {
@@ -235,7 +238,7 @@ macro_rules! impl_base_trace {
             }
 
             fn process(mut self) -> TraceResult<Self> {
-                self.data.events_handled = 0;
+                self.data.events_handled.store(0, Ordering::Relaxed);
                 self.etw.process()?;
 
                 Ok(self)

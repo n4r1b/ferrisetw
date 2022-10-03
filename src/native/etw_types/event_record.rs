@@ -31,6 +31,13 @@ impl EventRecord {
         &self.0 as *const EVENT_RECORD
     }
 
+    /// The `UserContext` field from the wrapped `EVENT_RECORD`
+    ///
+    /// In this crate, it is always populated to point to a valid [`TraceData`](crate::trace::TraceData)
+    pub fn user_context(&self) -> *const std::ffi::c_void {
+        self.0.UserContext as *const _
+    }
+
     /// The `ProviderId` field from the wrapped `EVENT_RECORD`
     pub fn provider_id(&self) -> GUID {
         self.0.EventHeader.ProviderId
