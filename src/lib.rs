@@ -50,7 +50,7 @@
 //! use ferrisetw::parser::Parser;
 //! use ferrisetw::parser::TryParse;
 //! use ferrisetw::provider::Provider;
-//! use ferrisetw::trace::{UserTraceBuilder, TraceTrait, TraceBaseTrait};
+//! use ferrisetw::trace::{UserTraceBuilder, TraceTrait};
 //! use std::sync::Arc;
 //!
 //! fn process_callback(record: &mut EventRecord, schema_locator: &mut SchemaLocator) {

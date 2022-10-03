@@ -1,6 +1,6 @@
 //! ETW information classes wrapper
 
-use windows::Win32::System::Diagnostics::Etw::{PROFILE_SOURCE_INFO, TRACE_PROFILE_INTERVAL};
+use windows::Win32::System::Diagnostics::Etw::TRACE_PROFILE_INTERVAL;
 
 use memoffset::offset_of;
 use std::convert::TryInto;
@@ -14,6 +14,7 @@ use crate::{
 type TraceResult<T> = Result<T, TraceError>;
 
 #[allow(non_camel_case_types)]
+#[allow(non_snake_case)]
 mod ffi {
     #[repr(C)]
     #[derive(zerocopy::AsBytes, zerocopy::FromBytes)]

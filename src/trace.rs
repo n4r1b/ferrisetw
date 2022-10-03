@@ -6,6 +6,7 @@ use crate::native::etw_types::{EventRecord, INVALID_TRACE_HANDLE};
 use crate::native::{evntrace, version_helper};
 use crate::provider::Provider;
 use crate::{provider, schema, utils};
+use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use windows::core::GUID;
@@ -114,32 +115,10 @@ impl TraceData {
     }
 }
 
-/// Base trait for a Trace
-///
-/// This trait define the general methods required to control an ETW Session
-pub trait TraceBaseTrait {
-    /// Closes a trace session
-    fn close(self) -> TraceResult<()>;
-    /// Start processing a Trace session
-    ///
-    /// # Note
-    /// This function will block the current thread while the trace is active. You will usually want to call this
-    /// on a seaparate worker thread.
-    ///
-    /// See [ProcessTrace](https://docs.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-processtrace#remarks)
-    fn process(&self) -> TraceResult<()>
-    where
-        Self: Sized;
-    /// Starts a trace session (if stopped earlier)
-    fn start(&mut self) -> TraceResult<()>;
-    /// Stops a trace session
-    fn stop(&self) -> TraceResult<()>;
-}
-
 /// Specific trait for a Trace
 ///
 /// This trait defines the specific methods that differentiate from a Kernel to a User Trace
-pub trait TraceTrait: TraceBaseTrait {
+pub trait TraceTrait {
     fn augmented_file_mode() -> u32 {
         0
     }
@@ -151,67 +130,80 @@ pub trait TraceTrait: TraceBaseTrait {
     }
 }
 
-impl TraceTrait for UserTrace {
-    // TODO: Should this fail???
-    // TODO: Add option to enable same provider twice with different flags
-    /*
-    #[allow(unused_must_use)]
-    fn enable_provider(&self) {
-        if let Ok(providers) = self.data.providers.read() {
-            providers.iter().for_each(|prov| {
-                // Should always be Some but just in case
-                if let Some(prov_guid) = prov.guid {
-                    let parameters = EnableTraceParameters::create(prov_guid, prov.trace_flags);
-                    // Fixme: return error if this fails
-                    self.etw
-                        .enable_trace(prov_guid, prov.any, prov.all, prov.level, parameters);
-                }
-            });
-        }
-    }
-    */
+// Prevent others from implementing our type trait.
+mod sealed {
+    pub trait Sealed {}
 }
 
-// Hyper Macro to create an impl of the BaseTrace for the Kernel and User Trace
-macro_rules! impl_base_trace {
-    (for $($t: ty),+) => {
-        $(impl TraceBaseTrait for $t {
-            fn close(mut self) -> TraceResult<()> {
-                self.etw.close()?;
-                Ok(())
-            }
+pub trait TraceType: sealed::Sealed {}
+pub struct Kernel;
+pub struct User;
 
-            fn start(&mut self) -> TraceResult<()> {
-                self.etw.start(&self.data)?;
-                Ok(())
-            }
+impl sealed::Sealed for Kernel {}
+impl sealed::Sealed for User {}
 
-            fn stop(&self) -> TraceResult<()> {
-                self.etw.stop(&self.data)?;
-                Ok(())
-            }
+impl TraceType for Kernel {}
+impl TraceType for User {}
 
-            fn process(&self) -> TraceResult<()> {
-                self.etw.process()?;
+pub struct KernelTraceBuilder;
+pub struct UserTraceBuilder;
+impl KernelTraceBuilder {
+    pub fn new() -> TraceBuilder<Kernel> {
+        TraceBuilder::<Kernel>::new()
+    }
+}
 
-                Ok(())
-            }
-
-            // query_stats
-            // set_default_event_callback
-            // buffers_processed
-        })*
+impl UserTraceBuilder {
+    pub fn new() -> TraceBuilder<User> {
+        TraceBuilder::<User>::new()
     }
 }
 
 #[derive(Default, Debug)]
-pub struct KernelTraceBuilder {
+pub struct TraceBuilder<T: TraceType> {
+    _type: PhantomData<T>,
     data: TraceData,
 }
 
-impl KernelTraceBuilder {
+impl<T: TraceType> TraceBuilder<T> {
+    pub fn properties(mut self, props: TraceProperties) -> Self {
+        self.data.properties = props;
+        self
+    }
+
+    pub fn enable(mut self, provider: provider::Provider) -> Self {
+        if provider.guid.is_none() {
+            panic!("Attempted to enable provider with no GUID");
+        }
+        self.data.insert_provider(provider);
+
+        self
+    }
+
+    pub fn open(self) -> TraceResult<Trace<T>>
+    where
+        Trace<T>: TraceTrait,
+    {
+        let mut etw = evntrace::NativeEtw::new();
+
+        etw.fill_info::<Trace<T>>(&self.data.name, &self.data.properties, &self.data.providers);
+        etw.register_trace(&self.data)?;
+
+        let data = Arc::new(self.data);
+        etw.open(data.clone())?;
+
+        Ok(Trace::<T> {
+            _type: PhantomData,
+            data,
+            etw,
+        })
+    }
+}
+
+impl TraceBuilder<Kernel> {
     pub fn new() -> Self {
         Self {
+            _type: PhantomData,
             data: if version_helper::is_win8_or_greater() {
                 TraceData::new()
             } else {
@@ -227,42 +219,12 @@ impl KernelTraceBuilder {
 
         self
     }
-
-    pub fn properties(mut self, props: TraceProperties) -> Self {
-        self.data.properties = props;
-        self
-    }
-
-    pub fn enable(mut self, provider: provider::Provider) -> Self {
-        if provider.guid.is_none() {
-            panic!("Attempted to enable provider with no GUID");
-        }
-        self.data.insert_provider(provider);
-
-        self
-    }
-
-    pub fn open(self) -> TraceResult<KernelTrace> {
-        let mut etw = evntrace::NativeEtw::new();
-
-        etw.fill_info::<KernelTrace>(&self.data.name, &self.data.properties, &self.data.providers);
-        etw.register_trace(&self.data)?;
-
-        let data = Arc::new(self.data);
-        etw.open(data.clone())?;
-
-        Ok(KernelTrace { data, etw })
-    }
 }
 
-#[derive(Default, Debug)]
-pub struct UserTraceBuilder {
-    data: TraceData,
-}
-
-impl UserTraceBuilder {
+impl TraceBuilder<User> {
     pub fn new() -> Self {
         Self {
+            _type: PhantomData,
             data: TraceData::new(),
         }
     }
@@ -275,52 +237,9 @@ impl UserTraceBuilder {
         self.data.name = name;
         self
     }
-
-    pub fn properties(mut self, props: TraceProperties) -> Self {
-        self.data.properties = props;
-        self
-    }
-
-    pub fn enable(mut self, provider: provider::Provider) -> Self {
-        if provider.guid.is_none() {
-            panic!("Attempted to enable provider with no GUID");
-        }
-        self.data.insert_provider(provider);
-
-        self
-    }
-
-    pub fn open(self) -> TraceResult<UserTrace> {
-        let mut etw = evntrace::NativeEtw::new();
-
-        etw.fill_info::<UserTrace>(&self.data.name, &self.data.properties, &self.data.providers);
-        etw.register_trace(&self.data)?;
-
-        let data = Arc::new(self.data);
-        etw.open(data.clone())?;
-
-        Ok(UserTrace { data, etw })
-    }
 }
 
-/// User Trace struct
-#[derive(Debug)]
-pub struct UserTrace {
-    data: Arc<TraceData>,
-    etw: evntrace::NativeEtw,
-}
-
-/// Kernel Trace struct
-#[derive(Debug)]
-pub struct KernelTrace {
-    data: Arc<TraceData>,
-    etw: evntrace::NativeEtw,
-}
-
-impl_base_trace!(for UserTrace, KernelTrace);
-
-// TODO: Implement enable_provider function for providers that require call to TraceSetInformation with extended PERFINFO_GROUPMASK
-impl TraceTrait for KernelTrace {
+impl TraceTrait for Trace<Kernel> {
     fn augmented_file_mode() -> u32 {
         if version_helper::is_win8_or_greater() {
             EVENT_TRACE_SYSTEM_LOGGER_MODE
@@ -342,24 +261,45 @@ impl TraceTrait for KernelTrace {
     }
 }
 
-/// On drop the ETW session will be stopped if not stopped before
-// TODO: log if it fails??
-#[allow(unused_must_use)]
-impl Drop for UserTrace {
-    fn drop(&mut self) {
-        if self.etw.session_handle() != INVALID_TRACE_HANDLE {
-            self.stop();
-            let _ = self.etw.close();
-        }
+impl TraceTrait for Trace<User> {}
+
+/// Active trace struct
+#[derive(Debug)]
+pub struct Trace<T: TraceType> {
+    _type: PhantomData<T>,
+    data: Arc<TraceData>,
+    etw: evntrace::NativeEtw,
+}
+
+impl<T: TraceType> Trace<T> {
+    pub fn close(mut self) -> TraceResult<()> {
+        self.etw.close()?;
+        Ok(())
+    }
+
+    pub fn start(&mut self) -> TraceResult<()> {
+        self.etw.start(&self.data)?;
+        Ok(())
+    }
+
+    pub fn stop(&self) -> TraceResult<()> {
+        self.etw.stop(&self.data)?;
+        Ok(())
+    }
+
+    pub fn process(&self) -> TraceResult<()> {
+        self.etw.process()?;
+
+        Ok(())
     }
 }
 
 /// On drop the ETW session will be stopped if not stopped before
-#[allow(unused_must_use)]
-impl Drop for KernelTrace {
+// TODO: log if it fails??
+impl<T: TraceType> Drop for Trace<T> {
     fn drop(&mut self) {
         if self.etw.session_handle() != INVALID_TRACE_HANDLE {
-            self.stop();
+            let _ = self.stop();
             let _ = self.etw.close();
         }
     }
