@@ -46,21 +46,21 @@ pub(crate) type EvntraceNativeResult<T> = Result<T, EvntraceNativeError>;
 #[derive(Debug)]
 pub(crate) struct NativeEtw {
     info: TraceInfo,
+    processing_handle: TraceHandle,
     session_handle: TraceHandle,
-    registration_handle: TraceHandle,
 }
 
 impl NativeEtw {
     pub(crate) fn new() -> Self {
         NativeEtw {
             info: TraceInfo::default(),
+            processing_handle: INVALID_TRACE_HANDLE,
             session_handle: INVALID_TRACE_HANDLE,
-            registration_handle: INVALID_TRACE_HANDLE,
         }
     }
 
     pub(crate) fn session_handle(&self) -> TraceHandle {
-        self.session_handle
+        self.processing_handle
     }
 
     // Not a big fan of this...
@@ -95,7 +95,7 @@ impl NativeEtw {
     }
 
     pub(crate) fn process(&self) -> EvntraceNativeResult<()> {
-        if self.session_handle == INVALID_TRACE_HANDLE {
+        if self.processing_handle == INVALID_TRACE_HANDLE {
             return Err(EvntraceNativeError::InvalidHandle);
         }
 
@@ -103,7 +103,7 @@ impl NativeEtw {
         unsafe {
             GetSystemTimeAsFileTime(&mut now);
 
-            match Etw::ProcessTrace(&[self.session_handle], &mut now, std::ptr::null_mut()) {
+            match Etw::ProcessTrace(&[self.processing_handle], &mut now, std::ptr::null_mut()) {
                 0 => Ok(()),
                 e => Err(EvntraceNativeError::IoError(
                     std::io::Error::from_raw_os_error(e as i32),
@@ -128,7 +128,7 @@ impl NativeEtw {
     fn start_trace(&mut self, trace_data: &TraceData) -> EvntraceNativeResult<()> {
         unsafe {
             let status = Etw::StartTraceA(
-                &mut self.registration_handle,
+                &mut self.session_handle,
                 PCSTR::from_raw(trace_data.name.as_ptr()),
                 &mut *self.info.properties,
             );
@@ -154,8 +154,8 @@ impl NativeEtw {
         });
 
         unsafe {
-            self.session_handle = Etw::OpenTraceA(&mut *log_file);
-            if self.session_handle == INVALID_TRACE_HANDLE {
+            self.processing_handle = Etw::OpenTraceA(&mut *log_file);
+            if self.processing_handle == INVALID_TRACE_HANDLE {
                 return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
             }
         }
@@ -173,12 +173,12 @@ impl NativeEtw {
     }
 
     fn close_trace(&mut self) -> EvntraceNativeResult<()> {
-        if self.session_handle == INVALID_TRACE_HANDLE {
+        if self.processing_handle == INVALID_TRACE_HANDLE {
             return Err(EvntraceNativeError::InvalidHandle);
         }
 
         unsafe {
-            let status = Etw::CloseTrace(self.session_handle);
+            let status = Etw::CloseTrace(self.processing_handle);
             if status != 0 && status != ERROR_CTX_CLOSE_PENDING.0 {
                 return Err(EvntraceNativeError::IoError(
                     std::io::Error::from_raw_os_error(status as i32),
@@ -186,7 +186,7 @@ impl NativeEtw {
             }
         }
 
-        self.session_handle = INVALID_TRACE_HANDLE;
+        self.processing_handle = INVALID_TRACE_HANDLE;
         Ok(())
     }
 
@@ -224,7 +224,7 @@ impl NativeEtw {
     ) -> EvntraceNativeResult<()> {
         match unsafe {
             Etw::EnableTraceEx2(
-                self.registration_handle,
+                self.session_handle,
                 &guid,
                 EVENT_CONTROL_CODE_ENABLE_PROVIDER.0,
                 level,
@@ -240,15 +240,39 @@ impl NativeEtw {
             )),
         }
     }
+
+    pub(crate) fn query_info(
+        &mut self,
+        class: TraceInformation,
+        buf: &mut [u8],
+    ) -> EvntraceNativeResult<usize> {
+        query_info_internal(Some(self.session_handle), class, buf)
+    }
+
+    pub(crate) fn set_info(
+        &mut self,
+        class: TraceInformation,
+        buf: &mut [u8],
+    ) -> EvntraceNativeResult<()> {
+        set_info_internal(Some(self.session_handle), class, buf)
+    }
 }
 
 /// Queries the system for system-wide ETW information (that does not require an active session).
 pub(crate) fn query_info(class: TraceInformation, buf: &mut [u8]) -> EvntraceNativeResult<usize> {
+    query_info_internal(None, class, buf)
+}
+
+fn query_info_internal(
+    handle: Option<TraceHandle>,
+    class: TraceInformation,
+    buf: &mut [u8],
+) -> EvntraceNativeResult<usize> {
     let mut ret_len = 0u32;
 
     match unsafe {
         Etw::TraceQueryInformation(
-            0,
+            handle.unwrap_or(0),
             TRACE_QUERY_INFO_CLASS(class as i32),
             buf.as_mut_ptr() as *mut std::ffi::c_void,
             buf.len() as u32,
@@ -256,6 +280,26 @@ pub(crate) fn query_info(class: TraceInformation, buf: &mut [u8]) -> EvntraceNat
         )
     } {
         0 => Ok(ret_len as usize),
+        e => Err(EvntraceNativeError::IoError(
+            std::io::Error::from_raw_os_error(e as i32),
+        )),
+    }
+}
+
+fn set_info_internal(
+    handle: Option<TraceHandle>,
+    class: TraceInformation,
+    buf: &mut [u8],
+) -> EvntraceNativeResult<()> {
+    match unsafe {
+        Etw::TraceSetInformation(
+            handle.unwrap_or(0),
+            TRACE_QUERY_INFO_CLASS(class as i32),
+            buf.as_ptr() as *const _,
+            buf.len() as u32,
+        )
+    } {
+        0 => Ok(()),
         e => Err(EvntraceNativeError::IoError(
             std::io::Error::from_raw_os_error(e as i32),
         )),
