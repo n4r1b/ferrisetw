@@ -19,7 +19,7 @@ windows = { version = "0.39", features = [
     "Win32_System_SystemServices",
     "Win32_System_Time",
 ]}
-com = "0.4.0"
+com = "0.6.0"
 memoffset = "0.6"
 rand = "~0.8.0"
 once_cell = "1.14"
