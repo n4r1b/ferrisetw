@@ -46,7 +46,7 @@
 //!
 //! ```
 //! use ferrisetw::native::etw_types::EventRecord;
-//! use ferrisetw::schema::SchemaLocator;
+//! use ferrisetw::schema_locator::SchemaLocator;
 //! use ferrisetw::parser::Parser;
 //! use ferrisetw::parser::TryParse;
 //! use ferrisetw::provider::Provider;
@@ -60,7 +60,7 @@
 //!             if record.event_id() == 2 {
 //!
 //!                 // We build the Parser based on the Schema
-//!                 let mut parser = Parser::create(&schema);
+//!                 let mut parser = Parser::create(record, &schema);
 //!
 //!                 // Finally, Parse data from the Event, proper error handling should be done
 //!                 // Type annotations or Fully Qualified Syntax are needed when calling TryParse
@@ -118,6 +118,7 @@ pub mod parser;
 pub mod property;
 pub mod provider;
 pub mod schema;
+pub mod schema_locator;
 pub mod trace;
 mod traits;
 mod utils;

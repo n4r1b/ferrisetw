@@ -6,7 +6,8 @@ use crate::native::etw_types::{EnableTraceParameters, EventRecord, INVALID_TRACE
 use crate::native::{evntrace, version_helper};
 use crate::provider::Provider;
 use crate::provider::event_filter::EventFilterDescriptor;
-use crate::{provider, schema, utils};
+use crate::{provider, utils};
+use crate::schema_locator::SchemaLocator;
 use windows::core::GUID;
 
 const KERNEL_LOGGER_NAME: &str = "NT Kernel Logger";
@@ -72,7 +73,7 @@ pub struct TraceData {
     pub events_handled: isize,
     /// List of Providers associated with the Trace
     providers: Vec<provider::Provider>,
-    schema_locator: schema::SchemaLocator,
+    schema_locator: SchemaLocator,
     // buffers_read : isize
 }
 
@@ -84,7 +85,7 @@ impl TraceData {
             events_handled: 0,
             properties: TraceProperties::default(),
             providers: Vec::new(),
-            schema_locator: schema::SchemaLocator::new(),
+            schema_locator: SchemaLocator::new(),
         }
     }
 

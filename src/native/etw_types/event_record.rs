@@ -7,7 +7,6 @@ use crate::native::etw_types::EventHeaderExtendedDataItem;
 
 /// A read-only wrapper over an [EVENT_RECORD](https://docs.microsoft.com/en-us/windows/win32/api/evntcons/ns-evntcons-event_record)
 #[repr(transparent)]
-#[derive(Clone)] // Temporary used, will be removed in an upcoming commit
 pub struct EventRecord(EVENT_RECORD);
 
 impl EventRecord {
@@ -89,14 +88,12 @@ impl EventRecord {
         self.0.EventHeader.TimeStamp
     }
 
-    // Note: will be replaced with a `-> &[u8]` in an upcoming commit
-    pub(crate) fn user_buffer(&self) -> Vec<u8> {
+    pub(crate) fn user_buffer(&self) -> &[u8] {
         unsafe {
             std::slice::from_raw_parts(
                 self.0.UserData as *mut _,
                 self.0.UserDataLength.into(),
             )
-            .to_vec()
         }
     }
 
@@ -107,7 +104,7 @@ impl EventRecord {
     /// # Example
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
-    /// # use ferrisetw::schema::SchemaLocator;
+    /// # use ferrisetw::schema_locator::SchemaLocator;
     /// use windows::Win32::System::Diagnostics::Etw::EVENT_HEADER_EXT_TYPE_RELATED_ACTIVITYID;
     ///
     /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {

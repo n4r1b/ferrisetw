@@ -1,7 +1,7 @@
 use ferrisetw::native::etw_types::EventRecord;
 use ferrisetw::parser::{Parser, TryParse};
 use ferrisetw::provider::*;
-use ferrisetw::schema::SchemaLocator;
+use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::*;
 use std::time::Duration;
 
@@ -11,11 +11,11 @@ fn main() {
             .event_schema(record)
         {
             Ok(schema) => {
-                let event_id = schema.record().event_id();
+                let event_id = record.event_id();
                 if event_id == 2 {
                     let name = schema.provider_name();
                     println!("Name: {}", name);
-                    let mut parser = Parser::create(&schema);
+                    let mut parser = Parser::create(record, &schema);
                     let process_id: u32 = parser.try_parse("ProcessID").unwrap();
                     let exit_code: u32 = parser.try_parse("ExitCode").unwrap();
                     let image_name: String = parser.try_parse("ImageName").unwrap();

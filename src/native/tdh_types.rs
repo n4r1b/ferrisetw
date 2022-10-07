@@ -10,7 +10,6 @@
 //!
 //! [TryParse]: crate::parser::TryParse
 //! [Property]: crate::native::tdh_types::Property
-use crate::native::etw_types::EventPropertyInfo;
 use num_traits::FromPrimitive;
 
 use windows::Win32::System::Diagnostics::Etw;
@@ -32,7 +31,7 @@ pub struct Property {
 
 #[doc(hidden)]
 impl Property {
-    pub fn new(name: String, property: &EventPropertyInfo) -> Self {
+    pub fn new(name: String, property: &Etw::EVENT_PROPERTY_INFO) -> Self {
         // Fixme: Check flags to see which values to get for the in_type
         unsafe {
             let out_type = FromPrimitive::from_u16(property.Anonymous1.nonStructType.OutType)

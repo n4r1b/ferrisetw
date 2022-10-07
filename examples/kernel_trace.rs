@@ -1,7 +1,7 @@
 use ferrisetw::native::etw_types::EventRecord;
 use ferrisetw::parser::{Parser, TryParse};
 use ferrisetw::provider::*;
-use ferrisetw::schema::SchemaLocator;
+use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::*;
 use std::time::Duration;
 
@@ -11,11 +11,11 @@ fn main() {
             .event_schema(record)
         {
             Ok(schema) => {
-                let opcode = schema.record().opcode();
+                let opcode = record.opcode();
                 if opcode == 10 {
                     let name = schema.provider_name();
                     println!("ProviderName: {}", name);
-                    let mut parser = Parser::create(&schema);
+                    let mut parser = Parser::create(record, &schema);
                     // Fully Qualified Syntax for Disambiguation
                     match TryParse::<String>::try_parse(&mut parser, "FileName") {
                         Ok(filename) => println!("FileName: {}", filename),

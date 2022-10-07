@@ -1,7 +1,7 @@
 use ferrisetw::native::etw_types::EventRecord;
 use ferrisetw::parser::{Parser, Pointer, TryParse};
 use ferrisetw::provider::*;
-use ferrisetw::schema::SchemaLocator;
+use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::*;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
@@ -9,9 +9,9 @@ use std::time::Duration;
 fn registry_callback(record: &EventRecord, schema_locator: &mut SchemaLocator) {
     match schema_locator.event_schema(record) {
         Ok(schema) => {
-            if schema.record().event_id() == 7 {
-                let mut parser = Parser::create(&schema);
-                let pid = schema.record().process_id();
+            if record.event_id() == 7 {
+                let mut parser = Parser::create(record, &schema);
+                let pid = record.process_id();
                 let key_obj: Pointer = parser.try_parse("KeyObject").unwrap_or(Pointer::default());
                 let status: u32 = parser.try_parse("Status").unwrap_or(0);
                 let value_name: String = parser.try_parse("ValueName").unwrap_or(String::from(""));
@@ -28,8 +28,8 @@ fn registry_callback(record: &EventRecord, schema_locator: &mut SchemaLocator) {
 fn tcpip_callback(record: &EventRecord, schema_locator: &mut SchemaLocator) {
     match schema_locator.event_schema(record) {
         Ok(schema) => {
-            if schema.record().event_id() == 11 {
-                let mut parser = Parser::create(&schema);
+            if record.event_id() == 11 {
+                let mut parser = Parser::create(record, &schema);
                 let size: u32 = parser.try_parse("size").unwrap_or(0);
                 let daddr: IpAddr = parser
                     .try_parse("daddr")
