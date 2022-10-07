@@ -106,7 +106,7 @@ impl<'a> Parser<'a> {
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
     /// # use ferrisetw::parser::Parser;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let parser = Parser::create(&schema);
     /// };
@@ -114,7 +114,7 @@ impl<'a> Parser<'a> {
     pub fn create(schema: &'a Schema) -> Self {
         Parser {
             schema,
-            buffer: schema.user_buffer(),
+            buffer: schema.record().user_buffer(),
             properties: PropertyIter::new(schema),
             last_property: 0,
             cache: HashMap::new(), // We could fill the cache on creation
@@ -141,7 +141,7 @@ impl<'a> Parser<'a> {
                 // There is an exception regarding pointer size though
                 // When reading captures, we should take care of the pointer size at the _source_, rather than the current architecture's pointer size.
                 // Note that a 32-bit program on a 64-bit OS would still send 32-bit pointers
-                if (self.schema.event_flags() & EVENT_HEADER_FLAG_32_BIT_HEADER) != 0 {
+                if (self.schema.record().event_flags() & EVENT_HEADER_FLAG_32_BIT_HEADER) != 0 {
                     4
                 } else {
                     8
@@ -246,7 +246,7 @@ impl_try_parse_primitive!(isize);
 /// # use ferrisetw::native::etw_types::EventRecord;
 /// # use ferrisetw::schema::SchemaLocator;
 /// # use ferrisetw::parser::{Parser, TryParse};
-/// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+/// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
 ///     let schema = schema_locator.event_schema(record).unwrap();
 ///     let mut parser = Parser::create(&schema);
 ///     let image_name: String = parser.try_parse("ImageName").unwrap();

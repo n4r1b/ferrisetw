@@ -7,11 +7,11 @@ use std::time::Duration;
 
 fn main() {
     let image_load_callback =
-        |record: EventRecord, schema_locator: &mut SchemaLocator| match schema_locator
+        |record: &EventRecord, schema_locator: &mut SchemaLocator| match schema_locator
             .event_schema(record)
         {
             Ok(schema) => {
-                let opcode = schema.opcode();
+                let opcode = schema.record().opcode();
                 if opcode == 10 {
                     let name = schema.provider_name();
                     println!("ProviderName: {}", name);

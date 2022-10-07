@@ -6,12 +6,12 @@ use ferrisetw::trace::*;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
-fn registry_callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
+fn registry_callback(record: &EventRecord, schema_locator: &mut SchemaLocator) {
     match schema_locator.event_schema(record) {
         Ok(schema) => {
-            if schema.event_id() == 7 {
+            if schema.record().event_id() == 7 {
                 let mut parser = Parser::create(&schema);
-                let pid = schema.process_id();
+                let pid = schema.record().process_id();
                 let key_obj: Pointer = parser.try_parse("KeyObject").unwrap_or(Pointer::default());
                 let status: u32 = parser.try_parse("Status").unwrap_or(0);
                 let value_name: String = parser.try_parse("ValueName").unwrap_or(String::from(""));
@@ -25,10 +25,10 @@ fn registry_callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
     };
 }
 
-fn tcpip_callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
+fn tcpip_callback(record: &EventRecord, schema_locator: &mut SchemaLocator) {
     match schema_locator.event_schema(record) {
         Ok(schema) => {
-            if schema.event_id() == 11 {
+            if schema.record().event_id() == 11 {
                 let mut parser = Parser::create(&schema);
                 let size: u32 = parser.try_parse("size").unwrap_or(0);
                 let daddr: IpAddr = parser

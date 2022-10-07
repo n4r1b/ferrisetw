@@ -20,15 +20,15 @@ use windows::Win32::Foundation::MAX_PATH;
 use windows::Win32::System::Diagnostics::Etw;
 use windows::Win32::System::Diagnostics::Etw::EVENT_FILTER_DESCRIPTOR;
 
+mod event_record;
+pub use event_record::EventRecord;
+
+mod extended_data;
+pub use extended_data::{ExtendedDataItem, EventHeaderExtendedDataItem};
+
 // typedef ULONG64 TRACEHANDLE, *PTRACEHANDLE;
 pub(crate) type TraceHandle = u64;
 pub(crate) type EvenTraceControl = Etw::EVENT_TRACE_CONTROL;
-
-/// Renaming type [EVENT_RECORD] type to match rust Naming Convention
-///
-/// [EVENT_RECORD]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.EVENT_RECORD.html
-pub type EventRecord = Etw::EVENT_RECORD;
-pub(crate) type PEventRecord = *mut EventRecord;
 
 pub const INVALID_TRACE_HANDLE: TraceHandle = u64::MAX;
 
@@ -198,7 +198,7 @@ pub struct EventTraceLogfile<'tracedata> {
 
 impl<'tracedata> EventTraceLogfile<'tracedata> {
     /// Create a new instance
-    pub fn create(trace_data: &'tracedata Box<TraceData>, callback: unsafe extern "system" fn(*mut EventRecord)) -> Self {
+    pub fn create(trace_data: &'tracedata Box<TraceData>, callback: unsafe extern "system" fn(*mut Etw::EVENT_RECORD)) -> Self {
         let mut log_file = EventTraceLogfile::default();
 
         let not_really_mut_ptr = trace_data.name.as_ptr() as *mut _; // That's kind-of fine because the logger name is _not supposed_ to be changed by Windows APIs

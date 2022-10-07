@@ -40,9 +40,11 @@ impl From<std::io::Error> for EvntraceNativeError {
 
 pub(crate) type EvntraceNativeResult<T> = Result<T, EvntraceNativeError>;
 
-unsafe extern "system" fn trace_callback_thunk(event_record: PEventRecord) {
-    let ctx: &mut TraceData = TraceData::unsafe_get_callback_ctx((*event_record).UserContext);
-    ctx.on_event(*event_record);
+unsafe extern "system" fn trace_callback_thunk(p_record: *mut Etw::EVENT_RECORD) {
+    let ctx: &mut TraceData = TraceData::unsafe_get_callback_ctx((*p_record).UserContext);
+    if let Some(event_record) = EventRecord::from_ptr(p_record) {
+        ctx.on_event(event_record);
+    }
 }
 
 #[derive(Debug, Clone)]

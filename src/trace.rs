@@ -98,7 +98,7 @@ impl TraceData {
         &mut *(ctx as *mut TraceData)
     }
 
-    pub(crate) fn on_event(&mut self, record: EventRecord) {
+    pub(crate) fn on_event(&mut self, record: &EventRecord) {
         self.events_handled += 1;
         let locator = &mut self.schema_locator;
         // We need a mutable reference to be able to modify the data it refers, which is actually
@@ -106,7 +106,7 @@ impl TraceData {
         for prov in &self.providers {
             // We can unwrap safely, provider builder wouldn't accept a provider without guid
             // so we must have Some(Guid)
-            if prov.guid.unwrap() == record.EventHeader.ProviderId {
+            if prov.guid.unwrap() == record.provider_id() {
                 prov.on_event(record, locator);
             }
         }
@@ -140,7 +140,7 @@ pub trait TraceBaseTrait {
     /// # use ferrisetw::provider::Provider;
     /// let provider = Provider::new()
     ///     .by_name(String::from("Microsoft-Windows-DistributedCOM"))
-    ///     .add_callback(|record, schema| { println!("{}", record.EventHeader.ProcessId); })
+    ///     .add_callback(|record, schema| { println!("{}", record.process_id()); })
     ///     .build()
     ///     .unwrap();
     /// let my_trace = UserTrace::new().enable(provider);

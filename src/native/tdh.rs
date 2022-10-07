@@ -27,11 +27,11 @@ impl From<std::io::Error> for TdhNativeError {
 
 pub(crate) type TdhNativeResult<T> = Result<T, TdhNativeError>;
 
-pub(crate) fn schema_from_tdh(event: EventRecord) -> TdhNativeResult<TraceEventInfoRaw> {
+pub(crate) fn schema_from_tdh(event: &EventRecord) -> TdhNativeResult<TraceEventInfoRaw> {
     let mut buffer_size = 0;
     unsafe {
         if Etw::TdhGetEventInformation(
-            &event,
+            event.as_raw_ptr(),
             &[],
             std::ptr::null_mut(),
             &mut buffer_size,
@@ -42,7 +42,7 @@ pub(crate) fn schema_from_tdh(event: EventRecord) -> TdhNativeResult<TraceEventI
 
         let mut buffer = TraceEventInfoRaw::alloc(buffer_size);
         if Etw::TdhGetEventInformation(
-            &event,
+            event.as_raw_ptr(),
             &[],
             buffer.info_as_ptr() as *mut _,
             &mut buffer_size,
@@ -55,7 +55,7 @@ pub(crate) fn schema_from_tdh(event: EventRecord) -> TdhNativeResult<TraceEventI
     }
 }
 
-pub(crate) fn property_size(event: EventRecord, name: &str) -> TdhNativeResult<u32> {
+pub(crate) fn property_size(event: &EventRecord, name: &str) -> TdhNativeResult<u32> {
     let mut property_size = 0;
 
     let name = name.into_utf16();
@@ -67,7 +67,7 @@ pub(crate) fn property_size(event: EventRecord, name: &str) -> TdhNativeResult<u
 
     unsafe {
         let status = Etw::TdhGetPropertySize(
-            &event,
+            event.as_raw_ptr(),
             &[],
             &[desc],
             &mut property_size,

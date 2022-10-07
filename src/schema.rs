@@ -6,10 +6,6 @@ use crate::native::tdh;
 use crate::native::tdh_types::Property;
 use std::collections::HashMap;
 use std::sync::Arc;
-use windows::core::GUID;
-
-pub mod extended_data;
-use extended_data::EventHeaderExtendedDataItem;
 
 /// Schema module errors
 #[derive(Debug)]
@@ -59,13 +55,13 @@ struct SchemaKey {
 
 impl SchemaKey {
     pub fn new(event: &EventRecord) -> Self {
-        let provider = format!("{:?}", event.EventHeader.ProviderId);
+        let provider = format!("{:?}", event.provider_id());
         SchemaKey {
             provider,
-            id: event.EventHeader.EventDescriptor.Id,
-            opcode: event.EventHeader.EventDescriptor.Opcode,
-            version: event.EventHeader.EventDescriptor.Version,
-            level: event.EventHeader.EventDescriptor.Level,
+            id: event.event_id(),
+            opcode: event.opcode(),
+            version: event.version(),
+            level: event.level(),
         }
     }
 }
@@ -114,12 +110,12 @@ impl SchemaLocator {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     /// };
     /// ```
-    pub fn event_schema(&mut self, event: EventRecord) -> SchemaResult<Schema> {
-        let key = SchemaKey::new(&event);
+    pub fn event_schema(&mut self, event: &EventRecord) -> SchemaResult<Schema> {
+        let key = SchemaKey::new(event);
         let info: Arc<_>;
 
         if !self.schemas.contains_key(&key) {
@@ -146,189 +142,14 @@ pub struct Schema {
 }
 
 impl Schema {
-    pub(crate) fn new(record: EventRecord, schema: Arc<TraceEventInfoRaw>) -> Self {
-        Schema { record, schema }
+    pub(crate) fn new(record: &EventRecord, schema: Arc<TraceEventInfoRaw>) -> Self {
+        Schema { record: EventRecord::clone(record), schema }
     }
 
-    pub(crate) fn user_buffer(&self) -> Vec<u8> {
-        unsafe {
-            std::slice::from_raw_parts(
-                self.record.UserData as *mut _,
-                self.record.UserDataLength.into(),
-            )
-            .to_vec()
-        }
+    // This is temporary and will be removed in a later commit
+    pub fn record(&self) -> &EventRecord {
+        &self.record
     }
-
-    // Horrible getters FTW!! :D
-    // TODO: Not a big fan of this, think a better way..
-    pub(crate) fn record(&self) -> EventRecord {
-        self.record
-    }
-
-    /// Return the EventId of the ETW Event that triggered the registered callback
-    ///
-    /// # Example
-    /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
-    /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record).unwrap();
-    ///     let event_id = schema.event_id();
-    /// };
-    /// ```
-    pub fn event_id(&self) -> u16 {
-        self.record.EventHeader.EventDescriptor.Id
-    }
-
-    /// Return the opcode of the ETW Event that triggered the registered callback
-    ///
-    /// # Example
-    /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
-    /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record).unwrap();
-    ///     let event_id = schema.opcode();
-    /// };
-    /// ```
-    pub fn opcode(&self) -> u8 {
-        self.record.EventHeader.EventDescriptor.Opcode
-    }
-
-    /// Returns the Event Flags of the ETW Event that triggered the registered callback
-    ///
-    /// # Example
-    /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
-    /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record).unwrap();
-    ///     let event_flags = schema.event_flags();
-    /// };
-    /// ```
-    pub fn event_flags(&self) -> u16 {
-        self.record.EventHeader.Flags
-    }
-
-    /// Returns the Version of the ETW Event that triggered the registered callback
-    ///
-    /// # Example
-    /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
-    /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record).unwrap();
-    ///     let event_version = schema.event_version();
-    /// };
-    /// ```
-    pub fn event_version(&self) -> u8 {
-        self.record.EventHeader.EventDescriptor.Version
-    }
-
-    /// Returns the ProcessId of the process that triggered the ETW Event
-    ///
-    /// # Example
-    /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
-    /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record).unwrap();
-    ///     let pid = schema.process_id();
-    /// };
-    /// ```
-    pub fn process_id(&self) -> u32 {
-        self.record.EventHeader.ProcessId
-    }
-
-    /// Returns the ThreadId of the thread that triggered the ETW Event
-    ///
-    /// # Example
-    /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
-    /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record).unwrap();
-    ///     let tid = schema.thread_id();
-    /// };
-    /// ```
-    pub fn thread_id(&self) -> u32 {
-        self.record.EventHeader.ThreadId
-    }
-
-    /// Returns the TimeStamp of the ETW Event
-    ///
-    /// As per [Microsoft's documentation](https://docs.microsoft.com/en-us/windows/win32/api/evntcons/ns-evntcons-event_header):
-    /// > Contains the time that the event occurred.
-    /// > The resolution is system time unless the ProcessTraceMode member of EVENT_TRACE_LOGFILE
-    /// > contains the PROCESS_TRACE_MODE_RAW_TIMESTAMP flag, in which case the resolution depends
-    /// > on the value of the Wnode.ClientContext member of EVENT_TRACE_PROPERTIES at the time the
-    /// > controller created the session.
-    ///
-    /// # Example
-    /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
-    /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record).unwrap();
-    ///     let timestamp = schema.timestamp();
-    /// };
-    /// ```
-    pub fn timestamp(&self) -> i64 {
-        self.record.EventHeader.TimeStamp
-    }
-
-    /// Returns the ActivityId from the ETW Event, this value is used to related Two events
-    ///
-    /// # Example
-    /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
-    /// # use ferrisetw::schema::SchemaLocator;
-    ///
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record).unwrap();
-    ///     let activity_id = schema.activity_id();
-    /// };
-    /// ```
-    pub fn activity_id(&self) -> GUID {
-        self.record.EventHeader.ActivityId
-    }
-
-    /// Returns the ExtendedData from the ETW Event
-    ///
-    /// Their availability is mostly determined by the the traces passed to [`Provider::trace_flags`](crate::provider::Provider::trace_flags)
-    ///
-    /// # Example
-    /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
-    /// # use ferrisetw::schema::SchemaLocator;
-    /// use windows::Win32::System::Diagnostics::Etw::EVENT_HEADER_EXT_TYPE_RELATED_ACTIVITYID;
-    ///
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record).unwrap();
-    ///     let activity_id = schema
-    ///         .extended_data()
-    ///         .iter()
-    ///         .find(|edata| edata.data_type() as u32 == EVENT_HEADER_EXT_TYPE_RELATED_ACTIVITYID)
-    ///         .map(|edata| edata.to_extended_data_item());
-    /// };
-    /// ```
-    pub fn extended_data(&self) -> &[EventHeaderExtendedDataItem] {
-        let n_extended_data = self.record.ExtendedDataCount;
-        let p_ed_array = self.record.ExtendedData;
-        if n_extended_data == 0 || p_ed_array.is_null() {
-            return &[];
-        }
-
-        // Safety: * we're building a slice from an array pointer size given by Windows
-        //         * the pointed data is not supposed to be mutated during the lifetime of `Self`
-        unsafe {
-            std::slice::from_raw_parts(
-                p_ed_array as *const EventHeaderExtendedDataItem,
-                n_extended_data as usize)
-        }
-    }
-
 
     /// Use the `decoding_source` function to obtain the [DecodingSource] from the [TraceEventInfo]
     ///
@@ -340,7 +161,7 @@ impl Schema {
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
 
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let decoding_source = schema.decoding_source();
     /// };
@@ -356,7 +177,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let provider_name = schema.provider_name();
     /// };
@@ -373,7 +194,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let task_name = schema.task_name();
     /// };
@@ -390,7 +211,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema::SchemaLocator;
-    /// let my_callback = |record: EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let opcode_name = schema.opcode_name();
     /// };

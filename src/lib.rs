@@ -52,12 +52,12 @@
 //! use ferrisetw::provider::Provider;
 //! use ferrisetw::trace::{UserTrace, TraceTrait, TraceBaseTrait};
 //!
-//! fn process_callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
+//! fn process_callback(record: &EventRecord, schema_locator: &mut SchemaLocator) {
 //!     // Within the callback we first locate the proper Schema for the event
 //!     match schema_locator.event_schema(record) {
 //!         Ok(schema) => {
 //!             // At the moment we can only filter by checking the event_id
-//!             if schema.event_id() == 2 {
+//!             if record.event_id() == 2 {
 //!
 //!                 // We build the Parser based on the Schema
 //!                 let mut parser = Parser::create(&schema);
