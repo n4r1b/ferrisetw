@@ -5,6 +5,8 @@
 //!
 //! This module shouldn't be accessed directly. Modules from the crate level provide a safe API to interact
 //! with the crate
+use std::panic::AssertUnwindSafe;
+
 use windows::core::{GUID, PCSTR};
 use windows::Win32::Foundation::FILETIME;
 use windows::Win32::System::Diagnostics::Etw;
@@ -41,22 +43,30 @@ impl From<std::io::Error> for EvntraceNativeError {
 pub(crate) type EvntraceNativeResult<T> = Result<T, EvntraceNativeError>;
 
 extern "system" fn trace_callback_thunk(p_record: *mut Etw::EVENT_RECORD) {
-    let record_from_ptr = unsafe {
-        // Safety: lifetime is valid at least until the end of the callback. A correct lifetime will be attached when we pass the reference to the child function
-        EventRecord::from_ptr(p_record)
-    };
-
-    if let Some(event_record) = record_from_ptr {
-        let p_user_context = event_record.user_context().cast::<TraceData>();
-        let user_context = unsafe {
-            // Safety:
-            //  * the API of this create guarantees this points to a `TraceData` already allocated and created
-            //  * TODO (#45): the API of this crate does not yet guarantee this `TraceData` is not mutated during the trace (e.g. modifying the list of providers) (although this may not be critical memory-safety-wise)
-            //  * TODO (#45): the API of this create does not yet guarantee this `TraceData` has not been dropped
-            p_user_context.as_ref()
+    match std::panic::catch_unwind(AssertUnwindSafe(|| {
+        let record_from_ptr = unsafe {
+            // Safety: lifetime is valid at least until the end of the callback. A correct lifetime will be attached when we pass the reference to the child function
+            EventRecord::from_ptr(p_record)
         };
-        if let Some(user_context) = user_context {
-            user_context.on_event(event_record);
+
+        if let Some(event_record) = record_from_ptr {
+            let p_user_context = event_record.user_context().cast::<TraceData>();
+            let user_context = unsafe {
+                // Safety:
+                //  * the API of this create guarantees this points to a `TraceData` already allocated and created
+                //  * TODO (#45): the API of this crate does not yet guarantee this `TraceData` is not mutated during the trace (e.g. modifying the list of providers) (although this may not be critical memory-safety-wise)
+                //  * TODO (#45): the API of this create does not yet guarantee this `TraceData` has not been dropped
+                p_user_context.as_ref()
+            };
+            if let Some(user_context) = user_context {
+                user_context.on_event(event_record);
+            }
+        }
+    })) {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("UNIMPLEMENTED PANIC: {e:?}");
+            std::process::exit(1);
         }
     }
 }
