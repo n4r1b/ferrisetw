@@ -8,6 +8,7 @@
 use windows::core::{GUID, PCSTR};
 use windows::Win32::Foundation::FILETIME;
 use windows::Win32::System::Diagnostics::Etw;
+use windows::Win32::System::Diagnostics::Etw::TRACE_QUERY_INFO_CLASS;
 use windows::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
 use windows::Win32::Foundation::ERROR_ALREADY_EXISTS;
 use windows::Win32::Foundation::ERROR_CTX_CLOSE_PENDING;
@@ -235,5 +236,23 @@ impl NativeEtw {
             }
         }
         Ok(())
+    }
+}
+
+/// Queries the system for system-wide ETW information (that does not require an active session).
+pub(crate) fn query_info(class: TraceInformation, buf: &mut [u8]) -> EvntraceNativeResult<()> {
+    match unsafe {
+        Etw::TraceQueryInformation(
+            0,
+            TRACE_QUERY_INFO_CLASS(class as i32),
+            buf.as_mut_ptr() as *mut std::ffi::c_void,
+            buf.len() as u32,
+            std::ptr::null_mut(),
+        )
+    } {
+        0 => Ok(()),
+        e => Err(EvntraceNativeError::IoError(
+            std::io::Error::from_raw_os_error(e as i32),
+        )),
     }
 }

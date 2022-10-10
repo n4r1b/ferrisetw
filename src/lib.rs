@@ -117,6 +117,7 @@ pub mod native;
 pub mod parser;
 pub mod property;
 pub mod provider;
+pub mod query;
 pub mod schema;
 pub mod schema_locator;
 pub mod trace;

@@ -30,6 +30,48 @@ pub(crate) type EvenTraceControl = Etw::EVENT_TRACE_CONTROL;
 
 pub const INVALID_TRACE_HANDLE: TraceHandle = u64::MAX;
 
+/// This enum is <https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ne-evntrace-trace_query_info_class>
+///
+/// Re-defining it here, because all these values are not defined in windows-rs (yet?)
+#[derive(Debug, Copy, Clone)]
+#[non_exhaustive]
+#[repr(i32)]
+pub enum TraceInformation {
+    TraceGuidQueryList,
+    TraceGuidQueryInfo,
+    TraceGuidQueryProcess,
+    TraceStackTracingInfo,
+    TraceSystemTraceEnableFlagsInfo,
+    TraceSampledProfileIntervalInfo,
+    TraceProfileSourceConfigInfo,
+    TraceProfileSourceListInfo,
+    TracePmcEventListInfo,
+    TracePmcCounterListInfo,
+    TraceSetDisallowList,
+    TraceVersionInfo,
+    TraceGroupQueryList,
+    TraceGroupQueryInfo,
+    TraceDisallowListQuery,
+    TraceInfoReserved15,
+    TracePeriodicCaptureStateListInfo,
+    TracePeriodicCaptureStateInfo,
+    TraceProviderBinaryTracking,
+    TraceMaxLoggersQuery,
+    TraceLbrConfigurationInfo,
+    TraceLbrEventListInfo,
+    /// Query the maximum PMC counters that can be specified simultaneously.
+    /// May be queried without an active ETW session.
+    ///
+    /// Output: u32
+    TraceMaxPmcCounterQuery,
+    TraceStreamCount,
+    TraceStackCachingInfo,
+    TracePmcCounterOwners,
+    TraceUnifiedStackCachingInfo,
+    TracePmcSessionInformation,
+    MaxTraceSetInfoClass,
+}
+
 #[allow(dead_code)]
 pub(crate) enum ControlValues {
     Query = 0,
