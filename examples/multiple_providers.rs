@@ -10,7 +10,7 @@ fn registry_callback(record: &EventRecord, schema_locator: &SchemaLocator) {
     match schema_locator.event_schema(record) {
         Ok(schema) => {
             if record.event_id() == 7 {
-                let mut parser = Parser::create(record, &schema);
+                let parser = Parser::create(record, &schema);
                 let pid = record.process_id();
                 let key_obj: Pointer = parser.try_parse("KeyObject").unwrap_or(Pointer::default());
                 let status: u32 = parser.try_parse("Status").unwrap_or(0);
@@ -29,7 +29,7 @@ fn tcpip_callback(record: &EventRecord, schema_locator: &SchemaLocator) {
     match schema_locator.event_schema(record) {
         Ok(schema) => {
             if record.event_id() == 11 {
-                let mut parser = Parser::create(record, &schema);
+                let parser = Parser::create(record, &schema);
                 let size: u32 = parser.try_parse("size").unwrap_or(0);
                 let daddr: IpAddr = parser
                     .try_parse("daddr")

@@ -301,7 +301,7 @@ impl_try_parse_primitive!(isize);
 /// # use ferrisetw::parser::{Parser, TryParse};
 /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
 ///     let schema = schema_locator.event_schema(record).unwrap();
-///     let mut parser = Parser::create(record, &schema);
+///     let parser = Parser::create(record, &schema);
 ///     let image_name: String = parser.try_parse("ImageName").unwrap();
 /// };
 /// ```
