@@ -26,10 +26,10 @@ fn main() {
             Err(err) => println!("Error {:?}", err),
         };
 
-    let provider = Provider::kernel(&kernel_providers::IMAGE_LOAD_PROVIDER)
+    let provider = Provider
+        ::kernel(&kernel_providers::IMAGE_LOAD_PROVIDER)
         .add_callback(image_load_callback)
-        .build()
-        .unwrap();
+        .build();
 
     let mut trace = KernelTrace::new()
         .named(String::from("MyKernelProvider"))

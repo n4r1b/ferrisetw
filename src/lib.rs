@@ -77,12 +77,11 @@
 //!
 //! fn main() {
 //!     // First we build a Provider
-//!     let process_provider = Provider::new()
-//!         .by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716") // Microsoft-Windows-Kernel-Process
+//!     let process_provider = Provider
+//!         ::by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716") // Microsoft-Windows-Kernel-Process
 //!         .add_callback(process_callback)
 //!         // .add_filter(event_filters) // it is possible to filter by event ID, process ID, etc.
-//!         .build()
-//!         .unwrap();
+//!         .build();
 //!
 //!     // We start a trace session for the previously registered provider
 //!     // This call will spawn a new thread which listens to the events

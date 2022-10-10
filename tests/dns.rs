@@ -30,8 +30,8 @@ fn simple_user_dns_trace() {
     let passed = Status::new(TestKind::ExpectSuccess);
     let notifier = passed.notifier();
 
-    let dns_provider = Provider::new()
-        .by_guid("1c95126e-7eea-49a9-a3fe-a378b03ddb4d") // Microsoft-Windows-DNS-Client
+    let dns_provider = Provider
+        ::by_guid("1c95126e-7eea-49a9-a3fe-a378b03ddb4d") // Microsoft-Windows-DNS-Client
         .add_callback(move |record: &EventRecord, schema_locator: &SchemaLocator| {
             let schema = schema_locator.event_schema(record).unwrap();
             let parser = Parser::create(record, &schema);
@@ -43,8 +43,7 @@ fn simple_user_dns_trace() {
                 notifier.notify_success();
             }
         })
-        .build()
-        .unwrap();
+        .build();
 
     let mut _dns_trace = UserTrace::new()
         .enable(dns_provider)
@@ -65,8 +64,8 @@ fn test_event_id_filter() {
 
     let filter = EventFilter::ByEventIds(vec![EVENT_ID_DNS_QUERY_COMPLETED]);
 
-    let dns_provider = Provider::new()
-        .by_guid("1c95126e-7eea-49a9-a3fe-a378b03ddb4d") // Microsoft-Windows-DNS-Client
+    let dns_provider = Provider
+        ::by_guid("1c95126e-7eea-49a9-a3fe-a378b03ddb4d") // Microsoft-Windows-DNS-Client
         .add_filter(filter)
         .add_callback(move |record: &EventRecord, _schema_locator: &SchemaLocator| {
             // We want at least one event, but only for the filtered kind
@@ -76,8 +75,7 @@ fn test_event_id_filter() {
                 notifier2.notify_failure();
             }
         })
-        .build()
-        .unwrap();
+        .build();
 
     let mut _dns_trace = UserTrace::new()
         .enable(dns_provider)
