@@ -7,7 +7,7 @@
 //! with the crate
 use std::panic::AssertUnwindSafe;
 
-use windows::core::{GUID, PCSTR};
+use windows::core::{GUID, PCWSTR};
 use windows::Win32::Foundation::FILETIME;
 use windows::Win32::System::Diagnostics::Etw;
 use windows::Win32::System::Diagnostics::Etw::TRACE_QUERY_INFO_CLASS;
@@ -150,20 +150,30 @@ impl NativeEtw {
     }
 
     fn start_trace(&mut self) -> EvntraceNativeResult<()> {
-        unsafe {
-            let status = Etw::StartTraceA(
+        let status = unsafe {
+            // Safety:
+            //  * first argument points to a valid and allocated address (this is an output and will be modified)
+            //  * second argument is a valid, null terminated widestring (note that it will be copied to the EventTraceProperties...from where it already comes. This will probably be overwritten by Windows, but heck.)
+            //  * third argument is a valid, allocated EVENT_TRACE_PROPERTIES (and will be mutated)
+            //  * Note: the string (that will be overwritten to itself) ends with a null widechar before the end of its buffer (see EventTraceProperties::new())
+            Etw::StartTraceW(
                 &mut self.registration_handle,
-                PCSTR::from_raw(self.info.trace_name_array().as_ptr()),
+                PCWSTR::from_raw(self.info.trace_name_array().as_ptr()),
                 self.info.as_mut_ptr(),
-            );
+            )
+        };
 
-            if status == ERROR_ALREADY_EXISTS.0 {
-                return Err(EvntraceNativeError::AlreadyExist);
-            } else if status != 0 {
-                return Err(EvntraceNativeError::IoError(
-                    std::io::Error::from_raw_os_error(status as i32),
-                ));
-            }
+        if status == ERROR_ALREADY_EXISTS.0 {
+            return Err(EvntraceNativeError::AlreadyExist);
+        } else if status != 0 {
+            return Err(EvntraceNativeError::IoError(
+                std::io::Error::from_raw_os_error(status as i32),
+            ));
+        } else if self.registration_handle == 0 {
+            // Because Microsoft says that
+            // > The session handle is 0 if the handle is not valid.
+            // (https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-starttracew)
+            return Err(EvntraceNativeError::InvalidHandle);
         }
         Ok(())
     }

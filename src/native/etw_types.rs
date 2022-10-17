@@ -14,7 +14,6 @@ use std::fmt::Formatter;
 use std::marker::PhantomData;
 use windows::core::GUID;
 use windows::core::PWSTR;
-use windows::Win32::Foundation::MAX_PATH;
 use windows::Win32::System::Diagnostics::Etw;
 use windows::Win32::System::Diagnostics::Etw::EVENT_FILTER_DESCRIPTOR;
 use widestring::ucstring::U16CString;
@@ -30,6 +29,8 @@ pub(crate) type TraceHandle = u64;
 pub(crate) type EvenTraceControl = Etw::EVENT_TRACE_CONTROL;
 
 pub const INVALID_TRACE_HANDLE: TraceHandle = u64::MAX;
+
+pub const TRACE_NAME_MAX_CHARS: usize = 200; // Microsoft documentation says the limit is 1024, but do not trust us. Experience shows that traces with names longer than ~240 character silently fail.
 
 /// This enum is <https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ne-evntrace-trace_query_info_class>
 ///
@@ -145,18 +146,25 @@ impl From<ProcessTraceMode> for u32 {
 #[derive(Clone, Copy)]
 pub struct EventTraceProperties {
     etw_trace_properties: Etw::EVENT_TRACE_PROPERTIES,
-    trace_name: [u8; MAX_PATH as usize],
-    log_file_name: [u8; MAX_PATH as usize], // not used currently, but this may be useful when resolving https://github.com/n4r1b/ferrisetw/issues/7
+    wide_trace_name: [u16; TRACE_NAME_MAX_CHARS+1],    // The +1 leaves space for the final null widechar.
+    wide_log_file_name: [u16; TRACE_NAME_MAX_CHARS+1], // The +1 leaves space for the final null widechar. Not used currently, but this may be useful when resolving https://github.com/n4r1b/ferrisetw/issues/7
 }
 
 
 impl std::fmt::Debug for EventTraceProperties {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<EventTraceProperties>")
+        let name = U16CString::from_vec_truncate(self.wide_trace_name).to_string_lossy();
+        f.debug_struct("EventTraceProperties")
+            .field("name", &name)
+            .finish()
     }
 }
 
 impl EventTraceProperties {
+    /// Create a new instance
+    ///
+    /// # Notes
+    /// `trace_name` is limited to 200 characters.
     pub(crate) fn new<T>(
         trace_name: &str,
         trace_properties: &TraceProperties,
@@ -189,7 +197,7 @@ impl EventTraceProperties {
         // etw_trace_properties.LogFileNameOffset must be 0, but this will change when https://github.com/n4r1b/ferrisetw/issues/7 is resolved
         // > If you do not want to log events to a log file (for example, if you specify EVENT_TRACE_REAL_TIME_MODE only), set LogFileNameOffset to 0.
         // (https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties)
-        etw_trace_properties.LoggerNameOffset = offset_of!(EventTraceProperties, log_file_name) as u32;
+        etw_trace_properties.LoggerNameOffset = offset_of!(EventTraceProperties, wide_log_file_name) as u32;
 
         // https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties#remarks
         // > You do not copy the session name to the offset. The StartTrace function copies the name for you.
@@ -197,10 +205,12 @@ impl EventTraceProperties {
         // Let's do it anyway, even though that's not required
         let mut s = Self {
             etw_trace_properties,
-            trace_name: [0; MAX_PATH as usize],
-            log_file_name: [0; MAX_PATH as usize],
+            wide_trace_name: [0u16; TRACE_NAME_MAX_CHARS+1],
+            wide_log_file_name: [0u16; TRACE_NAME_MAX_CHARS+1],
         };
-        s.trace_name[..trace_name.len()].copy_from_slice(trace_name.as_bytes());
+        let wide_trace_name = U16CString::from_str_truncate(trace_name);
+        let name_len = wide_trace_name.len().min(TRACE_NAME_MAX_CHARS);
+        s.wide_trace_name[..name_len].copy_from_slice(&wide_trace_name.as_slice()[..name_len]);
 
         s
     }
@@ -217,8 +227,8 @@ impl EventTraceProperties {
         &mut self.etw_trace_properties as *mut Etw::EVENT_TRACE_PROPERTIES
     }
 
-    pub fn trace_name_array(&self) -> &[u8] {
-        &self.trace_name
+    pub fn trace_name_array(&self) -> &[u16] {
+        &self.wide_trace_name
     }
 }
 
