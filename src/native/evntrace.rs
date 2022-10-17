@@ -231,10 +231,12 @@ impl NativeEtw {
     ) -> EvntraceNativeResult<()> {
         let status = unsafe {
             // Safety:
+            //  * the PCWSTR points to a valid, null-terminated widestring
             //  * depending on the control code, the `Properties` can be mutated
-            Etw::ControlTraceA(
+            //    note that the PCWSTR also points to this mutable instance, but the PCWSTR is an input-only (hence constant) parameter
+            Etw::ControlTraceW(
                 0,
-                PCSTR::from_raw(trace_data.name.as_ptr()),
+                PCWSTR::from_raw(self.info.trace_name_array().as_ptr()),
                 self.info.as_mut_ptr(),
                 control_code,
             )
