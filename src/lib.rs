@@ -120,3 +120,11 @@ pub mod schema;
 pub mod trace;
 mod traits;
 mod utils;
+
+// These types are returned by some public APIs of this crate.
+// They must be re-exported, so that users of the crate have a way to avoid version conflicts
+// (see https://github.com/n4r1b/ferrisetw/issues/46)
+/// Re-exported `GUID` from `windows-rs`, which is used in return values for some functions of this crate
+pub use windows::core::GUID;
+/// Re-exported `SID` from `windows-rs`, which is used in return values for some functions of this crate
+pub use windows::Win32::Security::SID;
