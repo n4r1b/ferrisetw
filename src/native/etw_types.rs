@@ -13,10 +13,11 @@ use std::ffi::c_void;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
 use windows::core::GUID;
-use windows::core::PSTR;
+use windows::core::PWSTR;
 use windows::Win32::Foundation::MAX_PATH;
 use windows::Win32::System::Diagnostics::Etw;
 use windows::Win32::System::Diagnostics::Etw::EVENT_FILTER_DESCRIPTOR;
+use widestring::ucstring::U16CString;
 
 mod event_record;
 pub use event_record::EventRecord;
@@ -221,47 +222,47 @@ impl EventTraceProperties {
     }
 }
 
-/// Newtype wrapper over an [EVENT_TRACE_LOGFILEA]
+/// Newtype wrapper over an [EVENT_TRACE_LOGFILEW]
 ///
-/// [EVENT_TRACE_LOGFILEA]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.EVENT_TRACE_LOGFILEA.html
+/// [EVENT_TRACE_LOGFILEW]: https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Diagnostics/Etw/struct.EVENT_TRACE_LOGFILEW.html
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct EventTraceLogfile<'tracedata> {
-    native: Etw::EVENT_TRACE_LOGFILEA,
+    native: Etw::EVENT_TRACE_LOGFILEW,
+    wide_logger_name: U16CString,
     lifetime: PhantomData<&'tracedata TraceData>,
 }
 
 impl<'tracedata> EventTraceLogfile<'tracedata> {
     /// Create a new instance
     pub fn create(trace_data: &'tracedata Box<TraceData>, callback: unsafe extern "system" fn(*mut Etw::EVENT_RECORD)) -> Self {
-        let mut log_file = EventTraceLogfile::default();
+        let mut native = Etw::EVENT_TRACE_LOGFILEW::default();
 
-        let not_really_mut_ptr = trace_data.name.as_ptr() as *mut _; // That's kind-of fine because the logger name is _not supposed_ to be changed by Windows APIs
-        log_file.native.LoggerName = PSTR(not_really_mut_ptr);
-        log_file.native.Anonymous1.ProcessTraceMode =
+        let mut wide_logger_name = U16CString::from_str_truncate(&trace_data.name);
+        native.LoggerName = PWSTR(wide_logger_name.as_mut_ptr());
+        native.Anonymous1.ProcessTraceMode =
             u32::from(ProcessTraceMode::RealTime) | u32::from(ProcessTraceMode::EventRecord);
 
-        log_file.native.Anonymous2.EventRecordCallback = Some(callback);
+        native.Anonymous2.EventRecordCallback = Some(callback);
 
         let not_really_mut_ptr = trace_data.as_ref() as *const TraceData as *const c_void as *mut c_void; // That's kind-of fine because the user context is _not supposed_ to be changed by Windows APIs
-        log_file.native.Context = not_really_mut_ptr;
+        native.Context = not_really_mut_ptr;
 
-        log_file
+        Self {
+            native,
+            wide_logger_name,
+            lifetime: PhantomData,
+        }
     }
 
     /// Retrieve the windows-rs compatible pointer to the contained `EVENT_TRACE_LOGFILEA`
     ///
     /// # Safety
     ///
-    /// This pointer is valid as long as [`Self`] is alive (and not modified elsewhere)
-    pub unsafe fn as_mut_ptr(&mut self) -> *mut Etw::EVENT_TRACE_LOGFILEA {
-        &mut self.native as *mut Etw::EVENT_TRACE_LOGFILEA
-    }
-}
-
-impl<'tracedata> Default for EventTraceLogfile<'tracedata> {
-    fn default() -> Self {
-        unsafe { std::mem::zeroed::<EventTraceLogfile>() }
+    /// This pointer is valid as long as [`Self`] is alive (and not modified elsewhere)<br/>
+    /// Note that `OpenTraceW` **will** modify its content on output, and thus you should make sure to be the only user of this instance.
+    pub(crate) unsafe fn as_mut_ptr(&mut self) -> *mut Etw::EVENT_TRACE_LOGFILEW {
+        &mut self.native as *mut Etw::EVENT_TRACE_LOGFILEW
     }
 }
 

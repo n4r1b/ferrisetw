@@ -177,7 +177,7 @@ impl NativeEtw {
             //
             // > On success, OpenTrace will update the structure with information from the opened file or session.
             // https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-opentracea
-            Etw::OpenTraceA(log_file.as_mut_ptr())
+            Etw::OpenTraceW(log_file.as_mut_ptr())
         };
 
         if self.session_handle == INVALID_TRACE_HANDLE {
