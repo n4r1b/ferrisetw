@@ -5,7 +5,6 @@ use std::time::Duration;
 use ferrisetw::provider::{Provider, EventFilter};
 use ferrisetw::native::etw_types::EventRecord;
 use ferrisetw::schema_locator::SchemaLocator;
-use ferrisetw::trace::TraceBaseTrait;
 use ferrisetw::parser::{Parser, TryParse};
 use ferrisetw::trace::KernelTrace;
 use ferrisetw::provider::kernel_providers;
@@ -54,7 +53,7 @@ fn simple_kernel_trace_trace() {
 
     let mut _kernel_trace = KernelTrace::new()
         .enable(kernel_provider)
-        .start()
+        .start_and_process()
         .unwrap();
 
     generate_image_load_events();

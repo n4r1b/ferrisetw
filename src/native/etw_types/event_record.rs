@@ -33,7 +33,7 @@ impl EventRecord {
 
     /// The `UserContext` field from the wrapped `EVENT_RECORD`
     ///
-    /// In this crate, it is always populated to point to a valid [`TraceData`](crate::trace::TraceData)
+    /// In this crate, it is always populated to point to a valid [`CallbackData`](crate::trace::CallbackData)
     pub fn user_context(&self) -> *const std::ffi::c_void {
         self.0.UserContext as *const _
     }

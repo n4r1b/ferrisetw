@@ -7,8 +7,8 @@
 //! In most cases a user of the crate won't have to deal with this and can directly obtain the data
 //! needed by using the functions exposed by the modules at the crate level
 use crate::provider::event_filter::EventFilterDescriptor;
-use crate::provider::{Provider, TraceFlags};
-use crate::trace::{TraceData, TraceProperties, TraceTrait};
+use crate::provider::TraceFlags;
+use crate::trace::{CallbackData, TraceProperties, TraceTrait};
 use std::ffi::c_void;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
@@ -16,19 +16,13 @@ use windows::core::GUID;
 use windows::core::PWSTR;
 use windows::Win32::System::Diagnostics::Etw;
 use windows::Win32::System::Diagnostics::Etw::EVENT_FILTER_DESCRIPTOR;
-use widestring::ucstring::U16CString;
+use widestring::{U16CStr, U16CString};
 
 mod event_record;
 pub use event_record::EventRecord;
 
 mod extended_data;
 pub use extended_data::{ExtendedDataItem, EventHeaderExtendedDataItem};
-
-// typedef ULONG64 TRACEHANDLE, *PTRACEHANDLE;
-pub(crate) type TraceHandle = u64;
-pub(crate) type EvenTraceControl = Etw::EVENT_TRACE_CONTROL;
-
-pub const INVALID_TRACE_HANDLE: TraceHandle = u64::MAX;
 
 pub const TRACE_NAME_MAX_CHARS: usize = 200; // Microsoft documentation says the limit is 1024, but do not trust us. Experience shows that traces with names longer than ~240 character silently fail.
 
@@ -166,9 +160,9 @@ impl EventTraceProperties {
     /// # Notes
     /// `trace_name` is limited to 200 characters.
     pub(crate) fn new<T>(
-        trace_name: &str,
+        trace_name: &U16CStr,
         trace_properties: &TraceProperties,
-        providers: &[Provider],
+        enable_flags: Etw::EVENT_TRACE_FLAG,
     ) -> Self
     where
         T: TraceTrait
@@ -192,7 +186,7 @@ impl EventTraceProperties {
         }
 
         etw_trace_properties.LogFileMode |= T::augmented_file_mode();
-        etw_trace_properties.EnableFlags = Etw::EVENT_TRACE_FLAG(T::enable_flags(providers));
+        etw_trace_properties.EnableFlags = enable_flags;
 
         // etw_trace_properties.LogFileNameOffset must be 0, but this will change when https://github.com/n4r1b/ferrisetw/issues/7 is resolved
         // > If you do not want to log events to a log file (for example, if you specify EVENT_TRACE_REAL_TIME_MODE only), set LogFileNameOffset to 0.
@@ -208,9 +202,8 @@ impl EventTraceProperties {
             wide_trace_name: [0u16; TRACE_NAME_MAX_CHARS+1],
             wide_log_file_name: [0u16; TRACE_NAME_MAX_CHARS+1],
         };
-        let wide_trace_name = U16CString::from_str_truncate(trace_name);
-        let name_len = wide_trace_name.len().min(TRACE_NAME_MAX_CHARS);
-        s.wide_trace_name[..name_len].copy_from_slice(&wide_trace_name.as_slice()[..name_len]);
+        let name_len = trace_name.len().min(TRACE_NAME_MAX_CHARS);
+        s.wide_trace_name[..name_len].copy_from_slice(&trace_name.as_slice()[..name_len]);
 
         s
     }
@@ -234,28 +227,29 @@ impl EventTraceProperties {
 
 /// Newtype wrapper over an [EVENT_TRACE_LOGFILEW]
 ///
+/// Its lifetime is tied a to [`CallbackData`] because it contains raw pointers to it.
+///
 /// [EVENT_TRACE_LOGFILEW]: https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Diagnostics/Etw/struct.EVENT_TRACE_LOGFILEW.html
 #[repr(C)]
 #[derive(Clone)]
-pub struct EventTraceLogfile<'tracedata> {
+pub struct EventTraceLogfile<'callbackdata> {
     native: Etw::EVENT_TRACE_LOGFILEW,
     wide_logger_name: U16CString,
-    lifetime: PhantomData<&'tracedata TraceData>,
+    lifetime: PhantomData<&'callbackdata CallbackData>,
 }
 
-impl<'tracedata> EventTraceLogfile<'tracedata> {
+impl<'callbackdata> EventTraceLogfile<'callbackdata> {
     /// Create a new instance
-    pub fn create(trace_data: &'tracedata Box<TraceData>, callback: unsafe extern "system" fn(*mut Etw::EVENT_RECORD)) -> Self {
+    pub fn create(callback_data: &'callbackdata Box<CallbackData>, mut wide_logger_name: U16CString, callback: unsafe extern "system" fn(*mut Etw::EVENT_RECORD)) -> Self {
         let mut native = Etw::EVENT_TRACE_LOGFILEW::default();
 
-        let mut wide_logger_name = U16CString::from_str_truncate(&trace_data.name);
         native.LoggerName = PWSTR(wide_logger_name.as_mut_ptr());
         native.Anonymous1.ProcessTraceMode =
             u32::from(ProcessTraceMode::RealTime) | u32::from(ProcessTraceMode::EventRecord);
 
         native.Anonymous2.EventRecordCallback = Some(callback);
 
-        let not_really_mut_ptr = trace_data.as_ref() as *const TraceData as *const c_void as *mut c_void; // That's kind-of fine because the user context is _not supposed_ to be changed by Windows APIs
+        let not_really_mut_ptr = callback_data.as_ref() as *const CallbackData as *const c_void as *mut c_void; // That's kind-of fine because the user context is _not supposed_ to be changed by Windows APIs
         native.Context = not_really_mut_ptr;
 
         Self {

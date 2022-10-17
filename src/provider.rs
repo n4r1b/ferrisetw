@@ -480,7 +480,6 @@ impl ProviderBuilder {
     ///
     /// # Example
     /// ```
-    /// # use crate::ferrisetw::trace::TraceBaseTrait;
     /// # use ferrisetw::provider::Provider;
     /// # use ferrisetw::trace::UserTrace;
     /// # use ferrisetw::native::etw_types::EventRecord;

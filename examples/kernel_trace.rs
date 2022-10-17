@@ -31,12 +31,12 @@ fn main() {
         .add_callback(image_load_callback)
         .build();
 
-    let mut trace = KernelTrace::new()
+    let kernel_trace = KernelTrace::new()
         .named(String::from("MyKernelProvider"))
         .enable(provider)
-        .start()
+        .start_and_process()
         .unwrap();
 
     std::thread::sleep(Duration::new(20, 0));
-    trace.stop();
+    kernel_trace.stop().unwrap(); // This is not required, as it will automatically be stopped on Drop
 }
