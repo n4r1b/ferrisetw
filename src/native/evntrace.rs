@@ -74,15 +74,18 @@ extern "system" fn trace_callback_thunk(p_record: *mut Etw::EVENT_RECORD) {
 
 #[derive(Debug, Clone)]
 pub(crate) struct NativeEtw {
-    info: TraceInfo,
+    info: EventTraceProperties,
     session_handle: TraceHandle,
     registration_handle: TraceHandle,
 }
 
 impl NativeEtw {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new<T>(name: &str, properties: &TraceProperties, providers: &[Provider]) -> Self
+    where
+        T: TraceTrait,
+    {
         NativeEtw {
-            info: TraceInfo::default(),
+            info: EventTraceProperties::new::<T>(name, properties, providers),
             session_handle: INVALID_TRACE_HANDLE,
             registration_handle: INVALID_TRACE_HANDLE,
         }
@@ -90,18 +93,6 @@ impl NativeEtw {
 
     pub(crate) fn session_handle(&self) -> TraceHandle {
         self.session_handle
-    }
-
-    // Not a big fan of this...
-    pub(crate) fn fill_info<T>(
-        &mut self,
-        name: &str,
-        properties: &TraceProperties,
-        providers: &[Provider],
-    ) where
-        T: TraceTrait,
-    {
-        self.info.fill::<T>(name, properties, providers);
     }
 
     pub(crate) fn start(&mut self) -> EvntraceNativeResult<()> {
@@ -146,11 +137,11 @@ impl NativeEtw {
     }
 
     pub(crate) fn register_trace(&mut self, trace_data: &TraceData) -> EvntraceNativeResult<()> {
-        if let Err(err) = self.start_trace(trace_data) {
+        if let Err(err) = self.start_trace() {
             if matches!(err, EvntraceNativeError::AlreadyExist) {
                 // TODO: Check need admin errors
                 self.stop_trace(trace_data)?;
-                self.start_trace(trace_data)?;
+                self.start_trace()?;
             } else {
                 return Err(err);
             }
@@ -158,12 +149,12 @@ impl NativeEtw {
         Ok(())
     }
 
-    fn start_trace(&mut self, trace_data: &TraceData) -> EvntraceNativeResult<()> {
+    fn start_trace(&mut self) -> EvntraceNativeResult<()> {
         unsafe {
             let status = Etw::StartTraceA(
                 &mut self.registration_handle,
-                PCSTR::from_raw(trace_data.name.as_ptr()),
-                &mut *self.info.properties,
+                PCSTR::from_raw(self.info.trace_name_array().as_ptr()),
+                self.info.as_mut_ptr(),
             );
 
             if status == ERROR_ALREADY_EXISTS.0 {
@@ -234,7 +225,7 @@ impl NativeEtw {
             Etw::ControlTraceA(
                 0,
                 PCSTR::from_raw(trace_data.name.as_ptr()),
-                &mut *self.info.properties,
+                self.info.as_mut_ptr(),
                 control_code,
             )
         };

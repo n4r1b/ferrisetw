@@ -134,95 +134,90 @@ impl From<ProcessTraceMode> for u32 {
     }
 }
 
-/// Newtype wrapper over an [EVENT_TRACE_PROPERTIES]
-///
-/// [EVENT_TRACE_PROPERTIES]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.EVENT_TRACE_PROPERTIES.html
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct EventTraceProperties(Etw::EVENT_TRACE_PROPERTIES);
 
-impl std::fmt::Debug for EventTraceProperties {
-    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
-    }
-}
-
-impl Default for EventTraceProperties {
-    fn default() -> Self {
-        unsafe { std::mem::zeroed::<EventTraceProperties>() }
-    }
-}
-
-impl std::ops::Deref for EventTraceProperties {
-    type Target = Etw::EVENT_TRACE_PROPERTIES;
-
-    fn deref(&self) -> &self::Etw::EVENT_TRACE_PROPERTIES {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for EventTraceProperties {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-/// Complete Trace Properties struct
+/// Wrapper over an [EVENT_TRACE_PROPERTIES](https://docs.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties), and its allocated companion members
 ///
 /// The [EventTraceProperties] struct contains the information about a tracing session, this struct
 /// also needs two buffers right after it to hold the log file name and the session name. This struct
 /// provides the full definition of the properties plus the the allocation for both names
-///
-/// See: [EVENT_TRACE_PROPERTIES](https://docs.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties)
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct TraceInfo {
-    pub properties: EventTraceProperties,
+#[derive(Clone, Copy)]
+pub struct EventTraceProperties {
+    etw_trace_properties: Etw::EVENT_TRACE_PROPERTIES,
     trace_name: [u8; MAX_PATH as usize],
-    log_file_name: [u8; MAX_PATH as usize],
+    log_file_name: [u8; MAX_PATH as usize], // not used currently, but this may be useful when resolving https://github.com/n4r1b/ferrisetw/issues/7
 }
 
-impl TraceInfo {
-    pub(crate) fn fill<T>(
-        &mut self,
-        trace_name: &str,
-        trace_properties: &TraceProperties,
-        providers: &[Provider],
-    ) where
-        T: TraceTrait,
-    {
-        self.properties.0.Wnode.BufferSize = std::mem::size_of::<TraceInfo>() as u32;
-        self.properties.0.Wnode.Guid = T::trace_guid();
-        self.properties.0.Wnode.Flags = Etw::WNODE_FLAG_TRACED_GUID;
-        self.properties.0.Wnode.ClientContext = 1; // QPC clock resolution
-        self.properties.0.BufferSize = trace_properties.buffer_size;
-        self.properties.0.MinimumBuffers = trace_properties.min_buffer;
-        self.properties.0.MaximumBuffers = trace_properties.max_buffer;
-        self.properties.0.FlushTimer = trace_properties.flush_timer;
 
-        if trace_properties.log_file_mode != 0 {
-            self.properties.0.LogFileMode = trace_properties.log_file_mode;
-        } else {
-            self.properties.0.LogFileMode =
-                u32::from(LoggingMode::RealTime) | u32::from(LoggingMode::NoPerProcBuffering);
-        }
-
-        self.properties.0.LogFileMode |= T::augmented_file_mode();
-        self.properties.0.EnableFlags = Etw::EVENT_TRACE_FLAG(T::enable_flags(providers));
-
-        self.properties.0.LoggerNameOffset = offset_of!(TraceInfo, log_file_name) as u32;
-        self.trace_name[..trace_name.len()].copy_from_slice(trace_name.as_bytes())
+impl std::fmt::Debug for EventTraceProperties {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<EventTraceProperties>")
     }
 }
 
-impl Default for TraceInfo {
-    fn default() -> Self {
-        let properties = EventTraceProperties::default();
-        TraceInfo {
-            properties,
-            trace_name: [0; 260],
-            log_file_name: [0; 260],
+impl EventTraceProperties {
+    pub(crate) fn new<T>(
+        trace_name: &str,
+        trace_properties: &TraceProperties,
+        providers: &[Provider],
+    ) -> Self
+    where
+        T: TraceTrait
+    {
+        let mut etw_trace_properties = Etw::EVENT_TRACE_PROPERTIES::default();
+
+        etw_trace_properties.Wnode.BufferSize = std::mem::size_of::<EventTraceProperties>() as u32;
+        etw_trace_properties.Wnode.Guid = T::trace_guid();
+        etw_trace_properties.Wnode.Flags = Etw::WNODE_FLAG_TRACED_GUID;
+        etw_trace_properties.Wnode.ClientContext = 1; // QPC clock resolution
+        etw_trace_properties.BufferSize = trace_properties.buffer_size;
+        etw_trace_properties.MinimumBuffers = trace_properties.min_buffer;
+        etw_trace_properties.MaximumBuffers = trace_properties.max_buffer;
+        etw_trace_properties.FlushTimer = trace_properties.flush_timer;
+
+        if trace_properties.log_file_mode != 0 {
+            etw_trace_properties.LogFileMode = trace_properties.log_file_mode;
+        } else {
+            etw_trace_properties.LogFileMode =
+                u32::from(LoggingMode::RealTime) | u32::from(LoggingMode::NoPerProcBuffering);
         }
+
+        etw_trace_properties.LogFileMode |= T::augmented_file_mode();
+        etw_trace_properties.EnableFlags = Etw::EVENT_TRACE_FLAG(T::enable_flags(providers));
+
+        // etw_trace_properties.LogFileNameOffset must be 0, but this will change when https://github.com/n4r1b/ferrisetw/issues/7 is resolved
+        // > If you do not want to log events to a log file (for example, if you specify EVENT_TRACE_REAL_TIME_MODE only), set LogFileNameOffset to 0.
+        // (https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties)
+        etw_trace_properties.LoggerNameOffset = offset_of!(EventTraceProperties, log_file_name) as u32;
+
+        // https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties#remarks
+        // > You do not copy the session name to the offset. The StartTrace function copies the name for you.
+        //
+        // Let's do it anyway, even though that's not required
+        let mut s = Self {
+            etw_trace_properties,
+            trace_name: [0; MAX_PATH as usize],
+            log_file_name: [0; MAX_PATH as usize],
+        };
+        s.trace_name[..trace_name.len()].copy_from_slice(trace_name.as_bytes());
+
+        s
+    }
+
+    /// Gets a pointer to the wrapped [Etw::EVENT_TRACE_PROPERTIES]
+    ///
+    /// # Safety
+    ///
+    /// The API enforces this points to an allocated, valid `EVENT_TRACE_PROPERTIES` instance.
+    /// As evey other mutable raw pointer, you should not use it in case someone else is keeping a reference to this object.
+    ///
+    /// Note that `OpenTraceA` **will** modify its content on output.
+    pub unsafe fn as_mut_ptr(&mut self) -> *mut Etw::EVENT_TRACE_PROPERTIES {
+        &mut self.etw_trace_properties as *mut Etw::EVENT_TRACE_PROPERTIES
+    }
+
+    pub fn trace_name_array(&self) -> &[u8] {
+        &self.trace_name
     }
 }
 
