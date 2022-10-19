@@ -12,6 +12,8 @@ use crate::trace::{CallbackData, TraceProperties, TraceTrait};
 use std::ffi::c_void;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
+use std::sync::Arc;
+
 use windows::core::GUID;
 use windows::core::PWSTR;
 use windows::Win32::System::Diagnostics::Etw;
@@ -240,7 +242,7 @@ pub struct EventTraceLogfile<'callbackdata> {
 
 impl<'callbackdata> EventTraceLogfile<'callbackdata> {
     /// Create a new instance
-    pub fn create(callback_data: &'callbackdata Box<CallbackData>, mut wide_logger_name: U16CString, callback: unsafe extern "system" fn(*mut Etw::EVENT_RECORD)) -> Self {
+    pub fn create(callback_data: &'callbackdata Box<Arc<CallbackData>>, mut wide_logger_name: U16CString, callback: unsafe extern "system" fn(*mut Etw::EVENT_RECORD)) -> Self {
         let mut native = Etw::EVENT_TRACE_LOGFILEW::default();
 
         native.LoggerName = PWSTR(wide_logger_name.as_mut_ptr());
@@ -249,7 +251,7 @@ impl<'callbackdata> EventTraceLogfile<'callbackdata> {
 
         native.Anonymous2.EventRecordCallback = Some(callback);
 
-        let not_really_mut_ptr = callback_data.as_ref() as *const CallbackData as *const c_void as *mut c_void; // That's kind-of fine because the user context is _not supposed_ to be changed by Windows APIs
+        let not_really_mut_ptr = callback_data.as_ref() as *const Arc<CallbackData> as *const c_void as *mut c_void; // That's kind-of fine because the user context is _not supposed_ to be changed by Windows APIs
         native.Context = not_really_mut_ptr;
 
         Self {

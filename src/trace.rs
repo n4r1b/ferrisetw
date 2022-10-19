@@ -3,6 +3,7 @@
 //! Provides both a Kernel and User trace that allows to start an ETW session
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use self::private::PrivateTraceTrait;
 
@@ -191,8 +192,9 @@ pub struct UserTrace {
     control_handle: ControlHandle,
     trace_handle: TraceHandle,
     // CallbackData is
+    // * `Arc`ed, so that dropping a Trace while a callback is still running is not an issue
     // * `Boxed`, so that the `UserTrace` can be moved around the stack (e.g. returned by a function) but the pointers to the `CallbackData` given to Windows ETW API stay valid
-    callback_data: Box<CallbackData>,
+    callback_data: Box<Arc<CallbackData>>,
 }
 
 /// A kernel trace session
@@ -204,8 +206,9 @@ pub struct KernelTrace {
     control_handle: ControlHandle,
     trace_handle: TraceHandle,
     // CallbackData is
+    // * `Arc`ed, so that dropping a Trace while a callback is still running is not an issue
     // * `Boxed`, so that the `UserTrace` can be moved around the stack (e.g. returned by a function) but the pointers to the `CallbackData` given to Windows ETW API stay valid
-    callback_data: Box<CallbackData>,
+    callback_data: Box<Arc<CallbackData>>,
 }
 
 /// Provides a way to crate Trace objects.
@@ -275,7 +278,7 @@ mod private {
 
     pub trait PrivateTraceTrait {
         const TRACE_KIND: TraceKind;
-        fn build(properties: EventTraceProperties, control_handle: ControlHandle, trace_handle: TraceHandle, callback_data: Box<CallbackData>) -> Self;
+        fn build(properties: EventTraceProperties, control_handle: ControlHandle, trace_handle: TraceHandle, callback_data: Box<Arc<CallbackData>>) -> Self;
         fn augmented_file_mode() -> u32;
         fn enable_flags(_providers: &[Provider]) -> u32;
         // This function aims at de-deduplicating code called by `impl Drop` and `Trace::stop`.
@@ -287,7 +290,7 @@ mod private {
 impl private::PrivateTraceTrait for UserTrace {
     const TRACE_KIND: private::TraceKind = private::TraceKind::User;
 
-    fn build(properties: EventTraceProperties, control_handle: ControlHandle, trace_handle: TraceHandle, callback_data: Box<CallbackData>) -> Self {
+    fn build(properties: EventTraceProperties, control_handle: ControlHandle, trace_handle: TraceHandle, callback_data: Box<Arc<CallbackData>>) -> Self {
         UserTrace {
             properties,
             control_handle,
@@ -313,7 +316,7 @@ impl private::PrivateTraceTrait for UserTrace {
 impl private::PrivateTraceTrait for KernelTrace {
     const TRACE_KIND: private::TraceKind = private::TraceKind::Kernel;
 
-    fn build(properties: EventTraceProperties, control_handle: ControlHandle, trace_handle: TraceHandle, callback_data: Box<CallbackData>) -> Self {
+    fn build(properties: EventTraceProperties, control_handle: ControlHandle, trace_handle: TraceHandle, callback_data: Box<Arc<CallbackData>>) -> Self {
         KernelTrace {
             properties,
             control_handle,
@@ -394,7 +397,7 @@ impl<T: TraceTrait + PrivateTraceTrait> TraceBuilder<T> {
         trace_wide_vec.truncate(crate::native::etw_types::TRACE_NAME_MAX_CHARS);
         let trace_wide_name = U16CString::from_vec_truncate(trace_wide_vec);
 
-        let callback_data = Box::new(self.callback_data);
+        let callback_data = Box::new(Arc::new(self.callback_data));
         let flags = callback_data.provider_flags::<T>();
         let (full_properties, control_handle) = start_trace::<T>(
             &trace_wide_name,

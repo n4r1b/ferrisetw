@@ -3,6 +3,7 @@
 //! This module makes sure the calls are safe memory-wise, but does not attempt to ensure they are called in the right order.<br/>
 //! Thus, you should prefer using `UserTrace`s, `KernelTrace`s and `TraceBuilder`s, that will ensure these API are correctly used.
 use std::panic::AssertUnwindSafe;
+use std::sync::Arc;
 
 use widestring::{U16CString, U16CStr};
 use windows::Win32::Foundation::WIN32_ERROR;
@@ -49,7 +50,7 @@ extern "system" fn trace_callback_thunk(p_record: *mut Etw::EVENT_RECORD) {
         };
 
         if let Some(event_record) = record_from_ptr {
-            let p_user_context = event_record.user_context().cast::<CallbackData>();
+            let p_user_context = event_record.user_context().cast::<Arc<CallbackData>>();
             let user_context = unsafe {
                 // Safety:
                 //  * the API of this create guarantees this points to a `CallbackData` already allocated and created
@@ -61,7 +62,10 @@ extern "system" fn trace_callback_thunk(p_record: *mut Etw::EVENT_RECORD) {
                 p_user_context.as_ref()
             };
             if let Some(user_context) = user_context {
-                user_context.on_event(event_record);
+                // The UserContext is owned by the `Trace` object. When it is dropped, so will the UserContext.
+                // We clone it now, so that the original Arc can be safely dropped at all times, but the callback data (including the closure captured context) will still be alive until the callback ends.
+                let cloned_arc = Arc::clone(user_context);
+                cloned_arc.on_event(event_record);
             }
         }
     })) {
@@ -135,7 +139,7 @@ where
 /// Subscribe to a started trace
 ///
 /// Microsoft calls this "opening" the trace (and this calls `OpenTraceW`)
-pub fn open_trace(trace_name: U16CString, callback_data: &Box<CallbackData>) -> EvntraceNativeResult<TraceHandle> {
+pub fn open_trace(trace_name: U16CString, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<TraceHandle> {
     let mut log_file = EventTraceLogfile::create(&callback_data, trace_name, trace_callback_thunk);
 
     let trace_handle = unsafe {
