@@ -82,8 +82,10 @@ pub struct SchemaLocator {
 }
 
 impl std::fmt::Debug for SchemaLocator {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SchemaLocator")
+            .field("len", &self.schemas.try_lock().map(|guard| guard.len()))
+            .finish()
     }
 }
 
