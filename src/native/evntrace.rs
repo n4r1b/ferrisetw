@@ -2,8 +2,13 @@
 //!
 //! This module makes sure the calls are safe memory-wise, but does not attempt to ensure they are called in the right order.<br/>
 //! Thus, you should prefer using `UserTrace`s, `KernelTrace`s and `TraceBuilder`s, that will ensure these API are correctly used.
+use std::collections::HashSet;
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::ffi::c_void;
+
+use once_cell::sync::Lazy;
 
 use widestring::{U16CString, U16CStr};
 use windows::Win32::Foundation::WIN32_ERROR;
@@ -41,6 +46,49 @@ pub enum EvntraceNativeError {
 
 pub(crate) type EvntraceNativeResult<T> = Result<T, EvntraceNativeError>;
 
+/// When a trace is closing, it is possible that every past events have not been processed yet.
+/// These events will still be fed to the callback, **after** the trace has been closed
+/// (see `ERROR_CTX_CLOSE_PENDING` in https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-closetrace#remarks)
+/// Also, there is no way to tell which callback invocation is the last one.
+///
+/// But, we would like to free memory used by the callbacks when we're done!
+/// Since that is not possible, let's discard every callback run after we've called `CloseTrace`.
+/// That's the purpose of this set.
+///
+/// TODO: it _might_ be possible to know whether we've processed the last buffered event, as
+///       ControlTraceW(EVENT_TRACE_CONTROL_QUERY) _might_ tell us if the buffers are empty or not.
+///       In case the trace is in ERROR_CTX_CLOSE_PENDING state, we could call this after every
+///       callback so that we know when to actually free memory used by the (now useless) callback.
+///       Maybe also setting the BufferCallback in EVENT_TRACE_LOGFILEW may help us.
+///       That's <https://github.com/n4r1b/ferrisetw/issues/62>
+static UNIQUE_VALID_CONTEXTS: UniqueValidContexts = UniqueValidContexts::new();
+struct UniqueValidContexts(Lazy<Mutex<HashSet<u64>>>);
+enum ContextError{
+    AlreadyExist
+}
+
+impl UniqueValidContexts {
+    pub const fn new() -> Self {
+        Self(Lazy::new(|| Mutex::new(HashSet::new())))
+    }
+    /// Insert if it did not exist previously
+    fn insert(&self, ctx_ptr: *const c_void) -> Result<(), ContextError> {
+        match self.0.lock().unwrap().insert(ctx_ptr as u64) {
+            true => Ok(()),
+            false => Err(ContextError::AlreadyExist),
+        }
+    }
+
+    fn remove(&self, ctx_ptr: *const c_void) {
+        self.0.lock().unwrap().remove(&(ctx_ptr as u64));
+    }
+
+    pub fn is_valid(&self, ctx_ptr: *const c_void) -> bool {
+        self.0.lock().unwrap().contains(&(ctx_ptr as u64))
+    }
+}
+
+
 /// This will be called by the ETW framework whenever an ETW event is available
 extern "system" fn trace_callback_thunk(p_record: *mut Etw::EVENT_RECORD) {
     match std::panic::catch_unwind(AssertUnwindSafe(|| {
@@ -50,21 +98,25 @@ extern "system" fn trace_callback_thunk(p_record: *mut Etw::EVENT_RECORD) {
         };
 
         if let Some(event_record) = record_from_ptr {
-            let p_user_context = event_record.user_context().cast::<Arc<CallbackData>>();
-            let user_context = unsafe {
+            let p_user_context = event_record.user_context();
+            if UNIQUE_VALID_CONTEXTS.is_valid(p_user_context) == false {
+                return;
+            }
+            let p_callback_data = p_user_context.cast::<Arc<CallbackData>>();
+            let callback_data = unsafe {
                 // Safety:
                 //  * the API of this create guarantees this points to a `CallbackData` already allocated and created
-                //  * TODO (#45): the API of this create does not yet guarantee this `CallbackData` has not been dropped
+                //  * we've just checked using UNIQUE_VALID_CONTEXTS that this `CallbackData` has not been dropped
                 //  * the API of this crate guarantees this `CallbackData` is not mutated from another thread during the trace:
                 //      * we're the only one to change CallbackData::events_handled (and that's an atomic, so it's fine)
                 //      * the list of Providers is a constant (may change in the future with #54)
                 //      * the schema_locator only has interior mutability
-                p_user_context.as_ref()
+                p_callback_data.as_ref()
             };
-            if let Some(user_context) = user_context {
+            if let Some(callback_data) = callback_data {
                 // The UserContext is owned by the `Trace` object. When it is dropped, so will the UserContext.
                 // We clone it now, so that the original Arc can be safely dropped at all times, but the callback data (including the closure captured context) will still be alive until the callback ends.
-                let cloned_arc = Arc::clone(user_context);
+                let cloned_arc = Arc::clone(callback_data);
                 cloned_arc.on_event(event_record);
             }
         }
@@ -140,7 +192,13 @@ where
 ///
 /// Microsoft calls this "opening" the trace (and this calls `OpenTraceW`)
 pub fn open_trace(trace_name: U16CString, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<TraceHandle> {
-    let mut log_file = EventTraceLogfile::create(&callback_data, trace_name, trace_callback_thunk);
+    let mut log_file = EventTraceLogfile::create(callback_data, trace_name, trace_callback_thunk);
+
+    if let Err(ContextError::AlreadyExist) = UNIQUE_VALID_CONTEXTS.insert(log_file.context_ptr()) {
+        // That's probably possible to get multiple handles to the same trace, by opening them multiple times.
+        // But that's left as a future TODO. Making things right and safe is difficult enough with a single opening of the trace already.
+        return Err(EvntraceNativeError::AlreadyExist);
+    }
 
     let trace_handle = unsafe {
         // This function modifies the data pointed to by log_file.
@@ -263,10 +321,13 @@ pub fn control_trace(
 /// In case ETW reports there are still events in the queue that are still to trigger callbacks, this returns Ok(true).<br/>
 /// If no further event callback will be invoked, this returns Ok(false)<br/>
 /// On error, this returns an `Err`
-pub fn close_trace(trace_handle: TraceHandle) -> EvntraceNativeResult<bool> {
+pub fn close_trace(trace_handle: TraceHandle, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<bool> {
     match filter_invalid_trace_handles(trace_handle) {
         None => Err(EvntraceNativeError::InvalidHandle),
         Some(handle) => {
+            // By contruction, only one Provider used this context in its callback. It is safe to remove it, it won't be used by anyone else.
+            UNIQUE_VALID_CONTEXTS.remove(callback_data.as_ref() as *const Arc<CallbackData> as *const c_void);
+
             let status = unsafe {
                 Etw::CloseTrace(handle)
             };
@@ -288,7 +349,7 @@ pub(crate) fn query_info(class: TraceInformation, buf: &mut [u8]) -> EvntraceNat
         Etw::TraceQueryInformation(
             0,
             TRACE_QUERY_INFO_CLASS(class as i32),
-            buf.as_mut_ptr() as *mut std::ffi::c_void,
+            buf.as_mut_ptr() as *mut c_void,
             buf.len() as u32,
             std::ptr::null_mut(),
         )

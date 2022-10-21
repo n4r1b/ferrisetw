@@ -307,7 +307,7 @@ impl private::PrivateTraceTrait for UserTrace {
     }
 
     fn non_consuming_stop(&mut self) -> TraceResult<()> {
-        close_trace(self.trace_handle)?;
+        close_trace(self.trace_handle, &self.callback_data)?;
         control_trace(&mut self.properties, self.control_handle, Etw::EVENT_TRACE_CONTROL_STOP)?;
         Ok(())
     }
@@ -338,7 +338,7 @@ impl private::PrivateTraceTrait for KernelTrace {
     }
 
     fn non_consuming_stop(&mut self) -> TraceResult<()> {
-        close_trace(self.trace_handle)?;
+        close_trace(self.trace_handle, &self.callback_data)?;
         control_trace(&mut self.properties, self.control_handle, Etw::EVENT_TRACE_CONTROL_STOP)?;
         Ok(())
     }

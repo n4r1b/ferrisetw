@@ -270,6 +270,11 @@ impl<'callbackdata> EventTraceLogfile<'callbackdata> {
     pub(crate) unsafe fn as_mut_ptr(&mut self) -> *mut Etw::EVENT_TRACE_LOGFILEW {
         &mut self.native as *mut Etw::EVENT_TRACE_LOGFILEW
     }
+
+    /// The current Context pointer.
+    pub fn context_ptr(&self) -> *const std::ffi::c_void {
+        self.native.Context
+    }
 }
 
 /// Newtype wrapper over an [ENABLE_TRACE_PARAMETERS]
