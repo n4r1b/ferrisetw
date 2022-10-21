@@ -116,7 +116,7 @@ impl<'schema, 'record> Parser<'schema, 'record> {
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
     /// # use ferrisetw::parser::Parser;
-    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let parser = Parser::create(record, &schema);
     /// };
@@ -252,7 +252,7 @@ impl_try_parse_primitive!(isize);
 /// # use ferrisetw::native::etw_types::EventRecord;
 /// # use ferrisetw::schema_locator::SchemaLocator;
 /// # use ferrisetw::parser::{Parser, TryParse};
-/// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
+/// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
 ///     let schema = schema_locator.event_schema(record).unwrap();
 ///     let mut parser = Parser::create(record, &schema);
 ///     let image_name: String = parser.try_parse("ImageName").unwrap();

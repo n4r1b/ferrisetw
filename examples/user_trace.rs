@@ -7,7 +7,7 @@ use std::time::Duration;
 
 fn main() {
     let process_callback =
-        |record: &EventRecord, schema_locator: &mut SchemaLocator| match schema_locator
+        |record: &EventRecord, schema_locator: &SchemaLocator| match schema_locator
             .event_schema(record)
         {
             Ok(schema) => {

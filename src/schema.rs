@@ -4,7 +4,6 @@
 use crate::native::etw_types::DecodingSource;
 use crate::native::tdh::TraceEventInfo;
 use crate::native::tdh_types::Property;
-use std::sync::Arc;
 use once_cell::sync::OnceCell;
 
 /// A schema suitable for parsing a given kind of event.
@@ -14,12 +13,12 @@ use once_cell::sync::OnceCell;
 /// This structure is basically a wrapper over a [TraceEventInfo](https://docs.microsoft.com/en-us/windows/win32/api/tdh/ns-tdh-trace_event_info),
 /// with a few info parsed (and cached) out of it
 pub struct Schema {
-    te_info: Arc<TraceEventInfo>,
+    te_info: TraceEventInfo,
     cached_properties: OnceCell<Vec<Property>>,
 }
 
 impl Schema {
-    pub(crate) fn new(te_info: Arc<TraceEventInfo>) -> Self {
+    pub(crate) fn new(te_info: TraceEventInfo) -> Self {
         Schema {
             te_info,
             cached_properties: OnceCell::new()
@@ -36,7 +35,7 @@ impl Schema {
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
 
-    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let decoding_source = schema.decoding_source();
     /// };
@@ -52,7 +51,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
-    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let provider_name = schema.provider_name();
     /// };
@@ -69,7 +68,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
-    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let task_name = schema.task_name();
     /// };
@@ -86,7 +85,7 @@ impl Schema {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
-    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     ///     let opcode_name = schema.opcode_name();
     /// };

@@ -1,7 +1,9 @@
 //! A way to cache and retrieve Schemas
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+
+use windows::core::GUID;
 
 use crate::native::tdh;
 use crate::native::tdh::TraceEventInfo;
@@ -11,8 +13,6 @@ use crate::schema::Schema;
 /// Schema module errors
 #[derive(Debug)]
 pub enum SchemaError {
-    /// Represents a Parser error
-    ParseError,
     /// Represents an internal [TdhNativeError]
     ///
     /// [TdhNativeError]: tdh::TdhNativeError
@@ -34,9 +34,7 @@ type SchemaResult<T> = Result<T, SchemaError>;
 /// > i.e. all events with the same DecodeGuid, Id, and Version should have the same set of fields with no changes in field names, field types, or field ordering.
 #[derive(Debug, Eq, PartialEq, Hash)]
 struct SchemaKey {
-    // For now, lazy to wrap Guid around an implement Hash
-    // TODO: wrap Guid and implement hash
-    provider: String,
+    provider: GUID,
     /// From the [docs](https://docs.microsoft.com/en-us/windows/win32/api/evntprov/ns-evntprov-event_descriptor): A 16-bit number used to identify manifest-based events
     id: u16,
     /// From the [docs](https://docs.microsoft.com/en-us/windows/win32/api/evntprov/ns-evntprov-event_descriptor): An 8-bit number used to specify the version of a manifest-based event.
@@ -56,9 +54,8 @@ struct SchemaKey {
 
 impl SchemaKey {
     pub fn new(event: &EventRecord) -> Self {
-        let provider = format!("{:?}", event.provider_id());
         SchemaKey {
-            provider,
+            provider: event.provider_id(),
             id: event.event_id(),
             opcode: event.opcode(),
             version: event.version(),
@@ -81,19 +78,21 @@ impl SchemaKey {
 /// See also the code of `SchemaKey` for more info
 #[derive(Default)]
 pub struct SchemaLocator {
-    schemas: HashMap<SchemaKey, Arc<TraceEventInfo>>,
+    schemas: Mutex<HashMap<SchemaKey, Arc<Schema>>>,
 }
 
 impl std::fmt::Debug for SchemaLocator {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SchemaLocator")
+            .field("len", &self.schemas.try_lock().map(|guard| guard.len()))
+            .finish()
     }
 }
 
 impl SchemaLocator {
     pub(crate) fn new() -> Self {
         SchemaLocator {
-            schemas: HashMap::new(),
+            schemas: Mutex::new(HashMap::new()),
         }
     }
 
@@ -106,22 +105,22 @@ impl SchemaLocator {
     /// ```
     /// # use ferrisetw::native::etw_types::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
-    /// let my_callback = |record: &EventRecord, schema_locator: &mut SchemaLocator| {
+    /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
     /// };
     /// ```
-    pub fn event_schema(&mut self, event: &EventRecord) -> SchemaResult<Schema> {
+    pub fn event_schema(&self, event: &EventRecord) -> SchemaResult<Arc<Schema>> {
         let key = SchemaKey::new(event);
-        let info: Arc<_>;
 
-        if !self.schemas.contains_key(&key) {
-            // TODO: Cloning for now, should be a reference at some point...
-            info = Arc::from(TraceEventInfo::build_from_event(event)?);
-            self.schemas.insert(key, Arc::clone(&info));
-        } else {
-            info = Arc::clone(self.schemas.get(&key).unwrap());
+        let mut schemas = self.schemas.lock().unwrap();
+        match schemas.get(&key) {
+            Some(s) => Ok(Arc::clone(s)),
+            None => {
+                let tei = TraceEventInfo::build_from_event(event)?;
+                let new_schema = Arc::from(Schema::new(tei));
+                schemas.insert(key, Arc::clone(&new_schema));
+                Ok(new_schema)
+            }
         }
-
-        Ok(Schema::new(info))
     }
 }

@@ -52,7 +52,7 @@
 //! use ferrisetw::provider::Provider;
 //! use ferrisetw::trace::{UserTrace, TraceTrait, TraceBaseTrait};
 //!
-//! fn process_callback(record: &EventRecord, schema_locator: &mut SchemaLocator) {
+//! fn process_callback(record: &EventRecord, schema_locator: &SchemaLocator) {
 //!     // Within the callback we first locate the proper Schema for the event
 //!     match schema_locator.event_schema(record) {
 //!         Ok(schema) => {

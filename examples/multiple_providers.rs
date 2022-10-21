@@ -6,7 +6,7 @@ use ferrisetw::trace::*;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
-fn registry_callback(record: &EventRecord, schema_locator: &mut SchemaLocator) {
+fn registry_callback(record: &EventRecord, schema_locator: &SchemaLocator) {
     match schema_locator.event_schema(record) {
         Ok(schema) => {
             if record.event_id() == 7 {
@@ -25,7 +25,7 @@ fn registry_callback(record: &EventRecord, schema_locator: &mut SchemaLocator) {
     };
 }
 
-fn tcpip_callback(record: &EventRecord, schema_locator: &mut SchemaLocator) {
+fn tcpip_callback(record: &EventRecord, schema_locator: &SchemaLocator) {
     match schema_locator.event_schema(record) {
         Ok(schema) => {
             if record.event_id() == 11 {
