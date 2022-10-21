@@ -140,7 +140,7 @@ impl<'schema, 'record> Parser<'schema, 'record> {
 
         if property
             .flags
-            .intersects(PropertyFlags::PROPERTY_PARAM_LENGTH) == false
+            .contains(PropertyFlags::PROPERTY_PARAM_LENGTH) == false
             && (property.len() > 0)
         {
             let size = if property.in_type() != TdhInType::InTypePointer {
