@@ -114,16 +114,3 @@ impl PartialEq for Schema {
 }
 
 impl Eq for Schema {}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    fn test_getters() {
-        todo!()
-    }
-
-    fn test_schema_key() {
-        todo!()
-    }
-}
