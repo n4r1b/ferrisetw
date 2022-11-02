@@ -5,6 +5,8 @@
 //!
 //! This module shouldn't be accessed directly. Modules from the crate level provide a safe API to interact
 //! with the crate
+use std::panic::AssertUnwindSafe;
+
 use windows::core::{GUID, PCSTR};
 use windows::Win32::Foundation::FILETIME;
 use windows::Win32::System::Diagnostics::Etw;
@@ -40,10 +42,32 @@ impl From<std::io::Error> for EvntraceNativeError {
 
 pub(crate) type EvntraceNativeResult<T> = Result<T, EvntraceNativeError>;
 
-unsafe extern "system" fn trace_callback_thunk(p_record: *mut Etw::EVENT_RECORD) {
-    let ctx: &mut TraceData = TraceData::unsafe_get_callback_ctx((*p_record).UserContext);
-    if let Some(event_record) = EventRecord::from_ptr(p_record) {
-        ctx.on_event(event_record);
+extern "system" fn trace_callback_thunk(p_record: *mut Etw::EVENT_RECORD) {
+    match std::panic::catch_unwind(AssertUnwindSafe(|| {
+        let record_from_ptr = unsafe {
+            // Safety: lifetime is valid at least until the end of the callback. A correct lifetime will be attached when we pass the reference to the child function
+            EventRecord::from_ptr(p_record)
+        };
+
+        if let Some(event_record) = record_from_ptr {
+            let p_user_context = event_record.user_context().cast::<TraceData>();
+            let user_context = unsafe {
+                // Safety:
+                //  * the API of this create guarantees this points to a `TraceData` already allocated and created
+                //  * TODO (#45): the API of this crate does not yet guarantee this `TraceData` is not mutated during the trace (e.g. modifying the list of providers) (although this may not be critical memory-safety-wise)
+                //  * TODO (#45): the API of this create does not yet guarantee this `TraceData` has not been dropped
+                p_user_context.as_ref()
+            };
+            if let Some(user_context) = user_context {
+                user_context.on_event(event_record);
+            }
+        }
+    })) {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("UNIMPLEMENTED PANIC: {e:?}");
+            std::process::exit(1);
+        }
     }
 }
 
@@ -153,7 +177,14 @@ impl NativeEtw {
     fn open_trace<'a>(&mut self, trace_data: &'a Box<TraceData>) -> EvntraceNativeResult<EventTraceLogfile<'a>> {
         let mut log_file = EventTraceLogfile::create(trace_data, trace_callback_thunk);
 
-        self.session_handle = unsafe { Etw::OpenTraceA(log_file.as_mut_ptr()) };
+        self.session_handle = unsafe {
+            // This function modifies the data pointed to by log_file.
+            // This is fine because there is currently no other ref `self` (the current function takes a `&mut self`, and `self` is not used anywhere else in the current function)
+            //
+            // > On success, OpenTrace will update the structure with information from the opened file or session.
+            // https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-opentracea
+            Etw::OpenTraceA(log_file.as_mut_ptr())
+        };
 
         if self.session_handle == INVALID_TRACE_HANDLE {
             return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
@@ -175,13 +206,14 @@ impl NativeEtw {
             return Err(EvntraceNativeError::InvalidHandle);
         }
 
-        unsafe {
-            let status = Etw::CloseTrace(self.session_handle);
-            if status != 0 && status != ERROR_CTX_CLOSE_PENDING.0 {
-                return Err(EvntraceNativeError::IoError(
-                    std::io::Error::from_raw_os_error(status as i32),
-                ));
-            }
+        let status = unsafe {
+            // Safety: the handle is valid
+            Etw::CloseTrace(self.session_handle)
+        };
+        if status != 0 && status != ERROR_CTX_CLOSE_PENDING.0 {
+            return Err(EvntraceNativeError::IoError(
+                std::io::Error::from_raw_os_error(status as i32),
+            ));
         }
 
         self.session_handle = INVALID_TRACE_HANDLE;
@@ -193,19 +225,21 @@ impl NativeEtw {
         trace_data: &TraceData,
         control_code: EvenTraceControl,
     ) -> EvntraceNativeResult<()> {
-        unsafe {
-            let status = Etw::ControlTraceA(
+        let status = unsafe {
+            // Safety:
+            //  * depending on the control code, the `Properties` can be mutated
+            Etw::ControlTraceA(
                 0,
                 PCSTR::from_raw(trace_data.name.as_ptr()),
                 &mut *self.info.properties,
                 control_code,
-            );
+            )
+        };
 
-            if status != 0 && status != ERROR_WMI_INSTANCE_NOT_FOUND.0 {
-                return Err(EvntraceNativeError::IoError(
-                    std::io::Error::from_raw_os_error(status as i32),
-                ));
-            }
+        if status != 0 && status != ERROR_WMI_INSTANCE_NOT_FOUND.0 {
+            return Err(EvntraceNativeError::IoError(
+                std::io::Error::from_raw_os_error(status as i32),
+            ));
         }
 
         Ok(())
