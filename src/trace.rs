@@ -456,6 +456,6 @@ mod test {
     fn test_provider_no_guid_should_panic() {
         let prov = Provider::new();
 
-        let trace = UserTrace::new().enable(prov);
+        let _trace = UserTrace::new().enable(prov);
     }
 }
