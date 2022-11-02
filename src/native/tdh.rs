@@ -87,7 +87,7 @@ impl TraceEventInfo {
             )
         };
         if status != ERROR_INSUFFICIENT_BUFFER.0 {
-            return Err(TdhNativeError::IoError(std::io::Error::last_os_error()));
+            return Err(TdhNativeError::IoError(std::io::Error::from_raw_os_error(status as i32)));
         }
 
         if buffer_size == 0 {
@@ -117,7 +117,7 @@ impl TraceEventInfo {
         };
 
         if status != 0 {
-            return Err(TdhNativeError::IoError(std::io::Error::last_os_error()));
+            return Err(TdhNativeError::IoError(std::io::Error::from_raw_os_error(status as i32)));
         }
 
         Ok(Self { data, mut_data_for_dealloc: data, layout })

@@ -169,7 +169,9 @@ impl NativeEtw {
             if status == ERROR_ALREADY_EXISTS.0 {
                 return Err(EvntraceNativeError::AlreadyExist);
             } else if status != 0 {
-                return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
+                return Err(EvntraceNativeError::IoError(
+                    std::io::Error::from_raw_os_error(status as i32),
+                ));
             }
         }
         Ok(())
@@ -254,8 +256,8 @@ impl NativeEtw {
         level: u8,
         parameters: EnableTraceParameters,
     ) -> EvntraceNativeResult<()> {
-        unsafe {
-            if Etw::EnableTraceEx2(
+        match unsafe {
+            Etw::EnableTraceEx2(
                 self.registration_handle,
                 &guid,
                 1, // Fixme: EVENT_CONTROL_CODE_ENABLE_PROVIDER
@@ -264,12 +266,13 @@ impl NativeEtw {
                 all,
                 0,
                 parameters.as_ptr(),
-            ) != 0
-            {
-                return Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()));
+            )
+        } {
+            0 => Ok(()),
+            e => Err(EvntraceNativeError::IoError(
+                std::io::Error::from_raw_os_error(e as i32),
+            )),
             }
-        }
-        Ok(())
     }
 }
 
