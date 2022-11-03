@@ -50,8 +50,7 @@ fn simple_kernel_trace_trace() {
             }
 
         })
-        .build()
-        .unwrap();
+        .build();
 
     let mut _kernel_trace = KernelTrace::new()
         .enable(kernel_provider)

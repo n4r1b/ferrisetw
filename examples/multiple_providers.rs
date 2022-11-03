@@ -50,17 +50,15 @@ fn tcpip_callback(record: &EventRecord, schema_locator: &SchemaLocator) {
 }
 
 fn main() {
-    let tcpip_provider = Provider::new()
-        .by_guid("7dd42a49-5329-4832-8dfd-43d979153a88") // Microsoft-Windows-Kernel-Network
+    let tcpip_provider = Provider
+        ::by_guid("7dd42a49-5329-4832-8dfd-43d979153a88") // Microsoft-Windows-Kernel-Network
         .add_callback(tcpip_callback)
-        .build()
-        .unwrap();
+        .build();
 
-    let process_provider = Provider::new()
-        .by_guid("70eb4f03-c1de-4f73-a051-33d13d5413bd") // Microsoft-Windows-Kernel-Registry
+    let process_provider = Provider
+        ::by_guid("70eb4f03-c1de-4f73-a051-33d13d5413bd") // Microsoft-Windows-Kernel-Registry
         .add_callback(registry_callback)
-        .build()
-        .unwrap();
+        .build();
 
     let mut trace = UserTrace::new()
         .enable(process_provider)
