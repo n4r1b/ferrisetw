@@ -81,8 +81,8 @@ impl TraceEventInfo {
             //  * the `EVENT_RECORD` was passed by Microsoft and has not been modified: it is thus valid and correctly aligned
             Etw::TdhGetEventInformation(
                 event.as_raw_ptr(),
-                &[],
-                std::ptr::null_mut(),
+                None,
+                None,
                 &mut buffer_size,
             )
         };
@@ -110,8 +110,8 @@ impl TraceEventInfo {
             //  * `data` has been successfully allocated, with the required size and the correct alignment
             Etw::TdhGetEventInformation(
                 event.as_raw_ptr(),
-                &[],
-                data.cast::<TRACE_EVENT_INFO>(),
+                None,
+                Some(data.cast::<TRACE_EVENT_INFO>()),
                 &mut buffer_size,
             )
         };
@@ -256,7 +256,7 @@ pub(crate) fn property_size(event: &EventRecord, name: &str) -> TdhNativeResult<
     unsafe {
         let status = Etw::TdhGetPropertySize(
             event.as_raw_ptr(),
-            &[],
+            None,
             &[desc],
             &mut property_size,
         );
