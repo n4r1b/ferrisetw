@@ -9,7 +9,7 @@
 use crate::provider::event_filter::EventFilterDescriptor;
 use crate::provider::TraceFlags;
 use crate::trace::{CallbackData, TraceProperties, TraceTrait};
-use std::ffi::c_void;
+use std::ffi::{c_void, OsString};
 use std::fmt::Formatter;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -224,6 +224,11 @@ impl EventTraceProperties {
 
     pub fn trace_name_array(&self) -> &[u16] {
         &self.wide_trace_name
+    }
+    pub fn name(&self) -> OsString {
+        widestring::U16CStr::from_slice_truncate(&self.wide_trace_name)
+            .map(|ws| ws.to_os_string())
+            .unwrap_or(OsString::from("<invalid name>"))
     }
 }
 
