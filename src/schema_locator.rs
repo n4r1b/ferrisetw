@@ -103,7 +103,7 @@ impl SchemaLocator {
     ///
     /// # Example
     /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
     /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();

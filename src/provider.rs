@@ -482,7 +482,7 @@ impl ProviderBuilder {
     /// ```
     /// # use ferrisetw::provider::Provider;
     /// # use ferrisetw::trace::UserTrace;
-    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
     /// let provider = Provider::by_guid("1EDEEE53-0AFE-4609-B846-D8C0B2075B1F").add_callback(|record: &EventRecord, schema_locator: &SchemaLocator| {
     ///     // Handle Event
@@ -527,7 +527,7 @@ impl ProviderBuilder {
     /// # Example
     /// ```
     /// # use ferrisetw::provider::Provider;
-    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
     /// # let process_callback = |_event: &EventRecord, _locator: &SchemaLocator| {};
     /// Provider::by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716") // Microsoft-Windows-Kernel-Process

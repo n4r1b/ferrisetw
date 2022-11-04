@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use ferrisetw::provider::{Provider, EventFilter};
-use ferrisetw::native::etw_types::EventRecord;
+use ferrisetw::EventRecord;
 use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::parser::Parser;
 use ferrisetw::trace::KernelTrace;

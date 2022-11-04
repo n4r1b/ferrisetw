@@ -88,7 +88,7 @@ struct CachedSlices<'schema, 'record> {
 ///
 /// # Example
 /// ```
-/// # use ferrisetw::native::etw_types::EventRecord;
+/// # use ferrisetw::EventRecord;
 /// # use ferrisetw::schema_locator::SchemaLocator;
 /// # use ferrisetw::parser::Parser;
 /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
@@ -118,6 +118,17 @@ impl<'schema, 'record> Parser<'schema, 'record> {
     ///
     /// # Arguments
     /// * `schema` - The [Schema] from the ETW Event we want to parse
+    ///
+    /// # Example
+    /// ```
+    /// # use ferrisetw::EventRecord;
+    /// # use ferrisetw::schema_locator::SchemaLocator;
+    /// # use ferrisetw::parser::Parser;
+    /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
+    ///     let schema = schema_locator.event_schema(record).unwrap();
+    ///     let parser = Parser::create(record, &schema);
+    /// };
+    /// ```
     pub fn create(event_record: &'record EventRecord, schema: &'schema Schema) -> Self {
         Parser {
             record: &event_record,
@@ -325,7 +336,7 @@ impl_try_parse_primitive!(isize);
 ///
 /// # Example
 /// ```
-/// # use ferrisetw::native::etw_types::EventRecord;
+/// # use ferrisetw::EventRecord;
 /// # use ferrisetw::schema_locator::SchemaLocator;
 /// # use ferrisetw::parser::Parser;
 /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {

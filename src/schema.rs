@@ -32,7 +32,7 @@ impl Schema {
     ///
     /// # Example
     /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
 
     /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
@@ -49,7 +49,7 @@ impl Schema {
     ///
     /// # Example
     /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
     /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
@@ -66,7 +66,7 @@ impl Schema {
     /// See: [TaskType](https://docs.microsoft.com/en-us/windows/win32/wes/eventmanifestschema-tasktype-complextype)
     /// # Example
     /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
     /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
@@ -83,7 +83,7 @@ impl Schema {
     /// See: [OpcodeType](https://docs.microsoft.com/en-us/windows/win32/wes/eventmanifestschema-opcodetype-complextype)
     /// # Example
     /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
     /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();

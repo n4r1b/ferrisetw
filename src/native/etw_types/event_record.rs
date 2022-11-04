@@ -132,7 +132,7 @@ impl EventRecord {
     ///
     /// # Example
     /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
     /// use windows::Win32::System::Diagnostics::Etw::EVENT_HEADER_EXT_TYPE_RELATED_ACTIVITYID;
     ///
