@@ -1,6 +1,8 @@
 //! ETW Types Parser
 //!
 //! This module act as a helper to parse the Buffer from an ETW Event
+
+
 use crate::native::etw_types::EVENT_HEADER_FLAG_32_BIT_HEADER;
 use crate::native::etw_types::EventRecord;
 use crate::native::sddl;
@@ -68,22 +70,6 @@ impl From<std::array::TryFromSliceError> for ParserError {
 
 type ParserResult<T> = Result<T, ParserError>;
 
-/// Trait to try and parse a type
-///
-/// This trait has to be implemented in order to be able to parse a type we want to retrieve from
-/// within an Event.
-///
-/// An implementation for most of the Primitive Types is created by using a Macro, any other needed type
-/// requires this trait to be implemented
-// TODO: Find a way to use turbofish operator
-pub trait TryParse<T> {
-    /// Implement the `try_parse` function to provide a way to Parse `T` from an ETW event or
-    /// return an Error in case the type `T` can't be parsed
-    ///
-    /// # Arguments
-    /// * `name` - Name of the property to be found in the Schema
-    fn try_parse(&self, name: &str) -> Result<T, ParserError>;
-}
 
 #[derive(Default)]
 /// Cache of the properties we've extracted already
@@ -99,6 +85,27 @@ struct CachedSlices<'schema, 'record> {
 ///
 /// This structure provides a way to parse an ETW event (= extract its properties).
 /// Because properties may have variable length (e.g. strings), a `Parser` is only suited to a single [`EventRecord`]
+///
+/// # Example
+/// ```
+/// # use ferrisetw::native::etw_types::EventRecord;
+/// # use ferrisetw::schema_locator::SchemaLocator;
+/// # use ferrisetw::parser::Parser;
+/// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
+///     let schema = schema_locator.event_schema(record).unwrap();
+///     let parser = Parser::create(record, &schema);
+///
+///     // There are several ways to define the type requested for `try_parse`
+///     // It is possible to use type inference...
+///     let property1: Option<String> = parser.try_parse("PropertyName").ok();
+///
+///     // ...or to use the turbofish operator
+///     match parser.try_parse::<u32>("OtherPropertyName") {
+///         Ok(_) => println!("OtherPropertyName is a valid u32"),
+///         Err(_) => println!("OtherPropertyName is invalid"),
+///     }
+/// };
+/// ```
 #[allow(dead_code)]
 pub struct Parser<'schema, 'record> {
     properties: &'schema [Property],
@@ -111,17 +118,6 @@ impl<'schema, 'record> Parser<'schema, 'record> {
     ///
     /// # Arguments
     /// * `schema` - The [Schema] from the ETW Event we want to parse
-    ///
-    /// # Example
-    /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
-    /// # use ferrisetw::schema_locator::SchemaLocator;
-    /// # use ferrisetw::parser::Parser;
-    /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
-    ///     let schema = schema_locator.event_schema(record).unwrap();
-    ///     let parser = Parser::create(record, &schema);
-    /// };
-    /// ```
     pub fn create(event_record: &'record EventRecord, schema: &'schema Schema) -> Self {
         Parser {
             record: &event_record,
@@ -253,12 +249,45 @@ impl<'schema, 'record> Parser<'schema, 'record> {
 
         Err(ParserError::NotFound)
     }
+
+    /// Return a property from the event, or an error in case the parsing failed.
+    ///
+    /// You must explicitly define `T`, the type you want to parse the property into.<br/>
+    /// In case this type is not compatible with the ETW type, [`ParserError::InvalidType`] is returned.
+    pub fn try_parse<T>(&self, name: &str) -> ParserResult<T>
+    where Parser<'schema, 'record>: private::TryParse<T>
+    {
+        use crate::parser::private::TryParse;
+        self.try_parse_impl(name)
+    }
+}
+
+
+
+mod private {
+    use super::*;
+
+    /// Trait to try and parse a type
+    ///
+    /// This trait has to be implemented in order to be able to parse a type we want to retrieve from
+    /// within an Event.
+    ///
+    /// An implementation for most of the Primitive Types is created by using a Macro, any other needed type
+    /// requires this trait to be implemented
+    pub trait TryParse<T> {
+        /// Implement the `try_parse` function to provide a way to Parse `T` from an ETW event or
+        /// return an Error in case the type `T` can't be parsed
+        ///
+        /// # Arguments
+        /// * `name` - Name of the property to be found in the Schema
+        fn try_parse_impl(&self, name: &str) -> Result<T, ParserError>;
+    }
 }
 
 macro_rules! impl_try_parse_primitive {
     ($T:ident) => {
-        impl TryParse<$T> for Parser<'_, '_> {
-            fn try_parse(&self, name: &str) -> ParserResult<$T> {
+        impl private::TryParse<$T> for Parser<'_, '_> {
+            fn try_parse_impl(&self, name: &str) -> ParserResult<$T> {
                 let prop_slice = self.find_property(name)?;
 
                 // TODO: Check In and Out type and do a better type checking
@@ -298,7 +327,7 @@ impl_try_parse_primitive!(isize);
 /// ```
 /// # use ferrisetw::native::etw_types::EventRecord;
 /// # use ferrisetw::schema_locator::SchemaLocator;
-/// # use ferrisetw::parser::{Parser, TryParse};
+/// # use ferrisetw::parser::Parser;
 /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
 ///     let schema = schema_locator.event_schema(record).unwrap();
 ///     let parser = Parser::create(record, &schema);
@@ -307,8 +336,8 @@ impl_try_parse_primitive!(isize);
 /// ```
 ///
 /// [TdhInTypes]: TdhInType
-impl TryParse<String> for Parser<'_, '_> {
-    fn try_parse(&self, name: &str) -> ParserResult<String> {
+impl private::TryParse<String> for Parser<'_, '_> {
+    fn try_parse_impl(&self, name: &str) -> ParserResult<String> {
         let prop_slice = self.find_property(name)?;
 
         // TODO: Handle errors and type checking better
@@ -334,8 +363,8 @@ impl TryParse<String> for Parser<'_, '_> {
     }
 }
 
-impl TryParse<GUID> for Parser<'_, '_> {
-    fn try_parse(&self, name: &str) -> Result<GUID, ParserError> {
+impl private::TryParse<GUID> for Parser<'_, '_> {
+    fn try_parse_impl(&self, name: &str) -> Result<GUID, ParserError> {
         let prop_slice = self.find_property(name)?;
 
         let guid_string = utils::parse_utf16_guid(prop_slice.buffer);
@@ -348,8 +377,8 @@ impl TryParse<GUID> for Parser<'_, '_> {
     }
 }
 
-impl TryParse<IpAddr> for Parser<'_, '_> {
-    fn try_parse(&self, name: &str) -> ParserResult<IpAddr> {
+impl private::TryParse<IpAddr> for Parser<'_, '_> {
+    fn try_parse_impl(&self, name: &str) -> ParserResult<IpAddr> {
         let prop_slice = self.find_property(name)?;
 
         if prop_slice.property.out_type() != TdhOutType::OutTypeIpv4
@@ -416,23 +445,23 @@ impl std::fmt::Display for Pointer {
     }
 }
 
-impl TryParse<Pointer> for Parser<'_, '_> {
-    fn try_parse(&self, name: &str) -> ParserResult<Pointer> {
+impl private::TryParse<Pointer> for Parser<'_, '_> {
+    fn try_parse_impl(&self, name: &str) -> ParserResult<Pointer> {
         let prop_slice = self.find_property(name)?;
 
         let mut res = Pointer::default();
         if prop_slice.buffer.len() == std::mem::size_of::<u32>() {
-            res.0 = TryParse::<u32>::try_parse(self, name)? as usize;
+            res.0 = private::TryParse::<u32>::try_parse_impl(self, name)? as usize;
         } else {
-            res.0 = TryParse::<u64>::try_parse(self, name)? as usize;
+            res.0 = private::TryParse::<u64>::try_parse_impl(self, name)? as usize;
         }
 
         Ok(res)
     }
 }
 
-impl TryParse<Vec<u8>> for Parser<'_, '_> {
-    fn try_parse(&self, name: &str) -> Result<Vec<u8>, ParserError> {
+impl private::TryParse<Vec<u8>> for Parser<'_, '_> {
+    fn try_parse_impl(&self, name: &str) -> Result<Vec<u8>, ParserError> {
         let prop_slice = self.find_property(name)?;
         Ok(prop_slice.buffer.to_vec())
     }

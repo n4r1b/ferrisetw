@@ -40,7 +40,6 @@
 //! use ferrisetw::native::etw_types::EventRecord;
 //! use ferrisetw::schema_locator::SchemaLocator;
 //! use ferrisetw::parser::Parser;
-//! use ferrisetw::parser::TryParse;
 //! use ferrisetw::provider::Provider;
 //! use ferrisetw::trace::{UserTrace, TraceTrait};
 //!
@@ -57,8 +56,7 @@
 //!                 // Finally, properties for a given event can be retrieved using a Parser
 //!                 let parser = Parser::create(record, &schema);
 //!
-//!                 // Type annotations or Fully Qualified Syntax are needed when calling TryParse
-//!                 // Supported types implement the trait TryParse for Parser
+//!                 // You'll need type inference to tell ferrisetw what type you want to parse into
 //!                 // In actual code, be sure to correctly handle Err values!
 //!                 let process_id: u32 = parser.try_parse("ProcessID").unwrap();
 //!                 let image_name: String = parser.try_parse("ImageName").unwrap();
