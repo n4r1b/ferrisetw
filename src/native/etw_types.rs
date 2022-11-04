@@ -115,23 +115,6 @@ impl From<LoggingMode> for u32 {
     }
 }
 
-#[allow(dead_code)]
-enum ProcessTraceMode {
-    RealTime,
-    EventRecord,
-    RawTimestamp,
-}
-
-impl From<ProcessTraceMode> for u32 {
-    fn from(val: ProcessTraceMode) -> Self {
-        match val {
-            ProcessTraceMode::RealTime => Etw::PROCESS_TRACE_MODE_EVENT_RECORD,
-            ProcessTraceMode::EventRecord => Etw::PROCESS_TRACE_MODE_REAL_TIME,
-            ProcessTraceMode::RawTimestamp => Etw::PROCESS_TRACE_MODE_RAW_TIMESTAMP,
-        }
-    }
-}
-
 
 /// Wrapper over an [EVENT_TRACE_PROPERTIES](https://docs.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties), and its allocated companion members
 ///
@@ -247,7 +230,8 @@ impl<'callbackdata> EventTraceLogfile<'callbackdata> {
 
         native.LoggerName = PWSTR(wide_logger_name.as_mut_ptr());
         native.Anonymous1.ProcessTraceMode =
-            u32::from(ProcessTraceMode::RealTime) | u32::from(ProcessTraceMode::EventRecord);
+            Etw::PROCESS_TRACE_MODE_REAL_TIME | Etw::PROCESS_TRACE_MODE_EVENT_RECORD;
+            // In case you really want to use PROCESS_TRACE_MODE_RAW_TIMESTAMP, please review EventRecord::timestamp(), which could not be valid anymore
 
         native.Anonymous2.EventRecordCallback = Some(callback);
 
