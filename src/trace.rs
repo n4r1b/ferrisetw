@@ -3,24 +3,24 @@
 //! Provides both a Kernel and User trace that allows to start an ETW session
 use std::ffi::OsString;
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use self::private::PrivateTraceTrait;
 
 use crate::native::etw_types::EventTraceProperties;
-use crate::native::etw_types::event_record::EventRecord;
 use crate::native::version_helper;
 use crate::native::evntrace::{ControlHandle, TraceHandle, start_trace, open_trace, process_trace, enable_provider, control_trace, close_trace};
 use crate::provider::Provider;
-use crate::{provider, utils};
-use crate::schema_locator::SchemaLocator;
+use crate::utils;
 use windows::core::GUID;
 use windows::Win32::System::Diagnostics::Etw;
 use widestring::U16CString;
 
 pub use crate::native::etw_types::LoggingMode;
+
+pub(crate) mod callback_data;
+use callback_data::CallbackData;
 
 const KERNEL_LOGGER_NAME: &str = "NT Kernel Logger";
 const SYSTEM_TRACE_CONTROL_GUID: &str = "9e814aad-3204-11d2-9a82-006008a86939";
@@ -79,49 +79,6 @@ impl Default for TraceProperties {
             max_buffer: 0,
             flush_timer: Duration::from_secs(1),
             log_file_mode: LoggingMode::EVENT_TRACE_REAL_TIME_MODE | LoggingMode::EVENT_TRACE_NO_PER_PROCESSOR_BUFFERING,
-        }
-    }
-}
-
-/// Data used by callbacks when the trace is running
-// NOTE: this structure is accessed in an unsafe block in a separate thread (see the `trace_callback_thunk` function)
-//       Thus, this struct must not be mutated (outside of interior mutability and/or using Mutex and other synchronization mechanisms) when the associated trace is running.
-#[derive(Debug, Default)]
-pub struct CallbackData {
-    /// Represents how many events have been handled so far
-    events_handled: AtomicUsize,
-    /// List of Providers associated with the Trace. This also owns the callback closures and their state
-    providers: Vec<provider::Provider>,
-    schema_locator: SchemaLocator,
-}
-
-impl CallbackData {
-    fn new() -> Self {
-        Self {
-            events_handled: AtomicUsize::new(0),
-            providers: Vec::new(),
-            schema_locator: SchemaLocator::new(),
-        }
-    }
-
-    /// How many events have been handled since this instance was created
-    pub fn events_handled(&self) -> usize {
-        self.events_handled.load(Ordering::Relaxed)
-    }
-
-    pub fn provider_flags<T: TraceTrait>(&self) -> Etw::EVENT_TRACE_FLAG {
-        Etw::EVENT_TRACE_FLAG(T::enable_flags(&self.providers))
-    }
-
-    pub fn on_event(&self, record: &EventRecord) {
-        self.events_handled.fetch_add(1, Ordering::Relaxed);
-
-        // We need a mutable reference to be able to modify the data it refers, which is actually
-        // done within the Callback (The schema locator is modified)
-        for prov in &self.providers {
-            if prov.guid() == record.provider_id() {
-                prov.on_event(record, &self.schema_locator);
-            }
         }
     }
 }
@@ -401,7 +358,7 @@ impl<T: TraceTrait + PrivateTraceTrait> TraceBuilder<T> {
     /// Windows API seems to support removing providers, or changing its properties when the session is processing events (see <https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-enabletraceex2#remarks>)    /// Currently, this crate only supports defining Providers and their settings when building the trace, because it is easier to ensure memory-safety this way.
     /// It probably would be possible to support changing Providers when the trace is processing, but this is left as a TODO (see <https://github.com/n4r1b/ferrisetw/issues/54>)
     pub fn enable(mut self, provider: Provider) -> Self {
-        self.callback_data.providers.push(provider);
+        self.callback_data.add_provider(provider);
         self
     }
 
@@ -434,7 +391,7 @@ impl<T: TraceTrait + PrivateTraceTrait> TraceBuilder<T> {
         // TODO: For kernel traces, implement enable_provider function for providers that require call to TraceSetInformation with extended PERFINFO_GROUPMASK
 
         if T::TRACE_KIND == private::TraceKind::User {
-            for prov in &callback_data.providers {
+            for prov in callback_data.providers() {
                 enable_provider(control_handle, prov)?;
             }
         }
@@ -489,6 +446,6 @@ mod test {
 
         let trace = UserTrace::new().enable(prov).enable(prov1);
 
-        assert_eq!(trace.callback_data.providers.len(), 2);
+        assert_eq!(trace.callback_data.providers().len(), 2);
     }
 }

@@ -8,7 +8,8 @@
 //! needed by using the functions exposed by the modules at the crate level
 use crate::provider::event_filter::EventFilterDescriptor;
 use crate::provider::TraceFlags;
-use crate::trace::{CallbackData, TraceProperties, TraceTrait};
+use crate::trace::{TraceProperties, TraceTrait};
+use crate::trace::callback_data::CallbackData;
 use std::ffi::{c_void, OsString};
 use std::fmt::Formatter;
 use std::marker::PhantomData;
