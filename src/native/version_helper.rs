@@ -5,8 +5,10 @@
 //!
 //! At the moment the only option available is to check if the actual System Version is greater than
 //! Win8, is the only check we need for the crate to work as expected
+use windows::Win32::Foundation::GetLastError;
 use windows::Win32::System::SystemInformation::{OSVERSIONINFOEXA, VER_MAJORVERSION, VER_MINORVERSION, VER_SERVICEPACKMAJOR};
 use windows::Win32::System::SystemInformation::{VerifyVersionInfoA, VerSetConditionMask};
+use windows::Win32::Foundation::ERROR_OLD_WIN_VERSION;
 
 use crate::traits::*;
 
@@ -41,7 +43,7 @@ fn verify_system_version(major: u8, minor: u8, sp_major: u16) -> VersionHelperRe
     };
 
     let mut condition_mask = 0;
-    unsafe {
+    let res = unsafe {
         condition_mask = VerSetConditionMask(
             condition_mask,
             VER_MAJORVERSION,
@@ -58,13 +60,24 @@ fn verify_system_version(major: u8, minor: u8, sp_major: u16) -> VersionHelperRe
             VER_GREATER_OR_EQUAL,
         );
 
-        Ok(VerifyVersionInfoA(
+        VerifyVersionInfoA(
             &mut os_version,
             VER_MAJORVERSION
                 | VER_MINORVERSION
                 | VER_SERVICEPACKMAJOR,
             condition_mask,
-        ) != false)
+        )
+    };
+
+    let error = unsafe{ GetLastError() };
+
+    // See https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-verifyversioninfoa#return-value
+    match (res.as_bool(), error) {
+        (true, _) => Ok(true),
+        (false, ERROR_OLD_WIN_VERSION) => Ok(false),
+        (false, _err) => Err(
+            VersionHelperError::IoError(std::io::Error::last_os_error())
+        ),
     }
 }
 
