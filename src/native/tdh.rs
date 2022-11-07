@@ -10,6 +10,7 @@ use std::alloc::Layout;
 use super::etw_types::*;
 use crate::traits::*;
 use crate::native::tdh_types::Property;
+use crate::native::etw_types::event_record::EventRecord;
 use windows::Win32::System::Diagnostics::Etw::{self, TRACE_EVENT_INFO, EVENT_PROPERTY_INFO};
 use windows::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
 use windows::core::GUID;
@@ -24,7 +25,7 @@ pub enum TdhNativeError {
     IoError(std::io::Error),
 }
 
-pub(crate) type TdhNativeResult<T> = Result<T, TdhNativeError>;
+pub type TdhNativeResult<T> = Result<T, TdhNativeError>;
 
 impl LastOsError<TdhNativeError> for TdhNativeError {}
 
@@ -132,36 +133,36 @@ impl TraceEventInfo {
         }
     }
 
-    pub(crate) fn provider_guid(&self) -> GUID {
+    pub fn provider_guid(&self) -> GUID {
         self.as_raw().ProviderGuid
     }
 
-    pub(crate) fn event_id(&self) -> u16 {
+    pub fn event_id(&self) -> u16 {
         self.as_raw().EventDescriptor.Id
     }
 
-    pub(crate) fn event_version(&self) -> u8 {
+    pub fn event_version(&self) -> u8 {
         self.as_raw().EventDescriptor.Version
     }
 
-    pub(crate) fn decoding_source(&self) -> DecodingSource {
+    pub fn decoding_source(&self) -> DecodingSource {
         let ds = self.as_raw().DecodingSource;
         DecodingSource::from(ds)
     }
 
-    pub(crate) fn provider_name(&self) -> String {
+    pub fn provider_name(&self) -> String {
         extract_utf16_string!(self, ProviderNameOffset);
     }
 
-    pub(crate) fn task_name(&self) -> String {
+    pub fn task_name(&self) -> String {
         extract_utf16_string!(self, TaskNameOffset);
     }
 
-    pub(crate) fn opcode_name(&self) -> String {
+    pub fn opcode_name(&self) -> String {
         extract_utf16_string!(self, OpcodeNameOffset);
     }
 
-    pub(crate) fn properties<'info>(&'info self) -> PropertyIterator<'info> {
+    pub fn properties<'info>(&'info self) -> PropertyIterator<'info> {
         PropertyIterator::new(self)
     }
 }
@@ -177,7 +178,7 @@ impl Drop for TraceEventInfo {
     }
 }
 
-pub(crate) struct PropertyIterator<'info> {
+pub struct PropertyIterator<'info> {
     next_index: u32,
     count: u32,
     te_info: &'info TraceEventInfo,
@@ -243,7 +244,7 @@ impl<'info> Iterator for PropertyIterator<'info> {
     }
 }
 
-pub(crate) fn property_size(event: &EventRecord, name: &str) -> TdhNativeResult<u32> {
+pub fn property_size(event: &EventRecord, name: &str) -> TdhNativeResult<u32> {
     let mut property_size = 0;
 
     let name = name.into_utf16();

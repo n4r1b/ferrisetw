@@ -7,7 +7,7 @@ use windows::core::GUID;
 
 use crate::native::tdh;
 use crate::native::tdh::TraceEventInfo;
-use crate::native::etw_types::EventRecord;
+use crate::native::etw_types::event_record::EventRecord;
 use crate::schema::Schema;
 
 /// Schema module errors

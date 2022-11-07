@@ -25,7 +25,7 @@ impl Schema {
         }
     }
 
-    /// Use the `decoding_source` function to obtain the [DecodingSource] from the [TraceEventInfo]
+    /// Use the `decoding_source` function to obtain the [DecodingSource] from the `TRACE_EVENT_INFO`
     ///
     /// This getter returns the DecodingSource from the event, this value identifies the source used
     /// parse the event data
@@ -40,12 +40,11 @@ impl Schema {
     ///     let decoding_source = schema.decoding_source();
     /// };
     /// ```
-    /// [TraceEventInfo]: crate::native::tdh::TraceEventInfo
     pub fn decoding_source(&self) -> DecodingSource {
         self.te_info.decoding_source()
     }
 
-    /// Use the `provider_name` function to obtain the Provider name from the [TraceEventInfo]
+    /// Use the `provider_name` function to obtain the Provider name from the `TRACE_EVENT_INFO`
     ///
     /// # Example
     /// ```
@@ -61,7 +60,7 @@ impl Schema {
         self.te_info.provider_name()
     }
 
-    /// Use the `task_name` function to obtain the Task name from the [TraceEventInfo]
+    /// Use the `task_name` function to obtain the Task name from the `TRACE_EVENT_INFO`
     ///
     /// See: [TaskType](https://docs.microsoft.com/en-us/windows/win32/wes/eventmanifestschema-tasktype-complextype)
     /// # Example
@@ -78,7 +77,7 @@ impl Schema {
         self.te_info.task_name()
     }
 
-    /// Use the `opcode_name` function to obtain the Opcode name from the [TraceEventInfo]
+    /// Use the `opcode_name` function to obtain the Opcode name from the `TRACE_EVENT_INFO`
     ///
     /// See: [OpcodeType](https://docs.microsoft.com/en-us/windows/win32/wes/eventmanifestschema-opcodetype-complextype)
     /// # Example

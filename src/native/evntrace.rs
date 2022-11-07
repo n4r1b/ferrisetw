@@ -27,6 +27,7 @@ use windows::Win32::Foundation::ERROR_WMI_INSTANCE_NOT_FOUND;
 use super::etw_types::*;
 use crate::provider::Provider;
 use crate::provider::event_filter::EventFilterDescriptor;
+use crate::native::etw_types::event_record::EventRecord;
 use crate::trace::{CallbackData, TraceProperties, TraceTrait};
 
 pub type TraceHandle = Etw::PROCESSTRACE_HANDLE;

@@ -3,7 +3,7 @@
 use windows::Win32::System::Diagnostics::Etw::EVENT_RECORD;
 use windows::core::GUID;
 
-use crate::native::etw_types::EventHeaderExtendedDataItem;
+use crate::native::etw_types::extended_data::EventHeaderExtendedDataItem;
 
 /// A read-only wrapper over an [EVENT_RECORD](https://docs.microsoft.com/en-us/windows/win32/api/evntcons/ns-evntcons-event_record)
 #[repr(transparent)]
@@ -27,14 +27,14 @@ impl EventRecord {
     /// # Safety
     ///
     /// Obviously, the returned pointer is only valid as long `self` is valid and not modified.
-    pub fn as_raw_ptr(&self) -> *const EVENT_RECORD {
+    pub(crate) fn as_raw_ptr(&self) -> *const EVENT_RECORD {
         &self.0 as *const EVENT_RECORD
     }
 
     /// The `UserContext` field from the wrapped `EVENT_RECORD`
     ///
     /// In this crate, it is always populated to point to a valid [`CallbackData`](crate::trace::CallbackData)
-    pub fn user_context(&self) -> *const std::ffi::c_void {
+    pub(crate) fn user_context(&self) -> *const std::ffi::c_void {
         self.0.UserContext as *const _
     }
 

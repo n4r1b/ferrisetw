@@ -2,7 +2,7 @@
 //!
 //! Provides an abstraction over an [ETW Provider](https://docs.microsoft.com/en-us/windows/win32/etw/about-event-tracing#providers)
 use super::traits::*;
-use crate::native::etw_types::EventRecord;
+use crate::native::etw_types::event_record::EventRecord;
 use crate::native::pla;
 use crate::schema_locator::SchemaLocator;
 
@@ -21,10 +21,8 @@ pub use trace_flags::TraceFlags;
 pub enum ProviderError {
     /// Returned whenever a provider doesn't have an associated GUID
     NoGuid,
-    /// Wrapper over an internal [PlaError]
-    ///
-    /// [PlaError]: crate::native::pla::PlaError
-    ComProvider(pla::PlaError),
+    /// Wrapper over an internal [PlaError](crate::native::PlaError)
+    ComProvider(crate::native::PlaError),
     /// Wrapper over an standard IO Error
     IoError(std::io::Error),
 }
@@ -37,8 +35,8 @@ impl From<std::io::Error> for ProviderError {
     }
 }
 
-impl From<pla::PlaError> for ProviderError {
-    fn from(err: pla::PlaError) -> Self {
+impl From<crate::native::PlaError> for ProviderError {
+    fn from(err: crate::native::PlaError) -> Self {
         ProviderError::ComProvider(err)
     }
 }
@@ -135,7 +133,7 @@ impl Provider {
     /// # use ferrisetw::provider::Provider;
     /// let my_provider = Provider::by_name("Microsoft-Windows-WinINet").unwrap().build();
     /// ```
-    pub fn by_name(name: &str) -> Result<ProviderBuilder, pla::PlaError> {
+    pub fn by_name(name: &str) -> Result<ProviderBuilder, crate::native::PlaError> {
         let guid = unsafe { pla::get_provider_guid(name) }?;
         Ok(Self::by_guid(guid))
     }

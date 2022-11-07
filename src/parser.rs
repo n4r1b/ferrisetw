@@ -4,7 +4,7 @@
 
 
 use crate::native::etw_types::EVENT_HEADER_FLAG_32_BIT_HEADER;
-use crate::native::etw_types::EventRecord;
+use crate::native::etw_types::event_record::EventRecord;
 use crate::native::sddl;
 use crate::native::tdh;
 use crate::native::tdh_types::{Property, PropertyFlags, TdhInType, TdhOutType};
@@ -34,24 +34,20 @@ pub enum ParserError {
     Utf8Error(std::str::Utf8Error),
     /// An error trying to get an slice as an array
     SliceError(std::array::TryFromSliceError),
-    /// Represents an internal [SddlNativeError]
-    ///
-    /// [SddlNativeError]: sddl::SddlNativeError
-    SddlNativeError(sddl::SddlNativeError),
-    /// Represents an internal [TdhNativeError]
-    ///
-    /// [TdhNativeError]: tdh::TdhNativeError
-    TdhNativeError(tdh::TdhNativeError),
+    /// Represents an internal [SddlNativeError](crate::native::SddlNativeError)
+    SddlNativeError(crate::native::SddlNativeError),
+    /// Represents an internal [TdhNativeError](crate::native::TdhNativeError)
+    TdhNativeError(crate::native::TdhNativeError),
 }
 
-impl From<tdh::TdhNativeError> for ParserError {
-    fn from(err: tdh::TdhNativeError) -> Self {
+impl From<crate::native::TdhNativeError> for ParserError {
+    fn from(err: crate::native::TdhNativeError) -> Self {
         ParserError::TdhNativeError(err)
     }
 }
 
-impl From<sddl::SddlNativeError> for ParserError {
-    fn from(err: sddl::SddlNativeError) -> Self {
+impl From<crate::native::SddlNativeError> for ParserError {
+    fn from(err: crate::native::SddlNativeError) -> Self {
         ParserError::SddlNativeError(err)
     }
 }

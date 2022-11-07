@@ -107,7 +107,7 @@ extern crate num_traits;
 
 pub mod native;
 pub mod parser;
-pub mod property;
+mod property;
 pub mod provider;
 pub mod query;
 pub mod schema;
@@ -119,5 +119,5 @@ mod utils;
 // Convenience re-exports.
 pub use crate::trace::UserTrace;
 pub use crate::trace::KernelTrace;
-pub use crate::native::etw_types::EventRecord;
+pub use crate::native::etw_types::event_record::EventRecord;
 pub use crate::schema_locator::SchemaLocator;

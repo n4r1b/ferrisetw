@@ -9,8 +9,9 @@ use std::time::Duration;
 
 use self::private::PrivateTraceTrait;
 
-use crate::native::etw_types::{EventRecord, EventTraceProperties, LoggingMode};
-use crate::native::{evntrace, version_helper};
+use crate::native::etw_types::EventTraceProperties;
+use crate::native::etw_types::event_record::EventRecord;
+use crate::native::version_helper;
 use crate::native::evntrace::{ControlHandle, TraceHandle, start_trace, open_trace, process_trace, enable_provider, control_trace, close_trace};
 use crate::provider::Provider;
 use crate::{provider, utils};
@@ -19,6 +20,8 @@ use windows::core::GUID;
 use windows::Win32::System::Diagnostics::Etw;
 use widestring::U16CString;
 
+pub use crate::native::etw_types::LoggingMode;
+
 const KERNEL_LOGGER_NAME: &str = "NT Kernel Logger";
 const SYSTEM_TRACE_CONTROL_GUID: &str = "9e814aad-3204-11d2-9a82-006008a86939";
 const EVENT_TRACE_SYSTEM_LOGGER_MODE: u32 = 0x02000000;
@@ -26,10 +29,8 @@ const EVENT_TRACE_SYSTEM_LOGGER_MODE: u32 = 0x02000000;
 /// Trace module errors
 #[derive(Debug)]
 pub enum TraceError {
-    /// Wrapper over an internal [EvntraceNativeError]
-    ///
-    /// [EvntraceNativeError]: crate::native::evntrace::EvntraceNativeError
-    EtwNativeError(evntrace::EvntraceNativeError),
+    /// Wrapper over an internal [EvntraceNativeError](crate::native::EvntraceNativeError)
+    EtwNativeError(crate::native::EvntraceNativeError),
     /// Wrapper over an standard IO Error
     IoError(std::io::Error),
 }
@@ -40,8 +41,8 @@ impl From<std::io::Error> for TraceError {
     }
 }
 
-impl From<evntrace::EvntraceNativeError> for TraceError {
-    fn from(err: evntrace::EvntraceNativeError) -> Self {
+impl From<crate::native::EvntraceNativeError> for TraceError {
+    fn from(err: crate::native::EvntraceNativeError) -> Self {
         TraceError::EtwNativeError(err)
     }
 }
@@ -112,7 +113,7 @@ impl CallbackData {
         Etw::EVENT_TRACE_FLAG(T::enable_flags(&self.providers))
     }
 
-    pub(crate) fn on_event(&self, record: &EventRecord) {
+    pub fn on_event(&self, record: &EventRecord) {
         self.events_handled.fetch_add(1, Ordering::Relaxed);
 
         // We need a mutable reference to be able to modify the data it refers, which is actually
