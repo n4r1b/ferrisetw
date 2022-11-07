@@ -31,14 +31,6 @@ const EVENT_TRACE_SYSTEM_LOGGER_MODE: u32 = 0x02000000;
 pub enum TraceError {
     /// Wrapper over an internal [EvntraceNativeError](crate::native::EvntraceNativeError)
     EtwNativeError(crate::native::EvntraceNativeError),
-    /// Wrapper over an standard IO Error
-    IoError(std::io::Error),
-}
-
-impl From<std::io::Error> for TraceError {
-    fn from(err: std::io::Error) -> Self {
-        TraceError::IoError(err)
-    }
 }
 
 impl From<crate::native::EvntraceNativeError> for TraceError {

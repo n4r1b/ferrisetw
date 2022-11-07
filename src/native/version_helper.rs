@@ -10,21 +10,11 @@ use windows::Win32::System::SystemInformation::{OSVERSIONINFOEXA, VER_MAJORVERSI
 use windows::Win32::System::SystemInformation::{VerifyVersionInfoA, VerSetConditionMask};
 use windows::Win32::Foundation::ERROR_OLD_WIN_VERSION;
 
-use crate::traits::*;
-
 /// Version Helper native error
 #[derive(Debug)]
 pub enum VersionHelperError {
     /// Represents an standard IO Error
     IoError(std::io::Error),
-}
-
-impl LastOsError<VersionHelperError> for VersionHelperError {}
-
-impl From<std::io::Error> for VersionHelperError {
-    fn from(err: std::io::Error) -> Self {
-        VersionHelperError::IoError(err)
-    }
 }
 
 pub(crate) type VersionHelperResult<T> = Result<T, VersionHelperError>;

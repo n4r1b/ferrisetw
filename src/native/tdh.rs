@@ -27,14 +27,6 @@ pub enum TdhNativeError {
 
 pub type TdhNativeResult<T> = Result<T, TdhNativeError>;
 
-impl LastOsError<TdhNativeError> for TdhNativeError {}
-
-impl From<std::io::Error> for TdhNativeError {
-    fn from(err: std::io::Error) -> Self {
-        TdhNativeError::IoError(err)
-    }
-}
-
 
 /// Read-only wrapper over an [TRACE_EVENT_INFO]
 ///

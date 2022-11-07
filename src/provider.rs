@@ -1,7 +1,6 @@
 //! ETW Providers abstraction.
 //!
 //! Provides an abstraction over an [ETW Provider](https://docs.microsoft.com/en-us/windows/win32/etw/about-event-tracing#providers)
-use super::traits::*;
 use crate::native::etw_types::event_record::EventRecord;
 use crate::native::pla;
 use crate::schema_locator::SchemaLocator;
@@ -19,20 +18,8 @@ pub use trace_flags::TraceFlags;
 /// Provider module errors
 #[derive(Debug)]
 pub enum ProviderError {
-    /// Returned whenever a provider doesn't have an associated GUID
-    NoGuid,
     /// Wrapper over an internal [PlaError](crate::native::PlaError)
     ComProvider(crate::native::PlaError),
-    /// Wrapper over an standard IO Error
-    IoError(std::io::Error),
-}
-
-impl LastOsError<ProviderError> for ProviderError {}
-
-impl From<std::io::Error> for ProviderError {
-    fn from(err: std::io::Error) -> Self {
-        ProviderError::IoError(err)
-    }
 }
 
 impl From<crate::native::PlaError> for ProviderError {
