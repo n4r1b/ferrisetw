@@ -11,7 +11,7 @@ use super::GUID;
 /// List of Kernel Providers GUIDs
 ///
 /// Credits: [KrabsETW::kernel_guids](https://github.com/microsoft/krabsetw/blob/master/krabs/krabs/kernel_guids.hpp)
-pub mod kernel_guids {
+mod kernel_guids {
     use super::GUID;
     pub const ALPC_GUID: GUID = GUID::from_values(
         0x45d8cccd, 0x539f, 0x4b72, [0xa8, 0xb7, 0x5c, 0x68, 0x31, 0x42, 0x60, 0x9a]);
@@ -64,7 +64,7 @@ pub mod kernel_guids {
 /// List of Kernel Providers flags
 ///
 /// More info: [EVENT_TRACE_PROPERTIES->EnableFlags](https://docs.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties)
-pub mod kernel_flags {
+mod kernel_flags {
     pub const EVENT_TRACE_FLAG_PROCESS: u32 = 0x00000001;
     pub const EVENT_TRACE_FLAG_THREAD: u32 = 0x00000002;
     pub const EVENT_TRACE_FLAG_IMAGE_LOAD: u32 = 0x00000004;
@@ -92,7 +92,9 @@ pub mod kernel_flags {
     pub const EVENT_TRACE_FLAG_FILE_IO_INIT: u32 = 0x04000000;
 }
 
-/// Represents a Kernel Provider structure which can be used to create a Kernel Provider
+/// Contains kernel provider identifiers.
+///
+/// You'll need to use it with [`crate::provider::Provider::kernel`]
 #[derive(Debug)]
 pub struct KernelProvider {
     /// Kernel Provider GUID
