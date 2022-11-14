@@ -224,17 +224,20 @@ pub struct EventTraceLogfile<'callbackdata> {
 impl<'callbackdata> EventTraceLogfile<'callbackdata> {
     /// Create a new instance
     pub fn create(callback_data: &'callbackdata Box<Arc<CallbackData>>, mut wide_logger_name: U16CString, callback: unsafe extern "system" fn(*mut Etw::EVENT_RECORD)) -> Self {
-        let mut native = Etw::EVENT_TRACE_LOGFILEW::default();
-
-        native.LoggerName = PWSTR(wide_logger_name.as_mut_ptr());
-        native.Anonymous1.ProcessTraceMode =
-            Etw::PROCESS_TRACE_MODE_REAL_TIME | Etw::PROCESS_TRACE_MODE_EVENT_RECORD;
-            // In case you really want to use PROCESS_TRACE_MODE_RAW_TIMESTAMP, please review EventRecord::timestamp(), which could not be valid anymore
-
-        native.Anonymous2.EventRecordCallback = Some(callback);
-
         let not_really_mut_ptr = callback_data.as_ref() as *const Arc<CallbackData> as *const c_void as *mut c_void; // That's kind-of fine because the user context is _not supposed_ to be changed by Windows APIs
-        native.Context = not_really_mut_ptr;
+
+        let native = Etw::EVENT_TRACE_LOGFILEW {
+            LoggerName: PWSTR(wide_logger_name.as_mut_ptr()),
+            Anonymous1: Etw::EVENT_TRACE_LOGFILEW_0 {
+                ProcessTraceMode: Etw::PROCESS_TRACE_MODE_REAL_TIME | Etw::PROCESS_TRACE_MODE_EVENT_RECORD
+                // In case you really want to use PROCESS_TRACE_MODE_RAW_TIMESTAMP, please review EventRecord::timestamp(), which could not be valid anymore
+            },
+            Anonymous2: Etw::EVENT_TRACE_LOGFILEW_1 {
+                EventRecordCallback: Some(callback)
+            },
+            Context: not_really_mut_ptr,
+            ..Default::default()
+        };
 
         Self {
             native,
