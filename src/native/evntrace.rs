@@ -192,6 +192,7 @@ where
 /// Subscribe to a started trace
 ///
 /// Microsoft calls this "opening" the trace (and this calls `OpenTraceW`)
+#[allow(clippy::borrowed_box)] // Being Boxed is really important, let's keep the Box<...> in the function signature to make the intent clearer
 pub(crate) fn open_trace(trace_name: U16CString, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<TraceHandle> {
     let mut log_file = EventTraceLogfile::create(callback_data, trace_name, trace_callback_thunk);
 
@@ -322,6 +323,7 @@ pub(crate) fn control_trace(
 /// In case ETW reports there are still events in the queue that are still to trigger callbacks, this returns Ok(true).<br/>
 /// If no further event callback will be invoked, this returns Ok(false)<br/>
 /// On error, this returns an `Err`
+#[allow(clippy::borrowed_box)] // Being Boxed is really important, let's keep the Box<...> in the function signature to make the intent clearer
 pub(crate) fn close_trace(trace_handle: TraceHandle, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<bool> {
     match filter_invalid_trace_handles(trace_handle) {
         None => Err(EvntraceNativeError::InvalidHandle),
