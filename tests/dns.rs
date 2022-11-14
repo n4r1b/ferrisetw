@@ -9,6 +9,7 @@ use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::UserTrace;
 use ferrisetw::trace::TraceTrait;
 use ferrisetw::parser::Parser;
+use ferrisetw::schema::Schema;
 
 mod utils;
 use utils::{Status, TestKind};
@@ -38,7 +39,7 @@ fn simple_user_dns_trace() {
             let parser = Parser::create(record, &schema);
 
             // While we're at it, let's check a few more-or-less unrelated things on an actual ETW event
-            check_a_few_cases(record, &parser);
+            check_a_few_cases(record, &parser, &schema);
 
             if has_seen_resolution_to_test_domain(record, &parser) {
                 notifier.notify_success();
@@ -119,7 +120,7 @@ fn generate_dns_events() {
     println!("Resolution done.");
 }
 
-fn check_a_few_cases(record: &EventRecord, parser: &Parser) {
+fn check_a_few_cases(record: &EventRecord, parser: &Parser, schema: &Schema) {
     // Parsing with a wrong type should properly error out
     if record.event_id() == EVENT_ID_DNS_QUERY_INITIATED {
         let _right_type: String = parser.try_parse("QueryName").unwrap();
@@ -130,6 +131,8 @@ fn check_a_few_cases(record: &EventRecord, parser: &Parser) {
     // Giving an unknown property should properly error out
     let wrong_name = parser.try_parse::<u32>("NoSuchProperty");
     assert!(wrong_name.is_err());
+
+    assert_eq!(&schema.provider_name(), "Microsoft-Windows-DNS-Client");
 }
 
 fn has_seen_resolution_to_test_domain(record: &EventRecord, parser: &Parser) -> bool {
