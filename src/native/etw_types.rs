@@ -262,7 +262,7 @@ impl<'callbackdata> EventTraceLogfile<'callbackdata> {
 
 /// Newtype wrapper over an [ENABLE_TRACE_PARAMETERS]
 ///
-/// [ENABLE_TRACE_PARAMETERS]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.ENABLE_TRACE_PARAMETERS.html
+/// [ENABLE_TRACE_PARAMETERS]: https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Diagnostics/Etw/struct.ENABLE_TRACE_PARAMETERS.html
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct EnableTraceParameters<'filters>{
@@ -279,6 +279,9 @@ impl<'filters> EnableTraceParameters<'filters> {
         params.native.EnableProperty = trace_flags.bits();
 
 
+        // Note: > Each type of filter (a specific Type member) may only appear once in a call to the EnableTraceEx2 function.
+        //       https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-enabletraceex2#remarks
+        //       > The maximum number of filters that can be included in a call to EnableTraceEx2 is set by MAX_EVENT_FILTERS_COUNT
         let mut win_filter_descriptors: Vec<EVENT_FILTER_DESCRIPTOR> = filters
             .iter()
             .map(|efd| efd.as_event_filter_descriptor())
@@ -305,7 +308,7 @@ impl<'filters> EnableTraceParameters<'filters> {
 
 /// Wrapper over the [DECODING_SOURCE] type
 ///
-/// [DECODING_SOURCE]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.DECODING_SOURCE.html
+/// [DECODING_SOURCE]: https://learn.microsoft.com/en-us/windows/win32/api/tdh/ne-tdh-decoding_source
 #[derive(Debug)]
 pub enum DecodingSource {
     DecodingSourceXMLFile,

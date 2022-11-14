@@ -1,8 +1,9 @@
 //! # Event Windows Tracing FTW!
-//! **Basically a [KrabsETW] rip-off written in Rust**, hence the name `Ferris` 🦀
+//! This crate provides safe Rust abstractions over the ETW consumer APIs.
 //!
-//! All **credits** go to the team at Microsoft who develop KrabsEtw, without it, this project
-//! probably wouldn't be a thing.
+//! It started as a [KrabsETW](https://github.com/microsoft/krabsetw/) rip-off written in Rust (hence the name [`Ferris`](https://rustacean.net/) 🦀).
+//! All credits go to the team at Microsoft who develop KrabsEtw, without it, this project probably wouldn't be a thing.<br/>
+//! Since version 1.0, the API and internal architecture of this crate is slightly diverging from `krabsetw`, so that it is more Rust-idiomatic.
 //!
 //! # What's ETW
 //! Event Tracing for Windows (ETW) is an efficient kernel-level tracing facility that lets you log
@@ -30,15 +31,6 @@
 //! would simplify ETW management written in Rust and available as a crate for other to consume would
 //! be pretty neat and that's where this crate comes into play 🔥
 //!
-//! # Disclaimer
-//! This project is still WIP. There's still plenty of things to evaluate/investigate and things to
-//! fix and do better. Any help would be greatly appreciated, also any issues you may have!
-//!
-//! Although I encourage everyone to use Rust, I do believe that, at the moment, if you plan on interacting
-//! with ETW in a production level and the programming language is not a constraint you should definitely
-//! consider [KrabsETW] as a more robust and tested option. Hopefully in next iterations I'll be able
-//! to remove this disclaimer 😃
-//!
 //! # Getting started
 //! If you are familiar with KrabsEtw you'll see using the crate is very similar, in case you are not
 //! familiar with it the following example shows the basics on how to build a provider, start a trace
@@ -53,26 +45,27 @@
 //! use ferrisetw::trace::{UserTrace, TraceTrait};
 //!
 //! fn process_callback(record: &EventRecord, schema_locator: &SchemaLocator) {
-//!     // Within the callback we first locate the proper Schema for the event
-//!     match schema_locator.event_schema(record) {
-//!         Ok(schema) => {
-//!             // At the moment we can only filter by checking the event_id
-//!             if record.event_id() == 2 {
+//!     // Basic event scrutinizing can be done directly from the `EventRecord`
+//!     if record.event_id() == 2 {
+//!         // More advanced info can be retrieved from the event schema
+//!         // (the SchemaLocator caches the schema for a given kind of event, so this call is cheap in case you've already encountered the same event kind previously)
+//!         match schema_locator.event_schema(record) {
+//!             Err(err) => println!("Error {:?}", err),
+//!             Ok(schema) => {
+//!                 println!("Received an event from provider {}", schema.provider_name());
 //!
-//!                 // We build the Parser based on the Schema
-//!                 let mut parser = Parser::create(record, &schema);
+//!                 // Finally, properties for a given event can be retrieved using a Parser
+//!                 let parser = Parser::create(record, &schema);
 //!
-//!                 // Finally, Parse data from the Event, proper error handling should be done
 //!                 // Type annotations or Fully Qualified Syntax are needed when calling TryParse
 //!                 // Supported types implement the trait TryParse for Parser
-//!
+//!                 // In actual code, be sure to correctly handle Err values!
 //!                 let process_id: u32 = parser.try_parse("ProcessID").unwrap();
 //!                 let image_name: String = parser.try_parse("ImageName").unwrap();
 //!                 println!("PID: {} ImageName: {}", process_id, image_name);
 //!             }
 //!         }
-//!         Err(err) => println!("Error {:?}", err),
-//!     };
+//!     }
 //! }
 //!
 //! fn main() {

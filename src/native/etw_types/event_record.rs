@@ -126,7 +126,7 @@ impl EventRecord {
         }
     }
 
-    /// Returns the ExtendedData from the ETW Event
+    /// Returns the `ExtendedData` from the ETW Event
     ///
     /// Their availability is mostly determined by the flags passed to [`Provider::trace_flags`](crate::provider::Provider::trace_flags)
     ///
