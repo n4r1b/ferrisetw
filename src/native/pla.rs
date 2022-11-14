@@ -9,7 +9,7 @@ use std::mem::MaybeUninit;
 use windows::core::{GUID, BSTR};
 
 /// Pla native module errors
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PlaError {
     /// Represents a Provider not found Error
     NotFound,
@@ -18,7 +18,7 @@ pub enum PlaError {
 }
 
 /// Wrapper over common HRESULT native errors (Incomplete)
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum HResult {
     /// Represents S_OK
     HrOk,

@@ -204,7 +204,7 @@ impl EventTraceProperties {
     pub fn name(&self) -> OsString {
         widestring::U16CStr::from_slice_truncate(&self.wide_trace_name)
             .map(|ws| ws.to_os_string())
-            .unwrap_or(OsString::from("<invalid name>"))
+            .unwrap_or_else(|_| OsString::from("<invalid name>"))
     }
 }
 

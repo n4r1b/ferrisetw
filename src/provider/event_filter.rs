@@ -28,8 +28,8 @@ impl EventFilter {
     /// Builds an EventFilterDescriptor (which can in turn generate an EVENT_FILTER_DESCRIPTOR)
     pub fn to_event_filter_descriptor(&self) -> Result<EventFilterDescriptor, Box<dyn Error>> {
         match self {
-            EventFilter::ByPids(pids) => EventFilterDescriptor::try_new_by_process_ids(&pids),
-            EventFilter::ByEventIds(ids) => EventFilterDescriptor::try_new_by_event_ids(&ids),
+            EventFilter::ByPids(pids) => EventFilterDescriptor::try_new_by_process_ids(pids),
+            EventFilter::ByEventIds(ids) => EventFilterDescriptor::try_new_by_event_ids(ids),
         }
     }
 }

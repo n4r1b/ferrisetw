@@ -261,12 +261,12 @@ pub(crate) fn enable_provider(control_handle: ControlHandle, provider: &Provider
 /// You probably want to spawn a thread that will block on this call.
 pub(crate) fn process_trace(trace_handle: TraceHandle) -> EvntraceNativeResult<()> {
     if filter_invalid_trace_handles(trace_handle).is_none() {
-        return Err(EvntraceNativeError::InvalidHandle);
+        Err(EvntraceNativeError::InvalidHandle)
     } else {
         let mut now = FILETIME::default();
         let result = unsafe {
             GetSystemTimeAsFileTime(&mut now);
-            Etw::ProcessTrace(&[trace_handle], Some(&mut now), None)
+            Etw::ProcessTrace(&[trace_handle], Some(&now), None)
         };
 
         if result == ERROR_SUCCESS {
@@ -290,7 +290,7 @@ pub(crate) fn control_trace(
     control_code: Etw::EVENT_TRACE_CONTROL,
 ) -> EvntraceNativeResult<()> {
     match filter_invalid_control_handle(control_handle) {
-        None => return Err(EvntraceNativeError::InvalidHandle),
+        None => Err(EvntraceNativeError::InvalidHandle),
         Some(handle) => {
             let status = unsafe {
                 // Safety:
@@ -336,7 +336,7 @@ pub(crate) fn close_trace(trace_handle: TraceHandle, callback_data: &Box<Arc<Cal
             match status {
                 ERROR_SUCCESS => Ok(false),
                 ERROR_CTX_CLOSE_PENDING => Ok(true),
-                status @ _ => Err(EvntraceNativeError::IoError(
+                status => Err(EvntraceNativeError::IoError(
                     std::io::Error::from_raw_os_error(status.0 as i32),
                 ))
             }
