@@ -1,6 +1,7 @@
 //! ETW Tracing/Session abstraction
 //!
 //! Provides both a Kernel and User trace that allows to start an ETW session
+use std::ffi::OsString;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -117,6 +118,7 @@ pub trait TraceTrait: private::PrivateTraceTrait + Sized {
     fn trace_handle(&self) -> TraceHandle;
 
     // These utilities should be implemented for every trace
+    fn trace_name(&self) -> OsString;
     fn events_handled(&self) -> usize;
 
     // The following are default implementations, that work on both user and kernel traces
@@ -152,6 +154,10 @@ impl TraceTrait for UserTrace {
         self.trace_handle
     }
 
+    fn trace_name(&self) -> OsString {
+        self.properties.name()
+    }
+
     fn events_handled(&self) -> usize {
         self.callback_data.events_handled()
     }
@@ -165,6 +171,10 @@ impl TraceTrait for UserTrace {
 impl TraceTrait for KernelTrace {
     fn trace_handle(&self) -> TraceHandle {
         self.trace_handle
+    }
+
+    fn trace_name(&self) -> OsString {
+        self.properties.name()
     }
 
     fn events_handled(&self) -> usize {

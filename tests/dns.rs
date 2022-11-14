@@ -62,8 +62,11 @@ fn simple_user_dns_trace() {
 fn test_event_id_filter() {
     let passed1 = Status::new(TestKind::ExpectSuccess);
     let passed2 = Status::new(TestKind::ExpectNoFailure);
+    let passed3 = Status::new(TestKind::ExpectSuccess);
+
     let notifier1 = passed1.notifier();
     let notifier2 = passed2.notifier();
+    let notifier3 = passed3.notifier();
 
     let filter = EventFilter::ByEventIds(vec![EVENT_ID_DNS_QUERY_COMPLETED]);
 
@@ -78,6 +81,12 @@ fn test_event_id_filter() {
                 notifier2.notify_failure();
             }
         })
+        .add_callback(move |record: &EventRecord, _schema_locator: &SchemaLocator| {
+            // This secondary callback basically tests all callbacks are run
+            if record.event_id() == EVENT_ID_DNS_QUERY_COMPLETED {
+                notifier3.notify_success();
+            }
+        })
         .build();
 
     let _trace = UserTrace::new()
@@ -89,6 +98,7 @@ fn test_event_id_filter() {
 
     passed1.assert_passed();
     passed2.assert_passed();
+    passed3.assert_passed();
     // Not calling .stop() here, let's just rely on the `impl Drop`
 
     println!("test_event_id_filter passed");
