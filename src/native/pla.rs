@@ -6,8 +6,7 @@
 //! This module shouldn't be accessed directly. Modules from the the crate level provide a safe API to interact
 //! with the crate
 use std::mem::MaybeUninit;
-use windows::core::GUID;
-use windows::Win32::Foundation::BSTR;
+use windows::core::{GUID, BSTR};
 
 /// Pla native module errors
 #[derive(Debug, PartialEq)]

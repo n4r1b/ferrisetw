@@ -11,7 +11,6 @@ use std::ffi::c_void;
 use once_cell::sync::Lazy;
 
 use widestring::{U16CString, U16CStr};
-use windows::Win32::Foundation::WIN32_ERROR;
 use windows::Win32::System::Diagnostics::Etw::EVENT_CONTROL_CODE_ENABLE_PROVIDER;
 use windows::core::GUID;
 use windows::core::PCWSTR;
@@ -30,8 +29,8 @@ use crate::provider::Provider;
 use crate::provider::event_filter::EventFilterDescriptor;
 use crate::trace::{CallbackData, TraceProperties, TraceTrait};
 
-pub type TraceHandle = u64;
-pub type ControlHandle = u64;
+pub type TraceHandle = Etw::PROCESSTRACE_HANDLE;
+pub type ControlHandle = Etw::CONTROLTRACE_HANDLE;
 
 /// Evntrace native module errors
 #[derive(Debug)]
@@ -133,7 +132,7 @@ fn filter_invalid_trace_handles(h: TraceHandle) -> Option<TraceHandle> {
     // See https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-opentracew#return-value
     // We're conservative and we always filter out u32::MAX, although it could be valid on 64-bit setups.
     // But it turns out runtime detection of the current OS bitness is not that easy. Plus, it is not clear whether this depends on how the architecture the binary is compiled for, or the actual OS architecture.
-    if h == u64::MAX || h == u32::MAX as u64 {
+    if h.0 == u64::MAX || h.0 == u32::MAX as u64 {
         None
     } else {
         Some(h)
@@ -143,7 +142,7 @@ fn filter_invalid_trace_handles(h: TraceHandle) -> Option<TraceHandle> {
 fn filter_invalid_control_handle(h: ControlHandle) -> Option<ControlHandle> {
     // The control handle is 0 if the handle is not valid.
     // (https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-starttracew)
-    if h == 0 {
+    if h.0 == 0 {
         None
     } else {
         Some(h)
@@ -173,11 +172,11 @@ where
         )
     };
 
-    if status == ERROR_ALREADY_EXISTS.0 {
+    if status == ERROR_ALREADY_EXISTS {
         return Err(EvntraceNativeError::AlreadyExist);
-    } else if status != 0 {
+    } else if status != ERROR_SUCCESS {
         return Err(EvntraceNativeError::IoError(
-            std::io::Error::from_raw_os_error(status as i32),
+            std::io::Error::from_raw_os_error(status.0 as i32),
         ));
     }
 
@@ -238,16 +237,16 @@ pub fn enable_provider(control_handle: ControlHandle, provider: &Provider) -> Ev
                     provider.any(),
                     provider.all(),
                     0,
-                    parameters.as_ptr(),
+                    Some(parameters.as_ptr()),
                 )
             };
 
-            if res == ERROR_SUCCESS.0 {
+            if res == ERROR_SUCCESS {
                 Ok(())
             } else {
                 Err(
                     EvntraceNativeError::IoError(
-                        std::io::Error::from_raw_os_error(res as i32)
+                        std::io::Error::from_raw_os_error(res.0 as i32)
                     )
                 )
             }
@@ -265,13 +264,13 @@ pub fn process_trace(trace_handle: TraceHandle) -> EvntraceNativeResult<()> {
         let mut now = FILETIME::default();
         let result = unsafe {
             GetSystemTimeAsFileTime(&mut now);
-            Etw::ProcessTrace(&[trace_handle], &mut now, std::ptr::null_mut())
+            Etw::ProcessTrace(&[trace_handle], Some(&mut now), None)
         };
 
-        if result == ERROR_SUCCESS.0 {
+        if result == ERROR_SUCCESS {
             Ok(())
         } else {
-            Err(EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(result as i32)))
+            Err(EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(result.0 as i32)))
         }
     }
 }
@@ -303,9 +302,9 @@ pub fn control_trace(
                 )
             };
 
-            if status != 0 && status != ERROR_WMI_INSTANCE_NOT_FOUND.0 {
+            if status != ERROR_SUCCESS && status != ERROR_WMI_INSTANCE_NOT_FOUND {
                 return Err(EvntraceNativeError::IoError(
-                    std::io::Error::from_raw_os_error(status as i32),
+                    std::io::Error::from_raw_os_error(status.0 as i32),
                 ));
             }
 
@@ -332,7 +331,7 @@ pub fn close_trace(trace_handle: TraceHandle, callback_data: &Box<Arc<CallbackDa
                 Etw::CloseTrace(handle)
             };
 
-            match WIN32_ERROR(status) {
+            match status {
                 ERROR_SUCCESS => Ok(false),
                 ERROR_CTX_CLOSE_PENDING => Ok(true),
                 status @ _ => Err(EvntraceNativeError::IoError(
@@ -347,16 +346,16 @@ pub fn close_trace(trace_handle: TraceHandle, callback_data: &Box<Arc<CallbackDa
 pub(crate) fn query_info(class: TraceInformation, buf: &mut [u8]) -> EvntraceNativeResult<()> {
     match unsafe {
         Etw::TraceQueryInformation(
-            0,
+            Etw::CONTROLTRACE_HANDLE(0),
             TRACE_QUERY_INFO_CLASS(class as i32),
             buf.as_mut_ptr() as *mut c_void,
             buf.len() as u32,
-            std::ptr::null_mut(),
+            None,
         )
     } {
-        0 => Ok(()),
+        ERROR_SUCCESS => Ok(()),
         e => Err(EvntraceNativeError::IoError(
-            std::io::Error::from_raw_os_error(e as i32),
+            std::io::Error::from_raw_os_error(e.0 as i32),
         )),
     }
 }
