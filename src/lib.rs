@@ -50,7 +50,7 @@
 //! use ferrisetw::parser::Parser;
 //! use ferrisetw::parser::TryParse;
 //! use ferrisetw::provider::Provider;
-//! use ferrisetw::trace::{UserTrace, TraceTrait, TraceBaseTrait};
+//! use ferrisetw::trace::{UserTrace, TraceTrait};
 //!
 //! fn process_callback(record: &EventRecord, schema_locator: &SchemaLocator) {
 //!     // Within the callback we first locate the proper Schema for the event
@@ -84,12 +84,14 @@
 //!         .build();
 //!
 //!     // We start a trace session for the previously registered provider
-//!     // This call will spawn a new thread which listens to the events
+//!     // Callbacks will be run in a separate thread.
 //!     let mut trace = UserTrace::new()
 //!         .named(String::from("MyProvider"))
 //!         .enable(process_provider)
-//!         // .enable(other_provider) // it is possible to enable multiple providers on the same trace
-//!         .start()
+//!         // .enable(other_provider) // It is possible to enable multiple providers on the same trace.
+//!         .start_and_process()       // This call will spawn the thread for you.
+//!                                    // See the doc for alternative ways of processing the trace,
+//!                                    // with more or less flexibility regarding this spawned thread.
 //!         .unwrap();
 //!
 //!     std::thread::sleep(std::time::Duration::from_secs(3));

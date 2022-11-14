@@ -33,12 +33,22 @@ fn main() {
         .add_callback(process_callback)
         .build();
 
-    let mut trace = UserTrace::new()
+    let (_user_trace, handle) = UserTrace::new()
         .named(String::from("MyProvider"))
         .enable(process_provider)
         .start()
         .unwrap();
 
+    // This example uses `process_from_handle` rather than the more convient `start_and_process`, because why not.
+    std::thread::spawn(move || {
+        let status = UserTrace::process_from_handle(handle);
+        // This code will be executed when the trace stops. Examples:
+        // * when it is dropped
+        // * when it is manually stopped (either by user_trace.stop, or by the `logman stop -ets MyProvider` command)
+        println!("Trace ended with status {:?}", status);
+    });
+
     std::thread::sleep(Duration::new(20, 0));
-    trace.stop();
+
+    // user_trace will be dropped (and stopped) here
 }
