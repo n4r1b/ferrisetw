@@ -5,10 +5,11 @@ use std::ffi::OsString;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use self::private::PrivateTraceTrait;
 
-use crate::native::etw_types::{EventRecord, EventTraceProperties};
+use crate::native::etw_types::{EventRecord, EventTraceProperties, LoggingMode};
 use crate::native::{evntrace, version_helper};
 use crate::native::evntrace::{ControlHandle, TraceHandle, start_trace, open_trace, process_trace, enable_provider, control_trace, close_trace};
 use crate::provider::Provider;
@@ -52,7 +53,7 @@ type TraceResult<T> = Result<T, TraceError>;
 /// These are some configuration settings that will be included in an [`EVENT_TRACE_PROPERTIES`](https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties)
 ///
 /// [More info](https://docs.microsoft.com/en-us/message-analyzer/specifying-advanced-etw-session-configuration-settings#configuring-the-etw-session)
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone)]
 pub struct TraceProperties {
     /// Represents the ETW Session in KB
     pub buffer_size: u32,
@@ -60,10 +61,25 @@ pub struct TraceProperties {
     pub min_buffer: u32,
     /// Represents the ETW Session maximum number of buffers in the buffer pool
     pub max_buffer: u32,
-    /// Represents the ETW Session flush interval in seconds
-    pub flush_timer: u32,
+    /// Represents the ETW Session flush interval.
+    ///
+    /// This duration will be rounded to the closest second (and 0 will be translated as 1 second)
+    pub flush_timer: Duration,
     /// Represents the ETW Session [Logging Mode](https://docs.microsoft.com/en-us/windows/win32/etw/logging-mode-constants)
-    pub log_file_mode: u32,
+    pub log_file_mode: LoggingMode,
+}
+
+impl Default for TraceProperties {
+    fn default() -> Self {
+        // Sane defaults, inspired by https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties
+        TraceProperties {
+            buffer_size: 32,
+            min_buffer: 0,
+            max_buffer: 0,
+            flush_timer: Duration::from_secs(1),
+            log_file_mode: LoggingMode::EVENT_TRACE_REAL_TIME_MODE | LoggingMode::EVENT_TRACE_NO_PER_PROCESSOR_BUFFERING,
+        }
+    }
 }
 
 /// Data used by callbacks when the trace is running

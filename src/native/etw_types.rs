@@ -77,58 +77,35 @@ pub(crate) enum ControlValues {
     Update = 2,
 }
 
-#[allow(dead_code)]
-enum LoggingMode {
-    None,
-    Sequential,
-    Circular,
-    Append,
-    NewFile,
-    NonStoppable,
-    Secure,
-    RealTime,
-    Buffering,
-    SystemLogger,
-    DelayOpenFile,
-    PrivateLogger,
-    NoPerProcBuffering,
-}
-
-impl From<LoggingMode> for u32 {
-    fn from(val: LoggingMode) -> Self {
-        match val {
-            // Not all but pretty much...
-            LoggingMode::None => Etw::EVENT_TRACE_FILE_MODE_NONE,
-            LoggingMode::Sequential => Etw::EVENT_TRACE_FILE_MODE_SEQUENTIAL,
-            LoggingMode::Circular => Etw::EVENT_TRACE_FILE_MODE_CIRCULAR,
-            LoggingMode::Append => Etw::EVENT_TRACE_FILE_MODE_APPEND,
-            LoggingMode::NewFile => Etw::EVENT_TRACE_FILE_MODE_NEWFILE,
-            LoggingMode::NonStoppable => Etw::EVENT_TRACE_NONSTOPPABLE_MODE,
-            LoggingMode::Secure => Etw::EVENT_TRACE_SECURE_MODE,
-            LoggingMode::RealTime => Etw::EVENT_TRACE_REAL_TIME_MODE,
-            LoggingMode::DelayOpenFile => Etw::EVENT_TRACE_DELAY_OPEN_FILE_MODE,
-            LoggingMode::Buffering => Etw::EVENT_TRACE_BUFFERING_MODE,
-            LoggingMode::PrivateLogger => Etw::EVENT_TRACE_PRIVATE_LOGGER_MODE,
-            LoggingMode::SystemLogger => Etw::EVENT_TRACE_SYSTEM_LOGGER_MODE,
-            LoggingMode::NoPerProcBuffering => Etw::EVENT_TRACE_NO_PER_PROCESSOR_BUFFERING,
-        }
-    }
-}
-
-#[allow(dead_code)]
-enum ProcessTraceMode {
-    RealTime,
-    EventRecord,
-    RawTimestamp,
-}
-
-impl From<ProcessTraceMode> for u32 {
-    fn from(val: ProcessTraceMode) -> Self {
-        match val {
-            ProcessTraceMode::RealTime => Etw::PROCESS_TRACE_MODE_EVENT_RECORD,
-            ProcessTraceMode::EventRecord => Etw::PROCESS_TRACE_MODE_REAL_TIME,
-            ProcessTraceMode::RawTimestamp => Etw::PROCESS_TRACE_MODE_RAW_TIMESTAMP,
-        }
+bitflags! {
+    /// Logging Mode constants
+    ///
+    /// See <https://learn.microsoft.com/en-us/windows/win32/etw/logging-mode-constants>
+    pub struct LoggingMode: u32 {
+        const EVENT_TRACE_FILE_MODE_NONE =             Etw::EVENT_TRACE_FILE_MODE_NONE;
+        const EVENT_TRACE_FILE_MODE_SEQUENTIAL =       Etw::EVENT_TRACE_FILE_MODE_SEQUENTIAL;
+        const EVENT_TRACE_FILE_MODE_CIRCULAR =         Etw::EVENT_TRACE_FILE_MODE_CIRCULAR;
+        const EVENT_TRACE_FILE_MODE_APPEND =           Etw::EVENT_TRACE_FILE_MODE_APPEND;
+        const EVENT_TRACE_FILE_MODE_NEWFILE =          Etw::EVENT_TRACE_FILE_MODE_NEWFILE;
+        const EVENT_TRACE_FILE_MODE_PREALLOCATE =      Etw::EVENT_TRACE_FILE_MODE_PREALLOCATE;
+        const EVENT_TRACE_NONSTOPPABLE_MODE =          Etw::EVENT_TRACE_NONSTOPPABLE_MODE;
+        const EVENT_TRACE_SECURE_MODE =                Etw::EVENT_TRACE_SECURE_MODE;
+        const EVENT_TRACE_REAL_TIME_MODE =             Etw::EVENT_TRACE_REAL_TIME_MODE;
+        const EVENT_TRACE_DELAY_OPEN_FILE_MODE =       Etw::EVENT_TRACE_DELAY_OPEN_FILE_MODE;
+        const EVENT_TRACE_BUFFERING_MODE =             Etw::EVENT_TRACE_BUFFERING_MODE;
+        const EVENT_TRACE_PRIVATE_LOGGER_MODE =        Etw::EVENT_TRACE_PRIVATE_LOGGER_MODE;
+        const EVENT_TRACE_USE_KBYTES_FOR_SIZE =        Etw::EVENT_TRACE_USE_KBYTES_FOR_SIZE;
+        const EVENT_TRACE_USE_GLOBAL_SEQUENCE =        Etw::EVENT_TRACE_USE_GLOBAL_SEQUENCE;
+        const EVENT_TRACE_USE_LOCAL_SEQUENCE =         Etw::EVENT_TRACE_USE_LOCAL_SEQUENCE;
+        const EVENT_TRACE_PRIVATE_IN_PROC =            Etw::EVENT_TRACE_PRIVATE_IN_PROC;
+        const EVENT_TRACE_MODE_RESERVED =              Etw::EVENT_TRACE_MODE_RESERVED;
+        const EVENT_TRACE_STOP_ON_HYBRID_SHUTDOWN =    Etw::EVENT_TRACE_STOP_ON_HYBRID_SHUTDOWN;
+        const EVENT_TRACE_PERSIST_ON_HYBRID_SHUTDOWN = Etw::EVENT_TRACE_PERSIST_ON_HYBRID_SHUTDOWN;
+        const EVENT_TRACE_USE_PAGED_MEMORY =           Etw::EVENT_TRACE_USE_PAGED_MEMORY;
+        const EVENT_TRACE_SYSTEM_LOGGER_MODE =         Etw::EVENT_TRACE_SYSTEM_LOGGER_MODE;
+        const EVENT_TRACE_INDEPENDENT_SESSION_MODE =   Etw::EVENT_TRACE_INDEPENDENT_SESSION_MODE;
+        const EVENT_TRACE_NO_PER_PROCESSOR_BUFFERING = Etw::EVENT_TRACE_NO_PER_PROCESSOR_BUFFERING;
+        const EVENT_TRACE_ADDTO_TRIAGE_DUMP =          Etw::EVENT_TRACE_ADDTO_TRIAGE_DUMP;
     }
 }
 
@@ -178,13 +155,13 @@ impl EventTraceProperties {
         etw_trace_properties.BufferSize = trace_properties.buffer_size;
         etw_trace_properties.MinimumBuffers = trace_properties.min_buffer;
         etw_trace_properties.MaximumBuffers = trace_properties.max_buffer;
-        etw_trace_properties.FlushTimer = trace_properties.flush_timer;
+        etw_trace_properties.FlushTimer = trace_properties.flush_timer.as_secs().clamp(1, u32::MAX as u64) as u32; // See https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties
 
-        if trace_properties.log_file_mode != 0 {
-            etw_trace_properties.LogFileMode = trace_properties.log_file_mode;
+        if trace_properties.log_file_mode.is_empty() == false {
+            etw_trace_properties.LogFileMode = trace_properties.log_file_mode.bits();
         } else {
             etw_trace_properties.LogFileMode =
-                u32::from(LoggingMode::RealTime) | u32::from(LoggingMode::NoPerProcBuffering);
+                (LoggingMode::EVENT_TRACE_REAL_TIME_MODE | LoggingMode::EVENT_TRACE_NO_PER_PROCESSOR_BUFFERING).bits()
         }
 
         etw_trace_properties.LogFileMode |= T::augmented_file_mode();
@@ -252,7 +229,8 @@ impl<'callbackdata> EventTraceLogfile<'callbackdata> {
 
         native.LoggerName = PWSTR(wide_logger_name.as_mut_ptr());
         native.Anonymous1.ProcessTraceMode =
-            u32::from(ProcessTraceMode::RealTime) | u32::from(ProcessTraceMode::EventRecord);
+            Etw::PROCESS_TRACE_MODE_REAL_TIME | Etw::PROCESS_TRACE_MODE_EVENT_RECORD;
+            // In case you really want to use PROCESS_TRACE_MODE_RAW_TIMESTAMP, please review EventRecord::timestamp(), which could not be valid anymore
 
         native.Anonymous2.EventRecordCallback = Some(callback);
 
