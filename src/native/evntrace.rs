@@ -122,7 +122,7 @@ extern "system" fn trace_callback_thunk(p_record: *mut Etw::EVENT_RECORD) {
     })) {
         Ok(_) => {}
         Err(e) => {
-            eprintln!("UNIMPLEMENTED PANIC: {e:?}");
+            log::error!("UNIMPLEMENTED PANIC: {e:?}");
             std::process::exit(1);
         }
     }

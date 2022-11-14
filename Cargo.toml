@@ -39,3 +39,7 @@ zerocopy = "0.6"
 time = { version = "0.3", features = ["large-dates"], optional = true }
 # thiserror = "~1.0"
 # anyhow = "~1.0"
+log = "0.4"
+
+[dev-dependencies]
+env_logger = "0.9" # used in examples
