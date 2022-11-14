@@ -1,5 +1,5 @@
 use ferrisetw::native::etw_types::EventRecord;
-use ferrisetw::parser::{Parser, TryParse};
+use ferrisetw::parser::Parser;
 use ferrisetw::provider::*;
 use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::*;
@@ -17,7 +17,7 @@ fn main() {
                     println!("ProviderName: {}", name);
                     let parser = Parser::create(record, &schema);
                     // Fully Qualified Syntax for Disambiguation
-                    match TryParse::<String>::try_parse(&parser, "FileName") {
+                    match parser.try_parse::<String>("FileName") {
                         Ok(filename) => println!("FileName: {}", filename),
                         Err(err) => println!("Error: {:?} getting Filename", err),
                     };

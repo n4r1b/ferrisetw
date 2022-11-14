@@ -5,10 +5,9 @@
 //! event
 //!
 //! This is a bit extra but is basically a redefinition of the In an Out TDH types following the
-//! rust naming convention, it can also come in handy when implementing the [TryParse] trait for a type
+//! rust naming convention, it can also come in handy when implementing the `TryParse` trait for a type
 //! to determine how to handle a [Property] based on this values
 //!
-//! [TryParse]: crate::parser::TryParse
 //! [Property]: crate::native::tdh_types::Property
 use num_traits::FromPrimitive;
 

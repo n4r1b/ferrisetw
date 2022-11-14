@@ -5,7 +5,7 @@ use std::time::Duration;
 use ferrisetw::provider::{Provider, EventFilter};
 use ferrisetw::native::etw_types::EventRecord;
 use ferrisetw::schema_locator::SchemaLocator;
-use ferrisetw::parser::{Parser, TryParse};
+use ferrisetw::parser::Parser;
 use ferrisetw::trace::KernelTrace;
 use ferrisetw::provider::kernel_providers;
 
@@ -88,7 +88,7 @@ fn generate_image_load_events() {
 
 fn has_seen_dll_load(record: &EventRecord, parser: &Parser) -> bool {
     if record.process_id() == std::process::id() {
-        let filename: Result<String, _> = parser.try_parse("FileName");
+        let filename = parser.try_parse::<String>("FileName");
         println!("   this one's for us: {:?}", filename);
         if let Ok(filename) = filename {
             if filename.ends_with(TEST_LIBRARY_NAME) {

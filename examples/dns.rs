@@ -8,7 +8,6 @@ use ferrisetw::parser::Parser;
 use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::native::etw_types::EventRecord;
 use ferrisetw::trace::UserTrace;
-use ferrisetw::parser::TryParse;
 use ferrisetw::schema::Schema;
 
 

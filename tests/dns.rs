@@ -8,7 +8,7 @@ use ferrisetw::native::etw_types::EventRecord;
 use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::UserTrace;
 use ferrisetw::trace::TraceTrait;
-use ferrisetw::parser::{Parser, TryParse};
+use ferrisetw::parser::Parser;
 
 mod utils;
 use utils::{Status, TestKind};
@@ -123,12 +123,12 @@ fn check_a_few_cases(record: &EventRecord, parser: &Parser) {
     // Parsing with a wrong type should properly error out
     if record.event_id() == EVENT_ID_DNS_QUERY_INITIATED {
         let _right_type: String = parser.try_parse("QueryName").unwrap();
-        let wrong_type: Result<u32, _> = parser.try_parse("QueryName");
+        let wrong_type = parser.try_parse::<u32>("QueryName");
         assert!(wrong_type.is_err());
     }
 
     // Giving an unknown property should properly error out
-    let wrong_name: Result<u32, _> = parser.try_parse("NoSuchProperty");
+    let wrong_name = parser.try_parse::<u32>("NoSuchProperty");
     assert!(wrong_name.is_err());
 }
 
