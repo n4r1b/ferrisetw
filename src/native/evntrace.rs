@@ -21,7 +21,6 @@ use windows::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
 use windows::Win32::Foundation::ERROR_SUCCESS;
 use windows::Win32::Foundation::ERROR_ALREADY_EXISTS;
 use windows::Win32::Foundation::ERROR_CTX_CLOSE_PENDING;
-use windows::Win32::Foundation::ERROR_WMI_INSTANCE_NOT_FOUND;
 
 
 use super::etw_types::*;
@@ -302,7 +301,7 @@ pub fn control_trace(
                 )
             };
 
-            if status != ERROR_SUCCESS && status != ERROR_WMI_INSTANCE_NOT_FOUND {
+            if status != ERROR_SUCCESS {
                 return Err(EvntraceNativeError::IoError(
                     std::io::Error::from_raw_os_error(status.0 as i32),
                 ));
