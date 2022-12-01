@@ -10,7 +10,7 @@ use self::private::PrivateTraceTrait;
 
 use crate::native::etw_types::EventTraceProperties;
 use crate::native::version_helper;
-use crate::native::evntrace::{ControlHandle, TraceHandle, start_trace, open_trace, process_trace, enable_provider, control_trace, close_trace};
+use crate::native::evntrace::{ControlHandle, TraceHandle, start_trace, open_trace, process_trace, enable_provider, control_trace, control_trace_by_name, close_trace};
 use crate::provider::Provider;
 use crate::utils;
 use windows::core::GUID;
@@ -29,6 +29,7 @@ const EVENT_TRACE_SYSTEM_LOGGER_MODE: u32 = 0x02000000;
 /// Trace module errors
 #[derive(Debug)]
 pub enum TraceError {
+    InvalidTraceName,
     /// Wrapper over an internal [EvntraceNativeError](crate::native::EvntraceNativeError)
     EtwNativeError(crate::native::EvntraceNativeError),
 }
@@ -429,6 +430,30 @@ impl Drop for KernelTrace {
     }
 }
 
+
+/// Stop a trace given its name.
+///
+/// This function is intended to close a trace you did not start yourself.
+/// Otherwise, you should prefer [`UserTrace::stop()`] or [`KernelTrace::stop()`]
+pub fn stop_trace_by_name(trace_name: &str) -> TraceResult<()> {
+    let trace_properties = TraceProperties::default();
+    let flags = Etw::EVENT_TRACE_FLAG::default();
+    let wide_name = U16CString::from_str(trace_name)
+        .map_err(|_| TraceError::InvalidTraceName)?;
+
+    let mut properties = EventTraceProperties::new::<UserTrace>( // for EVENT_TRACE_CONTROL_STOP, we don't really care about most of the contents of the EventTraceProperties, so using new::<UserTrace>() is fine, even when stopping a kernel trace
+        &wide_name,
+        &trace_properties,
+        flags);
+
+    control_trace_by_name(
+        &mut properties,
+        &wide_name,
+        Etw::EVENT_TRACE_CONTROL_STOP,
+    )?;
+
+    Ok(())
+}
 
 #[cfg(test)]
 mod test {

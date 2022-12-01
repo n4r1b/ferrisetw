@@ -316,6 +316,32 @@ pub(crate) fn control_trace(
     }
 }
 
+/// Similar to [`control_trace`], but using a trace name instead of a handle
+pub(crate) fn control_trace_by_name(
+    properties: &mut EventTraceProperties,
+    trace_name: &U16CStr,
+    control_code: Etw::EVENT_TRACE_CONTROL,
+) -> EvntraceNativeResult<()> {
+    let status = unsafe {
+        // Safety:
+        //  * depending on the control code, the `Properties` can be mutated. This is fine because properties is declared as `&mut` in this function, which means no other Rust function has a reference to it, and the mutation can only happen in the call to `ControlTraceW`, which returns immediately.
+        Etw::ControlTraceW(
+            Etw::CONTROLTRACE_HANDLE(0),
+            PCWSTR::from_raw(trace_name.as_ptr()),
+            properties.as_mut_ptr(),
+            control_code,
+        )
+    };
+
+    if status != ERROR_SUCCESS {
+        return Err(EvntraceNativeError::IoError(
+            std::io::Error::from_raw_os_error(status.0 as i32),
+        ));
+    }
+
+    Ok(())
+}
+
 /// Close the trace
 ///
 /// It is suggested to stop the trace immediately after `close`ing it (that's what it done in the `impl Drop`), because I'm not sure how sensible it is to call other methods (apart from `stop`) afterwards
