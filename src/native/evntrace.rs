@@ -282,9 +282,9 @@ pub(crate) fn process_trace(trace_handle: TraceHandle) -> EvntraceNativeResult<(
 ///
 /// # Notes
 ///
-/// In case you want to close the trace, you probably want to drop the instance rather than calling `control(EVENT_TRACE_CONTROL_STOP)` yourself,
-/// because closing the trace makes the trace handle invalid.
-/// A closed trace could theoretically(?) be re-used, but the trace handle should be re-created, so `open` should be called again.
+/// In case you want to stop the trace, you probably want to drop the instance rather than calling `control(EVENT_TRACE_CONTROL_STOP)` yourself,
+/// because stop the trace makes the trace handle invalid.
+/// A stopped trace could theoretically(?) be re-used, but the trace handle should be re-created, so `open` should be called again.
 pub(crate) fn control_trace(
     properties: &mut EventTraceProperties,
     control_handle: ControlHandle,
