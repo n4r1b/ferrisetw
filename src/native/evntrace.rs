@@ -192,6 +192,7 @@ where
 /// Subscribe to a started trace
 ///
 /// Microsoft calls this "opening" the trace (and this calls `OpenTraceW`)
+#[allow(clippy::borrowed_box)] // Being Boxed is really important, let's keep the Box<...> in the function signature to make the intent clearer
 pub(crate) fn open_trace(trace_name: U16CString, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<TraceHandle> {
     let mut log_file = EventTraceLogfile::create(callback_data, trace_name, trace_callback_thunk);
 
@@ -261,12 +262,12 @@ pub(crate) fn enable_provider(control_handle: ControlHandle, provider: &Provider
 /// You probably want to spawn a thread that will block on this call.
 pub(crate) fn process_trace(trace_handle: TraceHandle) -> EvntraceNativeResult<()> {
     if filter_invalid_trace_handles(trace_handle).is_none() {
-        return Err(EvntraceNativeError::InvalidHandle);
+        Err(EvntraceNativeError::InvalidHandle)
     } else {
         let mut now = FILETIME::default();
         let result = unsafe {
             GetSystemTimeAsFileTime(&mut now);
-            Etw::ProcessTrace(&[trace_handle], Some(&mut now), None)
+            Etw::ProcessTrace(&[trace_handle], Some(&now), None)
         };
 
         if result == ERROR_SUCCESS {
@@ -290,7 +291,7 @@ pub(crate) fn control_trace(
     control_code: Etw::EVENT_TRACE_CONTROL,
 ) -> EvntraceNativeResult<()> {
     match filter_invalid_control_handle(control_handle) {
-        None => return Err(EvntraceNativeError::InvalidHandle),
+        None => Err(EvntraceNativeError::InvalidHandle),
         Some(handle) => {
             let status = unsafe {
                 // Safety:
@@ -322,6 +323,7 @@ pub(crate) fn control_trace(
 /// In case ETW reports there are still events in the queue that are still to trigger callbacks, this returns Ok(true).<br/>
 /// If no further event callback will be invoked, this returns Ok(false)<br/>
 /// On error, this returns an `Err`
+#[allow(clippy::borrowed_box)] // Being Boxed is really important, let's keep the Box<...> in the function signature to make the intent clearer
 pub(crate) fn close_trace(trace_handle: TraceHandle, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<bool> {
     match filter_invalid_trace_handles(trace_handle) {
         None => Err(EvntraceNativeError::InvalidHandle),
@@ -336,7 +338,7 @@ pub(crate) fn close_trace(trace_handle: TraceHandle, callback_data: &Box<Arc<Cal
             match status {
                 ERROR_SUCCESS => Ok(false),
                 ERROR_CTX_CLOSE_PENDING => Ok(true),
-                status @ _ => Err(EvntraceNativeError::IoError(
+                status => Err(EvntraceNativeError::IoError(
                     std::io::Error::from_raw_os_error(status.0 as i32),
                 ))
             }

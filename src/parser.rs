@@ -129,7 +129,7 @@ impl<'schema, 'record> Parser<'schema, 'record> {
     /// ```
     pub fn create(event_record: &'record EventRecord, schema: &'schema Schema) -> Self {
         Parser {
-            record: &event_record,
+            record: event_record,
             properties: schema.properties(),
             cache: Mutex::new(CachedSlices::default())
         }
@@ -177,35 +177,34 @@ impl<'schema, 'record> Parser<'schema, 'record> {
                 // If a string is null-terminated, propertyLength includes the null character.
                 // If a string is not-null terminated, propertyLength includes all bytes up
                 // to the end of the record buffer.
-                if property.flags.contains(PropertyFlags::PROPERTY_STRUCT) == false {
-                    if property.out_type() == TdhOutType::OutTypeString {
-                        match property.in_type() {
-                            TdhInType::InTypeAnsiString => {
-                                let mut l = 0;
-                                for char in remaining_user_buffer {
-                                    if char == &0 {
-                                        l += 1; // include the final null byte
-                                        break;
-                                    }
-                                    l += 1;
+                if property.flags.contains(PropertyFlags::PROPERTY_STRUCT) == false
+                && property.out_type() == TdhOutType::OutTypeString {
+                    match property.in_type() {
+                        TdhInType::InTypeAnsiString => {
+                            let mut l = 0;
+                            for char in remaining_user_buffer {
+                                if char == &0 {
+                                    l += 1; // include the final null byte
+                                    break;
                                 }
-                                return Ok(l)
-                            },
-
-                            TdhInType::InTypeUnicodeString => {
-                                let mut l = 0;
-                                for bytes in remaining_user_buffer.chunks_exact(2) {
-                                    if bytes[0] == 0 && bytes[1] == 0 {
-                                        l += 2;
-                                        break;
-                                    }
-                                    l += 2;
-                                }
-                                return Ok(l);
+                                l += 1;
                             }
+                            return Ok(l)
+                        },
 
-                            _ => (),
+                        TdhInType::InTypeUnicodeString => {
+                            let mut l = 0;
+                            for bytes in remaining_user_buffer.chunks_exact(2) {
+                                if bytes[0] == 0 && bytes[1] == 0 {
+                                    l += 2;
+                                    break;
+                                }
+                                l += 2;
+                            }
+                            return Ok(l);
                         }
+
+                        _ => (),
                     }
                 }
             }
@@ -236,7 +235,7 @@ impl<'schema, 'record> Parser<'schema, 'record> {
                 Some(s) => s,
             };
 
-            let prop_size = self.find_property_size(&property, remaining_user_buffer)?;
+            let prop_size = self.find_property_size(property, remaining_user_buffer)?;
             let property_buffer = match remaining_user_buffer.get(..prop_size) {
                 None => return Err(ParserError::PropertyError("Property length out of buffer bounds".to_owned())),
                 Some(s) => s,
@@ -249,7 +248,7 @@ impl<'schema, 'record> Parser<'schema, 'record> {
             cache.slices.insert(String::clone(&property.name), prop_slice);
             cache.last_cached_offset += prop_size;
 
-            if &property.name == name {
+            if property.name == name {
                 return Ok(prop_slice);
             }
         }

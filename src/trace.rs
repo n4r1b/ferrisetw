@@ -163,6 +163,7 @@ impl TraceTrait for KernelTrace {
 ///
 /// To stop the session, you can drop this instance
 #[derive(Debug)]
+#[allow(clippy::redundant_allocation)] // see https://github.com/n4r1b/ferrisetw/issues/72
 pub struct UserTrace {
     properties: EventTraceProperties,
     control_handle: ControlHandle,
@@ -177,6 +178,7 @@ pub struct UserTrace {
 ///
 /// To stop the session, you can drop this instance
 #[derive(Debug)]
+#[allow(clippy::redundant_allocation)] // see https://github.com/n4r1b/ferrisetw/issues/72
 pub struct KernelTrace {
     properties: EventTraceProperties,
     control_handle: ControlHandle,
@@ -254,6 +256,7 @@ mod private {
 
     pub trait PrivateTraceTrait {
         const TRACE_KIND: TraceKind;
+        #[allow(clippy::redundant_allocation)] // Being Boxed is really important, let's keep the Box<...> in the function signature to make the intent clearer (see https://github.com/n4r1b/ferrisetw/issues/72)
         fn build(properties: EventTraceProperties, control_handle: ControlHandle, trace_handle: TraceHandle, callback_data: Box<Arc<CallbackData>>) -> Self;
         fn augmented_file_mode() -> u32;
         fn enable_flags(_providers: &[Provider]) -> u32;

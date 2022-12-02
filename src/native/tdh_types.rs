@@ -82,15 +82,11 @@ impl Property {
     pub fn len(&self) -> usize {
         self.length as usize
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.length == 0
-    }
 }
 
 /// Represent a TDH_IN_TYPE
 #[repr(u16)]
-#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq)]
+#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq, Eq)]
 pub enum TdhInType {
     // Deprecated values are not defined
     InTypeNull,
@@ -126,7 +122,7 @@ impl Default for TdhInType {
 
 /// Represent a TDH_OUT_TYPE
 #[repr(u16)]
-#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq)]
+#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq, Eq)]
 pub enum TdhOutType {
     OutTypeNull,
     OutTypeString,

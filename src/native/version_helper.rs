@@ -76,15 +76,13 @@ fn verify_system_version(major: u8, minor: u8, sp_major: u16) -> VersionHelperRe
 ///
 pub fn is_win8_or_greater() -> bool {
     // Lazy way, let's hardcode this...
-    let res = match verify_system_version(6, 2, 0) {
+    match verify_system_version(6, 2, 0) {
         Ok(res) => res,
         Err(err) => {
             log::warn!("Unable ro verify system version: {:?}", err);
             true
         }
-    };
-
-    res
+    }
 }
 
 #[cfg(test)]
