@@ -27,7 +27,10 @@ use windows::Win32::Foundation::ERROR_WMI_INSTANCE_NOT_FOUND;
 use super::etw_types::*;
 use crate::provider::Provider;
 use crate::provider::event_filter::EventFilterDescriptor;
-use crate::trace::{CallbackData, TraceProperties, TraceTrait};
+use crate::native::etw_types::event_record::EventRecord;
+use crate::trace::{TraceProperties, TraceTrait};
+use crate::trace::callback_data::CallbackData;
+
 
 pub type TraceHandle = Etw::PROCESSTRACE_HANDLE;
 pub type ControlHandle = Etw::CONTROLTRACE_HANDLE;
@@ -152,7 +155,7 @@ fn filter_invalid_control_handle(h: ControlHandle) -> Option<ControlHandle> {
 /// Create a new session.
 ///
 /// This builds an `EventTraceProperties`, calls `StartTraceW` and returns the built `EventTraceProperties` as well as the trace ControlHandle
-pub fn start_trace<T>(trace_name: &U16CStr, trace_properties: &TraceProperties, enable_flags: Etw::EVENT_TRACE_FLAG) -> EvntraceNativeResult<(EventTraceProperties, ControlHandle)>
+pub(crate) fn start_trace<T>(trace_name: &U16CStr, trace_properties: &TraceProperties, enable_flags: Etw::EVENT_TRACE_FLAG) -> EvntraceNativeResult<(EventTraceProperties, ControlHandle)>
 where
     T: TraceTrait
 {
@@ -190,7 +193,7 @@ where
 /// Subscribe to a started trace
 ///
 /// Microsoft calls this "opening" the trace (and this calls `OpenTraceW`)
-pub fn open_trace(trace_name: U16CString, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<TraceHandle> {
+pub(crate) fn open_trace(trace_name: U16CString, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<TraceHandle> {
     let mut log_file = EventTraceLogfile::create(callback_data, trace_name, trace_callback_thunk);
 
     if let Err(ContextError::AlreadyExist) = UNIQUE_VALID_CONTEXTS.insert(log_file.context_ptr()) {
@@ -216,7 +219,7 @@ pub fn open_trace(trace_name: U16CString, callback_data: &Box<Arc<CallbackData>>
 }
 
 /// Attach a provider to a trace
-pub fn enable_provider(control_handle: ControlHandle, provider: &Provider) -> EvntraceNativeResult<()> {
+pub(crate) fn enable_provider(control_handle: ControlHandle, provider: &Provider) -> EvntraceNativeResult<()> {
     match filter_invalid_control_handle(control_handle) {
         None => Err(EvntraceNativeError::InvalidHandle),
         Some(handle) => {
@@ -257,7 +260,7 @@ pub fn enable_provider(control_handle: ControlHandle, provider: &Provider) -> Ev
 /// Start processing a trace (this call is blocking until the trace is stopped)
 ///
 /// You probably want to spawn a thread that will block on this call.
-pub fn process_trace(trace_handle: TraceHandle) -> EvntraceNativeResult<()> {
+pub(crate) fn process_trace(trace_handle: TraceHandle) -> EvntraceNativeResult<()> {
     if filter_invalid_trace_handles(trace_handle).is_none() {
         return Err(EvntraceNativeError::InvalidHandle);
     } else {
@@ -282,7 +285,7 @@ pub fn process_trace(trace_handle: TraceHandle) -> EvntraceNativeResult<()> {
 /// In case you want to close the trace, you probably want to drop the instance rather than calling `control(EVENT_TRACE_CONTROL_STOP)` yourself,
 /// because closing the trace makes the trace handle invalid.
 /// A closed trace could theoretically(?) be re-used, but the trace handle should be re-created, so `open` should be called again.
-pub fn control_trace(
+pub(crate) fn control_trace(
     properties: &mut EventTraceProperties,
     control_handle: ControlHandle,
     control_code: Etw::EVENT_TRACE_CONTROL,
@@ -320,7 +323,7 @@ pub fn control_trace(
 /// In case ETW reports there are still events in the queue that are still to trigger callbacks, this returns Ok(true).<br/>
 /// If no further event callback will be invoked, this returns Ok(false)<br/>
 /// On error, this returns an `Err`
-pub fn close_trace(trace_handle: TraceHandle, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<bool> {
+pub(crate) fn close_trace(trace_handle: TraceHandle, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<bool> {
     match filter_invalid_trace_handles(trace_handle) {
         None => Err(EvntraceNativeError::InvalidHandle),
         Some(handle) => {

@@ -1,4 +1,3 @@
-use crate::traits::*;
 use std::str::Utf8Error;
 use core::ffi::c_void;
 use windows::core::PSTR;
@@ -13,14 +12,6 @@ pub enum SddlNativeError {
     SidParseError(Utf8Error),
     /// Represents an standard IO Error
     IoError(std::io::Error),
-}
-
-impl LastOsError<SddlNativeError> for SddlNativeError {}
-
-impl From<std::io::Error> for SddlNativeError {
-    fn from(err: std::io::Error) -> Self {
-        SddlNativeError::IoError(err)
-    }
 }
 
 impl From<Utf8Error> for SddlNativeError {

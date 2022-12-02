@@ -6,7 +6,7 @@ use ferrisetw::provider::Provider;
 use ferrisetw::provider::TraceFlags;
 use ferrisetw::parser::Parser;
 use ferrisetw::schema_locator::SchemaLocator;
-use ferrisetw::native::etw_types::EventRecord;
+use ferrisetw::EventRecord;
 use ferrisetw::trace::UserTrace;
 use ferrisetw::schema::Schema;
 

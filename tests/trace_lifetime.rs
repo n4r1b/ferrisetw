@@ -3,7 +3,7 @@
 use std::process::Command;
 
 use ferrisetw::provider::Provider;
-use ferrisetw::native::etw_types::EventRecord;
+use ferrisetw::EventRecord;
 use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::UserTrace;
 use ferrisetw::trace::TraceTrait;

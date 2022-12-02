@@ -8,7 +8,8 @@
 //! needed by using the functions exposed by the modules at the crate level
 use crate::provider::event_filter::EventFilterDescriptor;
 use crate::provider::TraceFlags;
-use crate::trace::{CallbackData, TraceProperties, TraceTrait};
+use crate::trace::{TraceProperties, TraceTrait};
+use crate::trace::callback_data::CallbackData;
 use std::ffi::{c_void, OsString};
 use std::fmt::Formatter;
 use std::marker::PhantomData;
@@ -20,11 +21,8 @@ use windows::Win32::System::Diagnostics::Etw;
 use windows::Win32::System::Diagnostics::Etw::EVENT_FILTER_DESCRIPTOR;
 use widestring::{U16CStr, U16CString};
 
-mod event_record;
-pub use event_record::EventRecord;
-
-mod extended_data;
-pub use extended_data::{ExtendedDataItem, EventHeaderExtendedDataItem};
+pub(crate) mod event_record;
+pub(crate) mod extended_data;
 
 pub const TRACE_NAME_MAX_CHARS: usize = 200; // Microsoft documentation says the limit is 1024, but do not trust us. Experience shows that traces with names longer than ~240 character silently fail.
 
@@ -32,6 +30,7 @@ pub const TRACE_NAME_MAX_CHARS: usize = 200; // Microsoft documentation says the
 ///
 /// Re-defining it here, because all these values are not defined in windows-rs (yet?)
 #[derive(Debug, Copy, Clone)]
+#[allow(dead_code)]
 #[non_exhaustive]
 #[repr(i32)]
 pub enum TraceInformation {

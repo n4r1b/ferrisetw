@@ -37,7 +37,7 @@
 //! and handle the Event in the callback
 //!
 //! ```
-//! use ferrisetw::native::etw_types::EventRecord;
+//! use ferrisetw::EventRecord;
 //! use ferrisetw::schema_locator::SchemaLocator;
 //! use ferrisetw::parser::Parser;
 //! use ferrisetw::provider::Provider;
@@ -107,7 +107,7 @@ extern crate num_traits;
 
 pub mod native;
 pub mod parser;
-pub mod property;
+mod property;
 pub mod provider;
 pub mod query;
 pub mod schema;
@@ -115,3 +115,9 @@ pub mod schema_locator;
 pub mod trace;
 mod traits;
 mod utils;
+
+// Convenience re-exports.
+pub use crate::trace::UserTrace;
+pub use crate::trace::KernelTrace;
+pub use crate::native::etw_types::event_record::EventRecord;
+pub use crate::schema_locator::SchemaLocator;

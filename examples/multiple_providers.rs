@@ -1,4 +1,4 @@
-use ferrisetw::native::etw_types::EventRecord;
+use ferrisetw::EventRecord;
 use ferrisetw::parser::{Parser, Pointer};
 use ferrisetw::provider::*;
 use ferrisetw::schema_locator::SchemaLocator;

@@ -7,7 +7,7 @@ use windows::core::GUID;
 
 use crate::native::tdh;
 use crate::native::tdh::TraceEventInfo;
-use crate::native::etw_types::EventRecord;
+use crate::native::etw_types::event_record::EventRecord;
 use crate::schema::Schema;
 
 /// Schema module errors
@@ -103,7 +103,7 @@ impl SchemaLocator {
     ///
     /// # Example
     /// ```
-    /// # use ferrisetw::native::etw_types::EventRecord;
+    /// # use ferrisetw::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
     /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
     ///     let schema = schema_locator.event_schema(record).unwrap();
