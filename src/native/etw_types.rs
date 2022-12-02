@@ -264,9 +264,12 @@ impl<'callbackdata> EventTraceLogfile<'callbackdata> {
 ///
 /// [ENABLE_TRACE_PARAMETERS]: https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Diagnostics/Etw/struct.ENABLE_TRACE_PARAMETERS.html
 #[repr(C)]
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 pub struct EnableTraceParameters<'filters>{
     native: Etw::ENABLE_TRACE_PARAMETERS,
+    /// `native` has pointers to an array of EVENT_FILTER_DESCRIPTOR, let's store it here
+    array_of_event_filter_descriptor: Vec<EVENT_FILTER_DESCRIPTOR>,
+    /// `array_of_event_filter_descriptor` points to data somewhere else. Let's bind it to their lifetime
     lifetime: PhantomData<&'filters EventFilterDescriptor>,
 }
 
@@ -282,15 +285,15 @@ impl<'filters> EnableTraceParameters<'filters> {
         // Note: > Each type of filter (a specific Type member) may only appear once in a call to the EnableTraceEx2 function.
         //       https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-enabletraceex2#remarks
         //       > The maximum number of filters that can be included in a call to EnableTraceEx2 is set by MAX_EVENT_FILTERS_COUNT
-        let mut win_filter_descriptors: Vec<EVENT_FILTER_DESCRIPTOR> = filters
+        params.array_of_event_filter_descriptor = filters
             .iter()
             .map(|efd| efd.as_event_filter_descriptor())
             .collect();
-        params.native.FilterDescCount = win_filter_descriptors.len() as u32; // (let's assume we won't try to fit more than 4 billion filters)
+        params.native.FilterDescCount = params.array_of_event_filter_descriptor.len() as u32; // (let's assume we won't try to fit more than 4 billion filters)
         if filters.is_empty() {
             params.native.EnableFilterDesc = std::ptr::null_mut();
         } else {
-            params.native.EnableFilterDesc = win_filter_descriptors.as_mut_ptr();
+            params.native.EnableFilterDesc = params.array_of_event_filter_descriptor.as_mut_ptr();
         }
 
         params
