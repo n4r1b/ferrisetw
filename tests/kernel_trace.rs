@@ -15,7 +15,7 @@ use windows::Win32::System::LibraryLoader::{LOAD_LIBRARY_FLAGS, LoadLibraryExW};
 
 
 mod utils;
-use utils::{Status, TestKind};
+use utils::{Status, TestKind, StatusNotifier};
 
 const TEST_LIBRARY_NAME: &str = "crypt32.dll"; // this DLL is available on all Windows versions (so that the test can run everywhere)
 
@@ -23,13 +23,21 @@ const TEST_LIBRARY_NAME: &str = "crypt32.dll"; // this DLL is available on all W
 
 #[test]
 fn kernel_trace_tests() {
-    simple_kernel_trace_trace();
-}
-
-fn simple_kernel_trace_trace() {
     let passed1 = Status::new(TestKind::ExpectSuccess);
     let notifier1 = passed1.notifier();
 
+    // Calling a sub-function, and getting the trace back. This ensures we are able to move the Trace around the stack
+    // (see https://github.com/n4r1b/ferrisetw/pull/28)
+    let moved_trace = create_simple_kernel_trace_trace(notifier1);
+
+    generate_image_load_events();
+
+    passed1.assert_passed();
+    moved_trace.stop().unwrap();
+    println!("Test passed");
+}
+
+fn create_simple_kernel_trace_trace(notifier: StatusNotifier) -> KernelTrace {
     println!("We are process {}", std::process::id());
     let our_process_only = EventFilter::ByPids(vec![std::process::id() as _]);
 
@@ -45,21 +53,16 @@ fn simple_kernel_trace_trace() {
             //     notifier2.notify_failure();
             // }
             if has_seen_dll_load(record, &parser) {
-                notifier1.notify_success();
+                notifier.notify_success();
             }
 
         })
         .build();
 
-    let mut _kernel_trace = KernelTrace::new()
+    KernelTrace::new()
         .enable(kernel_provider)
         .start_and_process()
-        .unwrap();
-
-    generate_image_load_events();
-
-    passed1.assert_passed();
-    println!("Test passed");
+        .unwrap()
 }
 
 fn load_library(libname: &str) {

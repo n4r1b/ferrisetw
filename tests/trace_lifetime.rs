@@ -115,27 +115,36 @@ fn test_wordpad_trace(
 ///
 /// This is limited to the ASCII part of the trace name, because Windows really sucks when it comes to encodings from sub processes (codepage issues, etc.)
 #[track_caller]
-fn assert_trace_exists(ascii_part_of_the_trace_name: &str, expected: bool) -> bool {
-    let output_u8 = Command::new("logman")
-        .arg("query")
-        .arg("-ets")
-        .output()
-        .unwrap()
-        .stdout;
+fn assert_trace_exists(ascii_part_of_the_trace_name: &str, expected: bool) {
+    for _attempt in 0..3 {
+        let output = Command::new("logman")
+            .arg("query")
+            .arg("-ets")
+            .output()
+            .unwrap();
 
-    let output = String::from_utf8_lossy(&output_u8);
+        let stdout_u8 = output.stdout;
+        let stdout = String::from_utf8_lossy(&stdout_u8);
+        let status = output.status;
 
-    let res = output
-        .split('\n')
-        .any(|line| {
-            let val = line.contains(&ascii_part_of_the_trace_name);
-            val
-        });
+        let res = stdout
+            .split('\n')
+            .any(|line| {
+                let val = line.contains(&ascii_part_of_the_trace_name);
+                val
+            });
 
-    if res != expected {
-        println!("logman output: {}", output);
-        assert!(false);
+        if status.success() {
+            if res != expected {
+                println!("logman output (returned {}): {}", status, stdout);
+                assert!(false);
+            }
+        } else {
+            // Not sure why, but logman sometimes fails to list current traces (with "The GUID passed was not recognized as valid by a WMI data provider.")
+            println!("logman hit an error (returned {}).", status);
+            println!("logman output: {}", stdout);
+            println!("Let's try again");
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
     }
-
-    res
 }
