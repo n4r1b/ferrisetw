@@ -23,8 +23,10 @@ use windows::core::GUID;
 pub enum ParserError {
     /// No property has this name
     NotFound,
-    /// An invalid type...
+    /// An invalid type
     InvalidType,
+    /// Some properties are not supported by this crate (yet?)
+    UnsupportedProperties,
     /// Error parsing
     ParseError,
     /// Length mismatch when parsing a type

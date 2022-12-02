@@ -3,7 +3,7 @@
 //! This module contains the means needed to interact with the Schema of an ETW event
 use crate::native::etw_types::DecodingSource;
 use crate::native::tdh::TraceEventInfo;
-use crate::native::tdh_types::Property;
+use crate::native::tdh_types::{Property, PropertyError};
 use once_cell::sync::OnceCell;
 
 /// A schema suitable for parsing a given kind of event.
@@ -14,7 +14,7 @@ use once_cell::sync::OnceCell;
 /// with a few info parsed (and cached) out of it
 pub struct Schema {
     te_info: TraceEventInfo,
-    cached_properties: OnceCell<Vec<Property>>,
+    cached_properties: OnceCell<Result<Vec<Property>, PropertyError>>,
 }
 
 impl Schema {
@@ -98,9 +98,21 @@ impl Schema {
     ///
     /// This is parsed on first call, and cached for later use
     pub(crate) fn properties(&self) -> &[Property] {
-        self.cached_properties.get_or_init(|| {
-            self.te_info.properties().collect()
-        })
+        let cache = self.cached_properties.get_or_init(|| {
+            let mut cache = Vec::new();
+            for property in self.te_info.properties() {
+                cache.push(property?)
+            }
+            Ok(cache)
+        });
+
+        match cache {
+            Err(PropertyError::UnimplementedType) => {
+                log::error!("Unable to list properties: a type is not implemented");
+                &[]
+            }
+            Ok(cache) => cache.as_slice()
+        }
     }
 }
 
