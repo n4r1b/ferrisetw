@@ -6,6 +6,8 @@ use ferrisetw::trace::*;
 use std::time::Duration;
 
 fn main() {
+    env_logger::init(); // this is optional. This makes the (rare) error logs of ferrisetw to be printed to stderr
+
     let process_callback =
         |record: &EventRecord, schema_locator: &SchemaLocator| match schema_locator
             .event_schema(record)

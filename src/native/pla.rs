@@ -136,7 +136,6 @@ pub(crate) unsafe fn get_provider_guid(name: &str) -> ProvidersComResult<GUID> {
         if prov_name.eq(name) {
             hr = provider.get_guid(guid.as_mut_ptr());
             check_hr(hr)?;
-            println!("{}", prov_name);
             break;
         }
     }

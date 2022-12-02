@@ -94,6 +94,11 @@
 //!
 //! [KrabsETW]: https://github.com/microsoft/krabsetw/
 //! [Source]: https://docs.microsoft.com/en-us/windows/win32/etw/about-event-tracing
+//!
+//! # Log messages
+//! ferrisetw may (very) occasionally write error log messages using the [`log`](https://docs.rs/log/latest/log/) crate.<br/>
+//! In case you want them to be printed to the console, your binary should use one of the various logger implementations. [`env_logger`](https://docs.rs/env_logger/latest/env_logger/) is one of them.<br/>
+//! You can have a look at how to use it in the `examples/` folder in the GitHub repository.
 
 #[macro_use]
 extern crate memoffset;
