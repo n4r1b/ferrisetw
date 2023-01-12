@@ -15,11 +15,15 @@ use windows::Win32::System::Diagnostics::Etw::{
 use windows::Win32::System::Diagnostics::Etw::{
     EVENT_EXTENDED_ITEM_RELATED_ACTIVITYID,
     EVENT_EXTENDED_ITEM_TS_ID,
+};
+use windows::Win32::Security::SID;
+
+// These types are returned by our public API. Let's use their re-exported versions
+use crate::native::{
     EVENT_EXTENDED_ITEM_INSTANCE,
     EVENT_EXTENDED_ITEM_STACK_TRACE32,
     EVENT_EXTENDED_ITEM_STACK_TRACE64,
 };
-use windows::Win32::Security::SID;
 
 /// A wrapper over [`windows::Win32::System::Diagnostics::Etw::EVENT_HEADER_EXTENDED_DATA_ITEM`]
 #[repr(transparent)]
@@ -63,6 +67,7 @@ impl EventHeaderExtendedDataItem {
         self.0.ExtType
     }
 
+    /// Returns this extended data as a variant of a Rust enum.
     pub fn to_extended_data_item(&self) -> ExtendedDataItem {
         let data_ptr = self.0.DataPtr as *const std::ffi::c_void;
         if data_ptr.is_null() {

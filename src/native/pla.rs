@@ -6,11 +6,10 @@
 //! This module shouldn't be accessed directly. Modules from the the crate level provide a safe API to interact
 //! with the crate
 use std::mem::MaybeUninit;
-use windows::core::GUID;
-use windows::Win32::Foundation::BSTR;
+use windows::core::{GUID, BSTR};
 
 /// Pla native module errors
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PlaError {
     /// Represents a Provider not found Error
     NotFound,
@@ -19,7 +18,7 @@ pub enum PlaError {
 }
 
 /// Wrapper over common HRESULT native errors (Incomplete)
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum HResult {
     /// Represents S_OK
     HrOk,
@@ -137,7 +136,6 @@ pub(crate) unsafe fn get_provider_guid(name: &str) -> ProvidersComResult<GUID> {
         if prov_name.eq(name) {
             hr = provider.get_guid(guid.as_mut_ptr());
             check_hr(hr)?;
-            println!("{}", prov_name);
             break;
         }
     }

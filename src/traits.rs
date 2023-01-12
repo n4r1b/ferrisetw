@@ -1,10 +1,5 @@
 use std::iter;
 
-pub trait LastOsError<T: From<std::io::Error>> {
-    fn last_error() -> T {
-        T::from(std::io::Error::last_os_error())
-    }
-}
 
 pub trait EncodeUtf16 {
     fn into_utf16(self) -> Vec<u16>;

@@ -1,8 +1,9 @@
 //! # Event Windows Tracing FTW!
-//! **Basically a [KrabsETW] rip-off written in Rust**, hence the name `Ferris` 🦀
+//! This crate provides safe Rust abstractions over the ETW consumer APIs.
 //!
-//! All **credits** go to the team at Microsoft who develop KrabsEtw, without it, this project
-//! probably wouldn't be a thing.
+//! It started as a [KrabsETW](https://github.com/microsoft/krabsetw/) rip-off written in Rust (hence the name [`Ferris`](https://rustacean.net/) 🦀).
+//! All credits go to the team at Microsoft who develop KrabsEtw, without it, this project probably wouldn't be a thing.<br/>
+//! Since version 1.0, the API and internal architecture of this crate is slightly diverging from `krabsetw`, so that it is more Rust-idiomatic.
 //!
 //! # What's ETW
 //! Event Tracing for Windows (ETW) is an efficient kernel-level tracing facility that lets you log
@@ -30,66 +31,58 @@
 //! would simplify ETW management written in Rust and available as a crate for other to consume would
 //! be pretty neat and that's where this crate comes into play 🔥
 //!
-//! # Disclaimer
-//! This project is still WIP. There's still plenty of things to evaluate/investigate and things to
-//! fix and do better. Any help would be greatly appreciated, also any issues you may have!
-//!
-//! Although I encourage everyone to use Rust, I do believe that, at the moment, if you plan on interacting
-//! with ETW in a production level and the programming language is not a constraint you should definitely
-//! consider [KrabsETW] as a more robust and tested option. Hopefully in next iterations I'll be able
-//! to remove this disclaimer 😃
-//!
 //! # Getting started
 //! If you are familiar with KrabsEtw you'll see using the crate is very similar, in case you are not
 //! familiar with it the following example shows the basics on how to build a provider, start a trace
 //! and handle the Event in the callback
 //!
 //! ```
-//! use ferrisetw::native::etw_types::EventRecord;
-//! use ferrisetw::schema::SchemaLocator;
+//! use ferrisetw::EventRecord;
+//! use ferrisetw::schema_locator::SchemaLocator;
 //! use ferrisetw::parser::Parser;
-//! use ferrisetw::parser::TryParse;
 //! use ferrisetw::provider::Provider;
-//! use ferrisetw::trace::{UserTrace, TraceTrait, TraceBaseTrait};
+//! use ferrisetw::trace::{UserTrace, TraceTrait};
 //!
-//! fn process_callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
-//!     // Within the callback we first locate the proper Schema for the event
-//!     match schema_locator.event_schema(record) {
-//!         Ok(schema) => {
-//!             // At the moment we can only filter by checking the event_id
-//!             if schema.event_id() == 2 {
+//! fn process_callback(record: &EventRecord, schema_locator: &SchemaLocator) {
+//!     // Basic event scrutinizing can be done directly from the `EventRecord`
+//!     if record.event_id() == 2 {
+//!         // More advanced info can be retrieved from the event schema
+//!         // (the SchemaLocator caches the schema for a given kind of event, so this call is cheap in case you've already encountered the same event kind previously)
+//!         match schema_locator.event_schema(record) {
+//!             Err(err) => println!("Error {:?}", err),
+//!             Ok(schema) => {
+//!                 println!("Received an event from provider {}", schema.provider_name());
 //!
-//!                 // We build the Parser based on the Schema
-//!                 let mut parser = Parser::create(&schema);
+//!                 // Finally, properties for a given event can be retrieved using a Parser
+//!                 let parser = Parser::create(record, &schema);
 //!
-//!                 // Finally, Parse data from the Event, proper error handling should be done
-//!                 // Type annotations or Fully Qualified Syntax are needed when calling TryParse
-//!                 // Supported types implement the trait TryParse for Parser
-//!
+//!                 // You'll need type inference to tell ferrisetw what type you want to parse into
+//!                 // In actual code, be sure to correctly handle Err values!
 //!                 let process_id: u32 = parser.try_parse("ProcessID").unwrap();
 //!                 let image_name: String = parser.try_parse("ImageName").unwrap();
 //!                 println!("PID: {} ImageName: {}", process_id, image_name);
 //!             }
 //!         }
-//!         Err(err) => println!("Error {:?}", err),
-//!     };
+//!     }
 //! }
 //!
 //! fn main() {
 //!     // First we build a Provider
-//!     let process_provider = Provider::new()
-//!         .by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716") // Microsoft-Windows-Kernel-Process
+//!     let process_provider = Provider
+//!         ::by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716") // Microsoft-Windows-Kernel-Process
 //!         .add_callback(process_callback)
-//!         .build()
-//!         .unwrap();
+//!         // .add_filter(event_filters) // it is possible to filter by event ID, process ID, etc.
+//!         .build();
 //!
 //!     // We start a trace session for the previously registered provider
-//!     // This call will spawn a new thread which listens to the events
+//!     // Callbacks will be run in a separate thread.
 //!     let mut trace = UserTrace::new()
 //!         .named(String::from("MyProvider"))
 //!         .enable(process_provider)
-//!         // .enable(other_provider) // it is possible to enable multiple providers on the same trace
-//!         .start()
+//!         // .enable(other_provider) // It is possible to enable multiple providers on the same trace.
+//!         .start_and_process()       // This call will spawn the thread for you.
+//!                                    // See the doc for alternative ways of processing the trace,
+//!                                    // with more or less flexibility regarding this spawned thread.
 //!         .unwrap();
 //!
 //!     std::thread::sleep(std::time::Duration::from_secs(3));
@@ -101,6 +94,11 @@
 //!
 //! [KrabsETW]: https://github.com/microsoft/krabsetw/
 //! [Source]: https://docs.microsoft.com/en-us/windows/win32/etw/about-event-tracing
+//!
+//! # Log messages
+//! ferrisetw may (very) occasionally write error log messages using the [`log`](https://docs.rs/log/latest/log/) crate.<br/>
+//! In case you want them to be printed to the console, your binary should use one of the various logger implementations. [`env_logger`](https://docs.rs/env_logger/latest/env_logger/) is one of them.<br/>
+//! You can have a look at how to use it in the `examples/` folder in the GitHub repository.
 
 #[macro_use]
 extern crate memoffset;
@@ -114,12 +112,20 @@ extern crate num_traits;
 
 pub mod native;
 pub mod parser;
-pub mod property;
+mod property;
 pub mod provider;
+pub mod query;
 pub mod schema;
+pub mod schema_locator;
 pub mod trace;
 mod traits;
 mod utils;
+
+// Convenience re-exports.
+pub use crate::trace::UserTrace;
+pub use crate::trace::KernelTrace;
+pub use crate::native::etw_types::event_record::EventRecord;
+pub use crate::schema_locator::SchemaLocator;
 
 // These types are returned by some public APIs of this crate.
 // They must be re-exported, so that users of the crate have a way to avoid version conflicts

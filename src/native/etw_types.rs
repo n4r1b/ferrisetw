@@ -6,28 +6,68 @@
 //!
 //! In most cases a user of the crate won't have to deal with this and can directly obtain the data
 //! needed by using the functions exposed by the modules at the crate level
-use crate::native::tdh_types::Property;
-use crate::provider::Provider;
-use crate::trace::{TraceData, TraceProperties, TraceTrait};
-use crate::utils;
+use crate::provider::event_filter::EventFilterDescriptor;
+use crate::provider::TraceFlags;
+use crate::trace::{TraceProperties, TraceTrait};
+use crate::trace::callback_data::CallbackData;
+use std::ffi::{c_void, OsString};
 use std::fmt::Formatter;
-use std::sync::RwLock;
+use std::marker::PhantomData;
+use std::sync::Arc;
+
 use windows::core::GUID;
-use windows::core::PSTR;
-use windows::Win32::Foundation::MAX_PATH;
+use windows::core::PWSTR;
 use windows::Win32::System::Diagnostics::Etw;
+use windows::Win32::System::Diagnostics::Etw::EVENT_FILTER_DESCRIPTOR;
+use widestring::{U16CStr, U16CString};
 
-// typedef ULONG64 TRACEHANDLE, *PTRACEHANDLE;
-pub(crate) type TraceHandle = u64;
-pub(crate) type EvenTraceControl = Etw::EVENT_TRACE_CONTROL;
+pub(crate) mod event_record;
+pub(crate) mod extended_data;
 
-/// Renaming type [EVENT_RECORD] type to match rust Naming Convention
+pub const TRACE_NAME_MAX_CHARS: usize = 200; // Microsoft documentation says the limit is 1024, but do not trust us. Experience shows that traces with names longer than ~240 character silently fail.
+
+/// This enum is <https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ne-evntrace-trace_query_info_class>
 ///
-/// [EVENT_RECORD]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.EVENT_RECORD.html
-pub type EventRecord = Etw::EVENT_RECORD;
-pub(crate) type PEventRecord = *mut EventRecord;
-
-pub const INVALID_TRACE_HANDLE: TraceHandle = u64::MAX;
+/// Re-defining it here, because all these values are not defined in windows-rs (yet?)
+#[derive(Debug, Copy, Clone)]
+#[allow(dead_code)]
+#[non_exhaustive]
+#[repr(i32)]
+pub enum TraceInformation {
+    TraceGuidQueryList,
+    TraceGuidQueryInfo,
+    TraceGuidQueryProcess,
+    TraceStackTracingInfo,
+    TraceSystemTraceEnableFlagsInfo,
+    TraceSampledProfileIntervalInfo,
+    TraceProfileSourceConfigInfo,
+    TraceProfileSourceListInfo,
+    TracePmcEventListInfo,
+    TracePmcCounterListInfo,
+    TraceSetDisallowList,
+    TraceVersionInfo,
+    TraceGroupQueryList,
+    TraceGroupQueryInfo,
+    TraceDisallowListQuery,
+    TraceInfoReserved15,
+    TracePeriodicCaptureStateListInfo,
+    TracePeriodicCaptureStateInfo,
+    TraceProviderBinaryTracking,
+    TraceMaxLoggersQuery,
+    TraceLbrConfigurationInfo,
+    TraceLbrEventListInfo,
+    /// Query the maximum PMC counters that can be specified simultaneously.
+    /// May be queried without an active ETW session.
+    ///
+    /// Output: u32
+    TraceMaxPmcCounterQuery,
+    TraceStreamCount,
+    TraceStackCachingInfo,
+    TracePmcCounterOwners,
+    TraceUnifiedStackCachingInfo,
+    TracePmcSessionInformation,
+    MaxTraceSetInfoClass,
+}
 
 #[allow(dead_code)]
 pub(crate) enum ControlValues {
@@ -36,301 +76,246 @@ pub(crate) enum ControlValues {
     Update = 2,
 }
 
-#[allow(dead_code)]
-enum LoggingMode {
-    None,
-    Sequential,
-    Circular,
-    Append,
-    NewFile,
-    NonStoppable,
-    Secure,
-    RealTime,
-    Buffering,
-    SystemLogger,
-    DelayOpenFile,
-    PrivateLogger,
-    NoPerProcBuffering,
-}
-
-impl From<LoggingMode> for u32 {
-    fn from(val: LoggingMode) -> Self {
-        match val {
-            // Not all but pretty much...
-            LoggingMode::None => Etw::EVENT_TRACE_FILE_MODE_NONE,
-            LoggingMode::Sequential => Etw::EVENT_TRACE_FILE_MODE_SEQUENTIAL,
-            LoggingMode::Circular => Etw::EVENT_TRACE_FILE_MODE_CIRCULAR,
-            LoggingMode::Append => Etw::EVENT_TRACE_FILE_MODE_APPEND,
-            LoggingMode::NewFile => Etw::EVENT_TRACE_FILE_MODE_NEWFILE,
-            LoggingMode::NonStoppable => Etw::EVENT_TRACE_NONSTOPPABLE_MODE,
-            LoggingMode::Secure => Etw::EVENT_TRACE_SECURE_MODE,
-            LoggingMode::RealTime => Etw::EVENT_TRACE_REAL_TIME_MODE,
-            LoggingMode::DelayOpenFile => Etw::EVENT_TRACE_DELAY_OPEN_FILE_MODE,
-            LoggingMode::Buffering => Etw::EVENT_TRACE_BUFFERING_MODE,
-            LoggingMode::PrivateLogger => Etw::EVENT_TRACE_PRIVATE_LOGGER_MODE,
-            LoggingMode::SystemLogger => Etw::EVENT_TRACE_SYSTEM_LOGGER_MODE,
-            LoggingMode::NoPerProcBuffering => Etw::EVENT_TRACE_NO_PER_PROCESSOR_BUFFERING,
-        }
+bitflags! {
+    /// Logging Mode constants
+    ///
+    /// See <https://learn.microsoft.com/en-us/windows/win32/etw/logging-mode-constants>
+    pub struct LoggingMode: u32 {
+        const EVENT_TRACE_FILE_MODE_NONE =             Etw::EVENT_TRACE_FILE_MODE_NONE;
+        const EVENT_TRACE_FILE_MODE_SEQUENTIAL =       Etw::EVENT_TRACE_FILE_MODE_SEQUENTIAL;
+        const EVENT_TRACE_FILE_MODE_CIRCULAR =         Etw::EVENT_TRACE_FILE_MODE_CIRCULAR;
+        const EVENT_TRACE_FILE_MODE_APPEND =           Etw::EVENT_TRACE_FILE_MODE_APPEND;
+        const EVENT_TRACE_FILE_MODE_NEWFILE =          Etw::EVENT_TRACE_FILE_MODE_NEWFILE;
+        const EVENT_TRACE_FILE_MODE_PREALLOCATE =      Etw::EVENT_TRACE_FILE_MODE_PREALLOCATE;
+        const EVENT_TRACE_NONSTOPPABLE_MODE =          Etw::EVENT_TRACE_NONSTOPPABLE_MODE;
+        const EVENT_TRACE_SECURE_MODE =                Etw::EVENT_TRACE_SECURE_MODE;
+        const EVENT_TRACE_REAL_TIME_MODE =             Etw::EVENT_TRACE_REAL_TIME_MODE;
+        const EVENT_TRACE_DELAY_OPEN_FILE_MODE =       Etw::EVENT_TRACE_DELAY_OPEN_FILE_MODE;
+        const EVENT_TRACE_BUFFERING_MODE =             Etw::EVENT_TRACE_BUFFERING_MODE;
+        const EVENT_TRACE_PRIVATE_LOGGER_MODE =        Etw::EVENT_TRACE_PRIVATE_LOGGER_MODE;
+        const EVENT_TRACE_USE_KBYTES_FOR_SIZE =        Etw::EVENT_TRACE_USE_KBYTES_FOR_SIZE;
+        const EVENT_TRACE_USE_GLOBAL_SEQUENCE =        Etw::EVENT_TRACE_USE_GLOBAL_SEQUENCE;
+        const EVENT_TRACE_USE_LOCAL_SEQUENCE =         Etw::EVENT_TRACE_USE_LOCAL_SEQUENCE;
+        const EVENT_TRACE_PRIVATE_IN_PROC =            Etw::EVENT_TRACE_PRIVATE_IN_PROC;
+        const EVENT_TRACE_MODE_RESERVED =              Etw::EVENT_TRACE_MODE_RESERVED;
+        const EVENT_TRACE_STOP_ON_HYBRID_SHUTDOWN =    Etw::EVENT_TRACE_STOP_ON_HYBRID_SHUTDOWN;
+        const EVENT_TRACE_PERSIST_ON_HYBRID_SHUTDOWN = Etw::EVENT_TRACE_PERSIST_ON_HYBRID_SHUTDOWN;
+        const EVENT_TRACE_USE_PAGED_MEMORY =           Etw::EVENT_TRACE_USE_PAGED_MEMORY;
+        const EVENT_TRACE_SYSTEM_LOGGER_MODE =         Etw::EVENT_TRACE_SYSTEM_LOGGER_MODE;
+        const EVENT_TRACE_INDEPENDENT_SESSION_MODE =   Etw::EVENT_TRACE_INDEPENDENT_SESSION_MODE;
+        const EVENT_TRACE_NO_PER_PROCESSOR_BUFFERING = Etw::EVENT_TRACE_NO_PER_PROCESSOR_BUFFERING;
+        const EVENT_TRACE_ADDTO_TRIAGE_DUMP =          Etw::EVENT_TRACE_ADDTO_TRIAGE_DUMP;
     }
 }
 
-#[allow(dead_code)]
-enum ProcessTraceMode {
-    RealTime,
-    EventRecord,
-    RawTimestamp,
-}
 
-impl From<ProcessTraceMode> for u32 {
-    fn from(val: ProcessTraceMode) -> Self {
-        match val {
-            ProcessTraceMode::RealTime => Etw::PROCESS_TRACE_MODE_EVENT_RECORD,
-            ProcessTraceMode::EventRecord => Etw::PROCESS_TRACE_MODE_REAL_TIME,
-            ProcessTraceMode::RawTimestamp => Etw::PROCESS_TRACE_MODE_RAW_TIMESTAMP,
-        }
-    }
-}
-
-/// Newtype wrapper over an [EVENT_TRACE_PROPERTIES]
-///
-/// [EVENT_TRACE_PROPERTIES]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.EVENT_TRACE_PROPERTIES.html
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct EventTraceProperties(Etw::EVENT_TRACE_PROPERTIES);
-
-impl std::fmt::Debug for EventTraceProperties {
-    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
-    }
-}
-
-impl Default for EventTraceProperties {
-    fn default() -> Self {
-        unsafe { std::mem::zeroed::<EventTraceProperties>() }
-    }
-}
-
-impl std::ops::Deref for EventTraceProperties {
-    type Target = Etw::EVENT_TRACE_PROPERTIES;
-
-    fn deref(&self) -> &self::Etw::EVENT_TRACE_PROPERTIES {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for EventTraceProperties {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-/// Complete Trace Properties struct
+/// Wrapper over an [EVENT_TRACE_PROPERTIES](https://docs.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties), and its allocated companion members
 ///
 /// The [EventTraceProperties] struct contains the information about a tracing session, this struct
 /// also needs two buffers right after it to hold the log file name and the session name. This struct
 /// provides the full definition of the properties plus the the allocation for both names
-///
-/// See: [EVENT_TRACE_PROPERTIES](https://docs.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties)
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct TraceInfo {
-    pub properties: EventTraceProperties,
-    trace_name: [u8; MAX_PATH as usize],
-    log_file_name: [u8; MAX_PATH as usize],
-}
-
-impl TraceInfo {
-    pub(crate) fn fill<T>(
-        &mut self,
-        trace_name: &str,
-        trace_properties: &TraceProperties,
-        providers: &RwLock<Vec<Provider>>,
-    ) where
-        T: TraceTrait,
-    {
-        self.properties.0.Wnode.BufferSize = std::mem::size_of::<TraceInfo>() as u32;
-        self.properties.0.Wnode.Guid = T::trace_guid();
-        self.properties.0.Wnode.Flags = Etw::WNODE_FLAG_TRACED_GUID;
-        self.properties.0.Wnode.ClientContext = 1; // QPC clock resolution
-        self.properties.0.BufferSize = trace_properties.buffer_size;
-        self.properties.0.MinimumBuffers = trace_properties.min_buffer;
-        self.properties.0.MaximumBuffers = trace_properties.max_buffer;
-        self.properties.0.FlushTimer = trace_properties.flush_timer;
-
-        if trace_properties.log_file_mode != 0 {
-            self.properties.0.LogFileMode = trace_properties.log_file_mode;
-        } else {
-            self.properties.0.LogFileMode =
-                u32::from(LoggingMode::RealTime) | u32::from(LoggingMode::NoPerProcBuffering);
-        }
-
-        self.properties.0.LogFileMode |= T::augmented_file_mode();
-        self.properties.0.EnableFlags = Etw::EVENT_TRACE_FLAG(T::enable_flags(providers));
-
-        self.properties.0.LoggerNameOffset = offset_of!(TraceInfo, log_file_name) as u32;
-        self.trace_name[..trace_name.len()].copy_from_slice(trace_name.as_bytes())
-    }
-}
-
-impl Default for TraceInfo {
-    fn default() -> Self {
-        let properties = EventTraceProperties::default();
-        TraceInfo {
-            properties,
-            trace_name: [0; 260],
-            log_file_name: [0; 260],
-        }
-    }
-}
-
-/// Newtype wrapper over an [EVENT_TRACE_LOGFILEA]
-///
-/// [EVENT_TRACE_LOGFILEA]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.EVENT_TRACE_LOGFILEA.html
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct EventTraceLogfile(Etw::EVENT_TRACE_LOGFILEA);
+pub struct EventTraceProperties {
+    etw_trace_properties: Etw::EVENT_TRACE_PROPERTIES,
+    wide_trace_name: [u16; TRACE_NAME_MAX_CHARS+1],    // The +1 leaves space for the final null widechar.
+    wide_log_file_name: [u16; TRACE_NAME_MAX_CHARS+1], // The +1 leaves space for the final null widechar. Not used currently, but this may be useful when resolving https://github.com/n4r1b/ferrisetw/issues/7
+}
 
-impl EventTraceLogfile {
+
+impl std::fmt::Debug for EventTraceProperties {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let name = U16CString::from_vec_truncate(self.wide_trace_name).to_string_lossy();
+        f.debug_struct("EventTraceProperties")
+            .field("name", &name)
+            .finish()
+    }
+}
+
+impl EventTraceProperties {
     /// Create a new instance
+    ///
+    /// # Notes
+    /// `trace_name` is limited to 200 characters.
+    pub(crate) fn new<T>(
+        trace_name: &U16CStr,
+        trace_properties: &TraceProperties,
+        enable_flags: Etw::EVENT_TRACE_FLAG,
+    ) -> Self
+    where
+        T: TraceTrait
+    {
+        let mut etw_trace_properties = Etw::EVENT_TRACE_PROPERTIES::default();
+
+        etw_trace_properties.Wnode.BufferSize = std::mem::size_of::<EventTraceProperties>() as u32;
+        etw_trace_properties.Wnode.Guid = T::trace_guid();
+        etw_trace_properties.Wnode.Flags = Etw::WNODE_FLAG_TRACED_GUID;
+        etw_trace_properties.Wnode.ClientContext = 1; // QPC clock resolution
+        etw_trace_properties.BufferSize = trace_properties.buffer_size;
+        etw_trace_properties.MinimumBuffers = trace_properties.min_buffer;
+        etw_trace_properties.MaximumBuffers = trace_properties.max_buffer;
+        etw_trace_properties.FlushTimer = trace_properties.flush_timer.as_secs().clamp(1, u32::MAX as u64) as u32; // See https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties
+
+        if trace_properties.log_file_mode.is_empty() == false {
+            etw_trace_properties.LogFileMode = trace_properties.log_file_mode.bits();
+        } else {
+            etw_trace_properties.LogFileMode =
+                (LoggingMode::EVENT_TRACE_REAL_TIME_MODE | LoggingMode::EVENT_TRACE_NO_PER_PROCESSOR_BUFFERING).bits()
+        }
+
+        etw_trace_properties.LogFileMode |= T::augmented_file_mode();
+        etw_trace_properties.EnableFlags = enable_flags;
+
+        // etw_trace_properties.LogFileNameOffset must be 0, but this will change when https://github.com/n4r1b/ferrisetw/issues/7 is resolved
+        // > If you do not want to log events to a log file (for example, if you specify EVENT_TRACE_REAL_TIME_MODE only), set LogFileNameOffset to 0.
+        // (https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties)
+        etw_trace_properties.LoggerNameOffset = offset_of!(EventTraceProperties, wide_log_file_name) as u32;
+
+        // https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties#remarks
+        // > You do not copy the session name to the offset. The StartTrace function copies the name for you.
+        //
+        // Let's do it anyway, even though that's not required
+        let mut s = Self {
+            etw_trace_properties,
+            wide_trace_name: [0u16; TRACE_NAME_MAX_CHARS+1],
+            wide_log_file_name: [0u16; TRACE_NAME_MAX_CHARS+1],
+        };
+        let name_len = trace_name.len().min(TRACE_NAME_MAX_CHARS);
+        s.wide_trace_name[..name_len].copy_from_slice(&trace_name.as_slice()[..name_len]);
+
+        s
+    }
+
+    /// Gets a pointer to the wrapped [Etw::EVENT_TRACE_PROPERTIES]
     ///
     /// # Safety
     ///
-    /// Note that the returned structure contains pointers to the given `TraceData`, that should thus stay valid (and constant) during its lifetime
-    pub fn create(trace_data: &TraceData, callback: unsafe extern "system" fn(*mut EventRecord)) -> Self {
-        let mut log_file = EventTraceLogfile::default();
+    /// The API enforces this points to an allocated, valid `EVENT_TRACE_PROPERTIES` instance.
+    /// As evey other mutable raw pointer, you should not use it in case someone else is keeping a reference to this object.
+    ///
+    /// Note that `OpenTraceA` **will** modify its content on output.
+    pub unsafe fn as_mut_ptr(&mut self) -> *mut Etw::EVENT_TRACE_PROPERTIES {
+        &mut self.etw_trace_properties as *mut Etw::EVENT_TRACE_PROPERTIES
+    }
 
-        let not_really_mut_ptr = trace_data.name.as_ptr() as *mut _; // That's kind-of fine because the logger name is _not supposed_ to be changed by Windows APIs
-        log_file.0.LoggerName = PSTR(not_really_mut_ptr);
-        log_file.0.Anonymous1.ProcessTraceMode =
-            u32::from(ProcessTraceMode::RealTime) | u32::from(ProcessTraceMode::EventRecord);
-
-        log_file.0.Anonymous2.EventRecordCallback = Some(callback);
-        log_file.0.Context = unsafe { std::mem::transmute(trace_data as *const _) };
-
-        log_file
+    pub fn trace_name_array(&self) -> &[u16] {
+        &self.wide_trace_name
+    }
+    pub fn name(&self) -> OsString {
+        widestring::U16CStr::from_slice_truncate(&self.wide_trace_name)
+            .map(|ws| ws.to_os_string())
+            .unwrap_or_else(|_| OsString::from("<invalid name>"))
     }
 }
 
-impl Default for EventTraceLogfile {
-    fn default() -> Self {
-        unsafe { std::mem::zeroed::<EventTraceLogfile>() }
-    }
+/// Newtype wrapper over an [EVENT_TRACE_LOGFILEW]
+///
+/// Its lifetime is tied a to [`CallbackData`] because it contains raw pointers to it.
+///
+/// [EVENT_TRACE_LOGFILEW]: https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Diagnostics/Etw/struct.EVENT_TRACE_LOGFILEW.html
+#[repr(C)]
+#[derive(Clone)]
+pub struct EventTraceLogfile<'callbackdata> {
+    native: Etw::EVENT_TRACE_LOGFILEW,
+    wide_logger_name: U16CString,
+    lifetime: PhantomData<&'callbackdata CallbackData>,
 }
 
-impl std::ops::Deref for EventTraceLogfile {
-    type Target = Etw::EVENT_TRACE_LOGFILEA;
+impl<'callbackdata> EventTraceLogfile<'callbackdata> {
+    /// Create a new instance
+    #[allow(clippy::borrowed_box)] // Being Boxed is really important, let's keep the Box<...> in the function signature to make the intent clearer (see https://github.com/n4r1b/ferrisetw/issues/72)
+    pub fn create(callback_data: &'callbackdata Box<Arc<CallbackData>>, mut wide_logger_name: U16CString, callback: unsafe extern "system" fn(*mut Etw::EVENT_RECORD)) -> Self {
+        let not_really_mut_ptr = callback_data.as_ref() as *const Arc<CallbackData> as *const c_void as *mut c_void; // That's kind-of fine because the user context is _not supposed_ to be changed by Windows APIs
 
-    fn deref(&self) -> &self::Etw::EVENT_TRACE_LOGFILEA {
-        &self.0
+        let native = Etw::EVENT_TRACE_LOGFILEW {
+            LoggerName: PWSTR(wide_logger_name.as_mut_ptr()),
+            Anonymous1: Etw::EVENT_TRACE_LOGFILEW_0 {
+                ProcessTraceMode: Etw::PROCESS_TRACE_MODE_REAL_TIME | Etw::PROCESS_TRACE_MODE_EVENT_RECORD
+                // In case you really want to use PROCESS_TRACE_MODE_RAW_TIMESTAMP, please review EventRecord::timestamp(), which could not be valid anymore
+            },
+            Anonymous2: Etw::EVENT_TRACE_LOGFILEW_1 {
+                EventRecordCallback: Some(callback)
+            },
+            Context: not_really_mut_ptr,
+            ..Default::default()
+        };
+
+        Self {
+            native,
+            wide_logger_name,
+            lifetime: PhantomData,
+        }
     }
-}
 
-impl std::ops::DerefMut for EventTraceLogfile {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+    /// Retrieve the windows-rs compatible pointer to the contained `EVENT_TRACE_LOGFILEA`
+    ///
+    /// # Safety
+    ///
+    /// This pointer is valid as long as [`Self`] is alive (and not modified elsewhere)<br/>
+    /// Note that `OpenTraceW` **will** modify its content on output, and thus you should make sure to be the only user of this instance.
+    pub(crate) unsafe fn as_mut_ptr(&mut self) -> *mut Etw::EVENT_TRACE_LOGFILEW {
+        &mut self.native as *mut Etw::EVENT_TRACE_LOGFILEW
+    }
+
+    /// The current Context pointer.
+    pub fn context_ptr(&self) -> *const std::ffi::c_void {
+        self.native.Context
     }
 }
 
 /// Newtype wrapper over an [ENABLE_TRACE_PARAMETERS]
 ///
-/// [ENABLE_TRACE_PARAMETERS]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.ENABLE_TRACE_PARAMETERS.html
+/// [ENABLE_TRACE_PARAMETERS]: https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Diagnostics/Etw/struct.ENABLE_TRACE_PARAMETERS.html
 #[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct EnableTraceParameters(Etw::ENABLE_TRACE_PARAMETERS);
+#[derive(Clone, Default)]
+pub struct EnableTraceParameters<'filters>{
+    native: Etw::ENABLE_TRACE_PARAMETERS,
+    /// `native` has pointers to an array of EVENT_FILTER_DESCRIPTOR, let's store it here
+    array_of_event_filter_descriptor: Vec<EVENT_FILTER_DESCRIPTOR>,
+    /// `array_of_event_filter_descriptor` points to data somewhere else. Let's bind it to their lifetime
+    lifetime: PhantomData<&'filters EventFilterDescriptor>,
+}
 
-impl EnableTraceParameters {
-    pub fn create(guid: GUID, trace_flags: u32) -> Self {
+impl<'filters> EnableTraceParameters<'filters> {
+    pub fn create(guid: GUID, trace_flags: TraceFlags, filters: &'filters [EventFilterDescriptor]) -> Self {
         let mut params = EnableTraceParameters::default();
-        params.0.ControlFlags = 0;
-        params.0.Version = Etw::ENABLE_TRACE_PARAMETERS_VERSION_2;
-        params.0.SourceId = guid;
-        params.0.EnableProperty = trace_flags;
+        params.native.ControlFlags = 0;
+        params.native.Version = Etw::ENABLE_TRACE_PARAMETERS_VERSION_2;
+        params.native.SourceId = guid;
+        params.native.EnableProperty = trace_flags.bits();
 
-        // TODO: Add Filters option
-        params.0.EnableFilterDesc = std::ptr::null_mut();
-        params.0.FilterDescCount = 0;
+
+        // Note: > Each type of filter (a specific Type member) may only appear once in a call to the EnableTraceEx2 function.
+        //       https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-enabletraceex2#remarks
+        //       > The maximum number of filters that can be included in a call to EnableTraceEx2 is set by MAX_EVENT_FILTERS_COUNT
+        params.array_of_event_filter_descriptor = filters
+            .iter()
+            .map(|efd| efd.as_event_filter_descriptor())
+            .collect();
+        params.native.FilterDescCount = params.array_of_event_filter_descriptor.len() as u32; // (let's assume we won't try to fit more than 4 billion filters)
+        if filters.is_empty() {
+            params.native.EnableFilterDesc = std::ptr::null_mut();
+        } else {
+            params.native.EnableFilterDesc = params.array_of_event_filter_descriptor.as_mut_ptr();
+        }
 
         params
     }
-}
 
-impl std::ops::Deref for EnableTraceParameters {
-    type Target = Etw::ENABLE_TRACE_PARAMETERS;
-
-    fn deref(&self) -> &self::Etw::ENABLE_TRACE_PARAMETERS {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for EnableTraceParameters {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-/// Newtype wrapper over an [TRACE_EVENT_INFO]
-///
-/// [TRACE_EVENT_INFO]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.TRACE_EVENT_INFO.html
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct TraceEventInfo(Etw::TRACE_EVENT_INFO);
-
-impl std::ops::Deref for TraceEventInfo {
-    type Target = Etw::TRACE_EVENT_INFO;
-
-    fn deref(&self) -> &self::Etw::TRACE_EVENT_INFO {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for TraceEventInfo {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl From<&TraceEventInfoRaw> for TraceEventInfo {
-    fn from(val: &TraceEventInfoRaw) -> Self {
-        unsafe { *(val.info.as_ptr() as *mut TraceEventInfo) }
-    }
-}
-
-/// Newtype wrapper over an [EVENT_PROPERTY_INFO]
-///
-/// [EVENT_PROPERTY_INFO]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.EVENT_PROPERTY_INFO.html
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct EventPropertyInfo(Etw::EVENT_PROPERTY_INFO);
-
-impl std::ops::Deref for EventPropertyInfo {
-    type Target = Etw::EVENT_PROPERTY_INFO;
-
-    fn deref(&self) -> &self::Etw::EVENT_PROPERTY_INFO {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for EventPropertyInfo {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl From<&[u8]> for EventPropertyInfo {
-    fn from(val: &[u8]) -> Self {
-        unsafe { *(val.as_ptr() as *mut EventPropertyInfo) }
-    }
-}
-
-impl Default for EventPropertyInfo {
-    fn default() -> Self {
-        unsafe { std::mem::zeroed::<EventPropertyInfo>() }
+    /// Returns an unsafe pointer over the wrapped `ENABLE_TRACE_PARAMETERS`
+    ///
+    /// # Safety
+    ///
+    /// This pointer is valid as long `self` is valid (and not mutated)
+    pub fn as_ptr(&self) -> *const Etw::ENABLE_TRACE_PARAMETERS {
+        &self.native as *const _
     }
 }
 
 /// Wrapper over the [DECODING_SOURCE] type
 ///
-/// [DECODING_SOURCE]: https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.DECODING_SOURCE.html
+/// [DECODING_SOURCE]: https://learn.microsoft.com/en-us/windows/win32/api/tdh/ne-tdh-decoding_source
+#[derive(Debug)]
 pub enum DecodingSource {
     DecodingSourceXMLFile,
     DecodingSourceWbem,
@@ -354,77 +339,3 @@ impl From<Etw::DECODING_SOURCE> for DecodingSource {
 // Safe cast (EVENT_HEADER_FLAG_32_BIT_HEADER = 32)
 #[doc(hidden)]
 pub const EVENT_HEADER_FLAG_32_BIT_HEADER: u16 = Etw::EVENT_HEADER_FLAG_32_BIT_HEADER as u16;
-
-#[repr(C)]
-#[derive(Debug, Clone, Default)]
-pub(crate) struct TraceEventInfoRaw {
-    info: Vec<u8>,
-}
-
-impl TraceEventInfoRaw {
-    pub(crate) fn alloc(len: u32) -> Self {
-        TraceEventInfoRaw {
-            info: vec![0; len as usize],
-        }
-    }
-
-    pub(crate) fn info_as_ptr(&mut self) -> *mut u8 {
-        self.info.as_mut_ptr()
-    }
-
-    pub(crate) fn provider_guid(&self) -> GUID {
-        TraceEventInfo::from(self).ProviderGuid
-    }
-
-    pub(crate) fn event_id(&self) -> u16 {
-        TraceEventInfo::from(self).EventDescriptor.Id
-    }
-
-    pub(crate) fn event_version(&self) -> u8 {
-        TraceEventInfo::from(self).EventDescriptor.Version
-    }
-
-    pub(crate) fn decoding_source(&self) -> DecodingSource {
-        DecodingSource::from(TraceEventInfo::from(self).DecodingSource)
-    }
-
-    pub(crate) fn provider_name(&self) -> String {
-        let provider_name_offset = TraceEventInfo::from(self).ProviderNameOffset as usize;
-        // TODO: Evaluate performance, but this sounds better than creating a whole Vec<u16> and getting the string from the offset/2
-        utils::parse_unk_size_null_utf16_string(&self.info[provider_name_offset..])
-    }
-
-    pub(crate) fn task_name(&self) -> String {
-        let task_name_offset = TraceEventInfo::from(self).TaskNameOffset as usize;
-        utils::parse_unk_size_null_utf16_string(&self.info[task_name_offset..])
-    }
-
-    pub(crate) fn opcode_name(&self) -> String {
-        let opcode_name_offset = TraceEventInfo::from(self).OpcodeNameOffset as usize;
-        if opcode_name_offset == 0 {
-            return String::from("");
-        }
-        utils::parse_unk_size_null_utf16_string(&self.info[opcode_name_offset..])
-    }
-
-    pub(crate) fn property_count(&self) -> u32 {
-        TraceEventInfo::from(self).PropertyCount
-    }
-
-    pub(crate) fn property(&self, index: u32) -> Property {
-        // let's make sure index is not bigger thant the PropertyCount
-        assert!(index <= self.property_count());
-
-        // We need to subtract the sizeof(EVENT_PROPERTY_INFO) due to how TRACE_EVENT_INFO is declared
-        // in the bindings, the last field `EventPropertyInfoArray[ANYSIZE_ARRAY]` is declared as
-        // [EVENT_PROPERTY_INFO; 1]
-        // https://microsoft.github.io/windows-docs-rs/doc/bindings/Windows/Win32/Etw/struct.TRACE_EVENT_INFO.html#structfield.EventPropertyInfoArray
-        let curr_prop_offset = index as usize * std::mem::size_of::<EventPropertyInfo>()
-            + (std::mem::size_of::<TraceEventInfo>() - std::mem::size_of::<EventPropertyInfo>());
-
-        let curr_prop = EventPropertyInfo::from(&self.info[curr_prop_offset..]);
-        let name =
-            utils::parse_unk_size_null_utf16_string(&self.info[curr_prop.NameOffset as usize..]);
-        Property::new(name, &curr_prop)
-    }
-}

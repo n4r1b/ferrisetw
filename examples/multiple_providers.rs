@@ -1,17 +1,17 @@
-use ferrisetw::native::etw_types::EventRecord;
-use ferrisetw::parser::{Parser, Pointer, TryParse};
+use ferrisetw::EventRecord;
+use ferrisetw::parser::{Parser, Pointer};
 use ferrisetw::provider::*;
-use ferrisetw::schema::SchemaLocator;
+use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::*;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
-fn registry_callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
+fn registry_callback(record: &EventRecord, schema_locator: &SchemaLocator) {
     match schema_locator.event_schema(record) {
         Ok(schema) => {
-            if schema.event_id() == 7 {
-                let mut parser = Parser::create(&schema);
-                let pid = schema.process_id();
+            if record.event_id() == 7 {
+                let parser = Parser::create(record, &schema);
+                let pid = record.process_id();
                 let key_obj: Pointer = parser.try_parse("KeyObject").unwrap_or(Pointer::default());
                 let status: u32 = parser.try_parse("Status").unwrap_or(0);
                 let value_name: String = parser.try_parse("ValueName").unwrap_or(String::from(""));
@@ -25,11 +25,11 @@ fn registry_callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
     };
 }
 
-fn tcpip_callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
+fn tcpip_callback(record: &EventRecord, schema_locator: &SchemaLocator) {
     match schema_locator.event_schema(record) {
         Ok(schema) => {
-            if schema.event_id() == 11 {
-                let mut parser = Parser::create(&schema);
+            if record.event_id() == 11 {
+                let parser = Parser::create(record, &schema);
                 let size: u32 = parser.try_parse("size").unwrap_or(0);
                 let daddr: IpAddr = parser
                     .try_parse("daddr")
@@ -50,24 +50,25 @@ fn tcpip_callback(record: EventRecord, schema_locator: &mut SchemaLocator) {
 }
 
 fn main() {
-    let tcpip_provider = Provider::new()
-        .by_guid("7dd42a49-5329-4832-8dfd-43d979153a88") // Microsoft-Windows-Kernel-Network
+    env_logger::init(); // this is optional. This makes the (rare) error logs of ferrisetw to be printed to stderr
+
+    let tcpip_provider = Provider
+        ::by_guid("7dd42a49-5329-4832-8dfd-43d979153a88") // Microsoft-Windows-Kernel-Network
         .add_callback(tcpip_callback)
-        .build()
-        .unwrap();
+        .build();
 
-    let process_provider = Provider::new()
-        .by_guid("70eb4f03-c1de-4f73-a051-33d13d5413bd") // Microsoft-Windows-Kernel-Registry
+    let process_provider = Provider
+        ::by_guid("70eb4f03-c1de-4f73-a051-33d13d5413bd") // Microsoft-Windows-Kernel-Registry
         .add_callback(registry_callback)
-        .build()
-        .unwrap();
+        .build();
 
-    let mut trace = UserTrace::new()
+    let user_trace = UserTrace::new()
         .enable(process_provider)
         .enable(tcpip_provider)
-        .start()
+        .start_and_process()
         .unwrap();
 
     std::thread::sleep(Duration::new(10, 0));
-    trace.stop();
+
+    user_trace.stop().unwrap(); // optional. Simply dropping user_trace has the same effect
 }

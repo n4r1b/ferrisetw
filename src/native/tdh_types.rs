@@ -5,15 +5,20 @@
 //! event
 //!
 //! This is a bit extra but is basically a redefinition of the In an Out TDH types following the
-//! rust naming convention, it can also come in handy when implementing the [TryParse] trait for a type
+//! rust naming convention, it can also come in handy when implementing the `TryParse` trait for a type
 //! to determine how to handle a [Property] based on this values
 //!
-//! [TryParse]: crate::parser::TryParse
 //! [Property]: crate::native::tdh_types::Property
-use crate::native::etw_types::EventPropertyInfo;
 use num_traits::FromPrimitive;
 
 use windows::Win32::System::Diagnostics::Etw;
+
+#[derive(Debug)]
+pub enum PropertyError{
+    /// Parsing complex types in properties is not supported in this crate
+    /// (yet? See <https://github.com/n4r1b/ferrisetw/issues/76>)
+    UnimplementedType
+}
 
 
 /// Attributes of a property
@@ -32,23 +37,40 @@ pub struct Property {
 
 #[doc(hidden)]
 impl Property {
-    pub fn new(name: String, property: &EventPropertyInfo) -> Self {
-        // Fixme: Check flags to see which values to get for the in_type
-        unsafe {
-            let out_type = FromPrimitive::from_u16(property.Anonymous1.nonStructType.OutType)
+    pub fn new(name: String, property: &Etw::EVENT_PROPERTY_INFO) -> Result<Self, PropertyError> {
+        let flags = PropertyFlags::from(property.Flags);
+
+        if flags.contains(PropertyFlags::PROPERTY_STRUCT) == false {
+            // The property is a non-struct type. It makes sense to access these fields of the unions
+            let ot = unsafe { property.Anonymous1.nonStructType.OutType };
+            let it = unsafe { property.Anonymous1.nonStructType.InType };
+
+            let length = if flags.contains(PropertyFlags::PROPERTY_PARAM_LENGTH) {
+                // TODO: support properties that point at sibling property to tell the length of the property
+                return Err(PropertyError::UnimplementedType);
+            } else {
+                // The property has no param for its length, it makes sense to access this field of the union
+                unsafe { property.Anonymous3.length }
+            };
+
+            let out_type = FromPrimitive::from_u16(ot)
                 .unwrap_or(TdhOutType::OutTypeNull);
-            let in_type = FromPrimitive::from_u16(property.Anonymous1.nonStructType.InType)
+
+            let in_type = FromPrimitive::from_u16(it)
                 .unwrap_or(TdhInType::InTypeNull);
 
-            Property {
+            return Ok(Property {
                 name,
-                flags: PropertyFlags::from(property.Flags),
-                length: property.Anonymous3.length,
+                flags,
+                length,
                 in_type,
                 out_type,
-            }
+            });
         }
+
+        Err(PropertyError::UnimplementedType)
     }
+
     pub fn in_type(&self) -> TdhInType {
         self.in_type
     }
@@ -60,15 +82,11 @@ impl Property {
     pub fn len(&self) -> usize {
         self.length as usize
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.length == 0
-    }
 }
 
 /// Represent a TDH_IN_TYPE
 #[repr(u16)]
-#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq)]
+#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq, Eq)]
 pub enum TdhInType {
     // Deprecated values are not defined
     InTypeNull,
@@ -104,7 +122,7 @@ impl Default for TdhInType {
 
 /// Represent a TDH_OUT_TYPE
 #[repr(u16)]
-#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq)]
+#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq, Eq)]
 pub enum TdhOutType {
     OutTypeNull,
     OutTypeString,
