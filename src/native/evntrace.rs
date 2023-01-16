@@ -264,10 +264,9 @@ pub(crate) fn process_trace(trace_handle: TraceHandle) -> EvntraceNativeResult<(
     if filter_invalid_trace_handles(trace_handle).is_none() {
         Err(EvntraceNativeError::InvalidHandle)
     } else {
-        let mut now = FILETIME::default();
         let result = unsafe {
-            GetSystemTimeAsFileTime(&mut now);
-            Etw::ProcessTrace(&[trace_handle], Some(&now), None)
+            let mut now = GetSystemTimeAsFileTime();
+            Etw::ProcessTrace(&[trace_handle], Some(&mut now as *mut FILETIME), None)
         };
 
         if result == ERROR_SUCCESS {
