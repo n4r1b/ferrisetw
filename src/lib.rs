@@ -77,7 +77,7 @@
 //!     // We start a trace session for the previously registered provider
 //!     // Callbacks will be run in a separate thread.
 //!     let mut trace = UserTrace::new()
-//!         .named(String::from("MyProvider"))
+//!         .named(String::from("MyTrace"))
 //!         .enable(process_provider)
 //!         // .enable(other_provider) // It is possible to enable multiple providers on the same trace.
 //!         .start_and_process()       // This call will spawn the thread for you.

@@ -36,7 +36,7 @@ fn main() {
         .build();
 
     let (_user_trace, handle) = UserTrace::new()
-        .named(String::from("MyProvider"))
+        .named(String::from("MyTrace"))
         .enable(process_provider)
         .start()
         .unwrap();
@@ -46,7 +46,7 @@ fn main() {
         let status = UserTrace::process_from_handle(handle);
         // This code will be executed when the trace stops. Examples:
         // * when it is dropped
-        // * when it is manually stopped (either by user_trace.stop, or by the `logman stop -ets MyProvider` command)
+        // * when it is manually stopped (either by user_trace.stop, or by the `logman stop -ets MyTrace` command)
         println!("Trace ended with status {:?}", status);
     });
 
