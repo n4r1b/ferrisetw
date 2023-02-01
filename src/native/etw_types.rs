@@ -169,7 +169,7 @@ impl EventTraceProperties {
         // etw_trace_properties.LogFileNameOffset must be 0, but this will change when https://github.com/n4r1b/ferrisetw/issues/7 is resolved
         // > If you do not want to log events to a log file (for example, if you specify EVENT_TRACE_REAL_TIME_MODE only), set LogFileNameOffset to 0.
         // (https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties)
-        etw_trace_properties.LoggerNameOffset = offset_of!(EventTraceProperties, wide_log_file_name) as u32;
+        etw_trace_properties.LoggerNameOffset = offset_of!(EventTraceProperties, wide_trace_name) as u32;
 
         // https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties#remarks
         // > You do not copy the session name to the offset. The StartTrace function copies the name for you.
