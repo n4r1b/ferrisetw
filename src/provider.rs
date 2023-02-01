@@ -101,6 +101,8 @@ impl Provider {
     }
 
     /// Create a Kernel Provider
+    ///
+    /// You can pass either a KernelProvider you have created yourself, or one of the standard providers from [`crate::provider::kernel_providers`].
     pub fn kernel(kernel_provider: &kernel_providers::KernelProvider) -> ProviderBuilder {
         let mut builder = Self::by_guid(kernel_provider.guid);
         builder.kernel_flags = kernel_provider.flags;
