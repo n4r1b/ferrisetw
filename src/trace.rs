@@ -161,7 +161,7 @@ impl TraceTrait for KernelTrace {
 
 
 
-/// A user trace session
+/// A real-time user trace session
 ///
 /// To stop the session, you can drop this instance
 #[derive(Debug)]
@@ -176,7 +176,7 @@ pub struct UserTrace {
     callback_data: Box<Arc<CallbackData>>,
 }
 
-/// A kernel trace session
+/// A real-time kernel trace session
 ///
 /// To stop the session, you can drop this instance
 #[derive(Debug)]
@@ -339,7 +339,9 @@ impl private::PrivateTraceTrait for KernelTrace {
 impl<T: TraceTrait + PrivateTraceTrait> TraceBuilder<T> {
     /// Define the trace name
     ///
-    /// For kernel traces on Windows Versions older than Win8, this method won't change the trace name. In those versions the trace name will be set to "NT Kernel Logger"
+    /// For kernel traces on Windows Versions older than Win8, this method won't change the trace name. In those versions the trace name will be set to "NT Kernel Logger".
+    ///
+    /// Note: this trace name may be truncated to a few hundred characters if it is too long.
     pub fn named(mut self, name: String) -> Self {
         if T::TRACE_KIND == private::TraceKind::Kernel && version_helper::is_win8_or_greater() == false {
             self.name = String::from(KERNEL_LOGGER_NAME);

@@ -71,7 +71,8 @@
 //!     let process_provider = Provider
 //!         ::by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716") // Microsoft-Windows-Kernel-Process
 //!         .add_callback(process_callback)
-//!         // .add_filter(event_filters) // it is possible to filter by event ID, process ID, etc.
+//!         // .add_callback(process_callback) // it is possible to add multiple callbacks for a given provider
+//!         // .add_filter(event_filters)      // it is possible to filter by event ID, process ID, etc.
 //!         .build();
 //!
 //!     // We start a trace session for the previously registered provider
@@ -80,6 +81,7 @@
 //!         .named(String::from("MyProvider"))
 //!         .enable(process_provider)
 //!         // .enable(other_provider) // It is possible to enable multiple providers on the same trace.
+//!         // .set_etl_dump_file(...) // It is possible to dump the events that the callbacks are processing into a file
 //!         .start_and_process()       // This call will spawn the thread for you.
 //!                                    // See the doc for alternative ways of processing the trace,
 //!                                    // with more or less flexibility regarding this spawned thread.
