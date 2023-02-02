@@ -77,25 +77,28 @@ pub(crate) enum ControlValues {
 }
 
 bitflags! {
-    /// Logging Mode constants
+    /// Logging Mode constants that applies to a general trace
     ///
-    /// See <https://learn.microsoft.com/en-us/windows/win32/etw/logging-mode-constants>
+    /// This is a subset of <https://learn.microsoft.com/en-us/windows/win32/etw/logging-mode-constants>
     pub struct LoggingMode: u32 {
-        const EVENT_TRACE_FILE_MODE_NONE =             Etw::EVENT_TRACE_FILE_MODE_NONE;
-        const EVENT_TRACE_FILE_MODE_SEQUENTIAL =       Etw::EVENT_TRACE_FILE_MODE_SEQUENTIAL;
-        const EVENT_TRACE_FILE_MODE_CIRCULAR =         Etw::EVENT_TRACE_FILE_MODE_CIRCULAR;
-        const EVENT_TRACE_FILE_MODE_APPEND =           Etw::EVENT_TRACE_FILE_MODE_APPEND;
-        const EVENT_TRACE_FILE_MODE_NEWFILE =          Etw::EVENT_TRACE_FILE_MODE_NEWFILE;
-        const EVENT_TRACE_FILE_MODE_PREALLOCATE =      Etw::EVENT_TRACE_FILE_MODE_PREALLOCATE;
+        // Commented values only apply to DumpFileLoggingMod
+
+        // EVENT_TRACE_FILE_MODE_NONE
+        // EVENT_TRACE_FILE_MODE_SEQUENTIAL
+        // EVENT_TRACE_FILE_MODE_CIRCULAR
+        // EVENT_TRACE_FILE_MODE_APPEND
+        // EVENT_TRACE_FILE_MODE_NEWFILE
+        // EVENT_TRACE_FILE_MODE_PREALLOCATE
         const EVENT_TRACE_NONSTOPPABLE_MODE =          Etw::EVENT_TRACE_NONSTOPPABLE_MODE;
         const EVENT_TRACE_SECURE_MODE =                Etw::EVENT_TRACE_SECURE_MODE;
         const EVENT_TRACE_REAL_TIME_MODE =             Etw::EVENT_TRACE_REAL_TIME_MODE;
-        const EVENT_TRACE_DELAY_OPEN_FILE_MODE =       Etw::EVENT_TRACE_DELAY_OPEN_FILE_MODE;
+        // On Windows Vista or later, this mode is not applicable should not be used.
+        // EVENT_TRACE_DELAY_OPEN_FILE_MODE
         const EVENT_TRACE_BUFFERING_MODE =             Etw::EVENT_TRACE_BUFFERING_MODE;
         const EVENT_TRACE_PRIVATE_LOGGER_MODE =        Etw::EVENT_TRACE_PRIVATE_LOGGER_MODE;
-        const EVENT_TRACE_USE_KBYTES_FOR_SIZE =        Etw::EVENT_TRACE_USE_KBYTES_FOR_SIZE;
-        const EVENT_TRACE_USE_GLOBAL_SEQUENCE =        Etw::EVENT_TRACE_USE_GLOBAL_SEQUENCE;
-        const EVENT_TRACE_USE_LOCAL_SEQUENCE =         Etw::EVENT_TRACE_USE_LOCAL_SEQUENCE;
+        // EVENT_TRACE_USE_KBYTES_FOR_SIZE
+        // EVENT_TRACE_USE_GLOBAL_SEQUENCE
+        // EVENT_TRACE_USE_LOCAL_SEQUENCE
         const EVENT_TRACE_PRIVATE_IN_PROC =            Etw::EVENT_TRACE_PRIVATE_IN_PROC;
         const EVENT_TRACE_MODE_RESERVED =              Etw::EVENT_TRACE_MODE_RESERVED;
         const EVENT_TRACE_STOP_ON_HYBRID_SHUTDOWN =    Etw::EVENT_TRACE_STOP_ON_HYBRID_SHUTDOWN;
@@ -108,6 +111,66 @@ bitflags! {
     }
 }
 
+bitflags! {
+    /// Logging Mode constants that applies to a dump file.
+    ///
+    /// This is a subset of <https://learn.microsoft.com/en-us/windows/win32/etw/logging-mode-constants>
+    ///
+    /// See the documentation of [`crate::trace::TraceBuilder::set_etl_dump_file`] for more info.
+    pub struct DumpFileLoggingMode: u32 {
+        // Commented values only apply to LoggingMode
+
+        /// > Same as EVENT_TRACE_FILE_MODE_SEQUENTIAL with no maximum file size specified.
+        const EVENT_TRACE_FILE_MODE_NONE =             Etw::EVENT_TRACE_FILE_MODE_NONE;
+        /// > Writes events to a log file sequentially; stops when the file reaches its maximum size.Do not use with EVENT_TRACE_FILE_MODE_CIRCULAR or EVENT_TRACE_FILE_MODE_NEWFILE.
+        ///
+        /// Note: "stop" here means "stop appending to the file", not "stop the trace"
+        const EVENT_TRACE_FILE_MODE_SEQUENTIAL =       Etw::EVENT_TRACE_FILE_MODE_SEQUENTIAL;
+        /// > Writes events to a log file. After the file reaches the maximum size, the oldest events are replaced with incoming events.Note that the contents of the circular log file may appear out of order on multiprocessor computers.<br/>
+        /// > Do not use with EVENT_TRACE_FILE_MODE_APPEND, EVENT_TRACE_FILE_MODE_NEWFILE, or EVENT_TRACE_FILE_MODE_SEQUENTIAL.
+        const EVENT_TRACE_FILE_MODE_CIRCULAR =         Etw::EVENT_TRACE_FILE_MODE_CIRCULAR;
+        /// > Appends events to an existing sequential log file. If the file does not exist, it is created. Use only if you specify system time for the clock resolution, otherwise, ProcessTrace will return events with incorrect time stamps. When using EVENT_TRACE_FILE_MODE_APPEND, the values for BufferSize, NumberOfProcessors, and ClockType must be explicitly provided and must be the same in both the logger and the file being appended.<br/>
+        /// > Do not use with EVENT_TRACE_REAL_TIME_MODE, EVENT_TRACE_FILE_MODE_CIRCULAR, EVENT_TRACE_FILE_MODE_NEWFILE, or EVENT_TRACE_PRIVATE_LOGGER_MODE.
+        const EVENT_TRACE_FILE_MODE_APPEND =           Etw::EVENT_TRACE_FILE_MODE_APPEND;
+        /// > Automatically switches to a new log file when the file reaches the maximum size. The MaximumFileSize member of EVENT_TRACE_PROPERTIES must be set.The specified file name must be a formatted string (for example, the string contains a %d, such as c:\test%d.etl). Each time a new file is created, a counter is incremented and its value is used, the formatted string is updated, and the resulting string is used as the file name.<br/>
+        /// > This option is not allowed for private event tracing sessions and should not be used for NT kernel logger sessions.<br/>
+        /// > Do not use with EVENT_TRACE_FILE_MODE_CIRCULAR, EVENT_TRACE_FILE_MODE_APPEND or EVENT_TRACE_FILE_MODE_SEQUENTIAL.
+        const EVENT_TRACE_FILE_MODE_NEWFILE =          Etw::EVENT_TRACE_FILE_MODE_NEWFILE;
+        /// > Reserves EVENT_TRACE_PROPERTIES.MaximumFileSize bytes of disk space for the log file in advance. The file occupies the entire space during logging, for both circular and sequential log files. When you stop the session, the log file is reduced to the size needed. You must set EVENT_TRACE_PROPERTIES.MaximumFileSize.<br/>
+        /// > You cannot use the mode for private event tracing sessions.
+        const EVENT_TRACE_FILE_MODE_PREALLOCATE =      Etw::EVENT_TRACE_FILE_MODE_PREALLOCATE;
+        // EVENT_TRACE_NONSTOPPABLE_MODE
+        // EVENT_TRACE_SECURE_MODE
+        // EVENT_TRACE_REAL_TIME_MODE
+        // On Windows Vista or later, this mode is not applicable should not be used.
+        // EVENT_TRACE_DELAY_OPEN_FILE_MODE
+        // EVENT_TRACE_BUFFERING_MODE
+        // EVENT_TRACE_PRIVATE_LOGGER_MODE
+        /// > Use kilobytes as the unit of measure for specifying the size of a file. The default unit of measure is megabytes. This mode applies to the MaxFileSize registry value for an AutoLogger session and the MaximumFileSize member of EVENT_TRACE_PROPERTIES.
+        const EVENT_TRACE_USE_KBYTES_FOR_SIZE =        Etw::EVENT_TRACE_USE_KBYTES_FOR_SIZE;
+        /// > Uses sequence numbers that are unique across event tracing sessions. This mode only applies to events logged using the TraceMessage function. For more information, see TraceMessage for usage details.<br/>
+        /// > EVENT_TRACE_USE_GLOBAL_SEQUENCE and EVENT_TRACE_USE_LOCAL_SEQUENCE are mutually exclusive.
+        const EVENT_TRACE_USE_GLOBAL_SEQUENCE =        Etw::EVENT_TRACE_USE_GLOBAL_SEQUENCE;
+        /// > Uses sequence numbers that are unique only for an individual event tracing session. This mode only applies to events logged using the TraceMessage function. For more information, see TraceMessage for usage details.<br/>
+        /// > EVENT_TRACE_USE_GLOBAL_SEQUENCE and EVENT_TRACE_USE_LOCAL_SEQUENCE are mutually exclusive.
+        const EVENT_TRACE_USE_LOCAL_SEQUENCE =         Etw::EVENT_TRACE_USE_LOCAL_SEQUENCE;
+        // EVENT_TRACE_PRIVATE_IN_PROC
+        // EVENT_TRACE_MODE_RESERVED
+        // EVENT_TRACE_STOP_ON_HYBRID_SHUTDOWN
+        // EVENT_TRACE_PERSIST_ON_HYBRID_SHUTDOWN
+        // EVENT_TRACE_USE_PAGED_MEMORY
+        // EVENT_TRACE_SYSTEM_LOGGER_MODE
+        // EVENT_TRACE_INDEPENDENT_SESSION_MODE
+        // EVENT_TRACE_NO_PER_PROCESSOR_BUFFERING
+        // EVENT_TRACE_ADDTO_TRIAGE_DUMP
+    }
+}
+
+impl std::default::Default for DumpFileLoggingMode {
+    fn default() -> Self {
+        Self::EVENT_TRACE_FILE_MODE_NONE
+    }
+}
 
 /// Wrapper over an [EVENT_TRACE_PROPERTIES](https://docs.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties), and its allocated companion members
 ///
@@ -118,8 +181,10 @@ bitflags! {
 #[derive(Clone, Copy)]
 pub struct EventTraceProperties {
     etw_trace_properties: Etw::EVENT_TRACE_PROPERTIES,
+    /// The trace name to subscribe to
     wide_trace_name: [u16; TRACE_NAME_MAX_CHARS+1],    // The +1 leaves space for the final null widechar.
-    wide_log_file_name: [u16; TRACE_NAME_MAX_CHARS+1], // The +1 leaves space for the final null widechar. Not used currently, but this may be useful when resolving https://github.com/n4r1b/ferrisetw/issues/7
+    /// The file name (if any) we store our events to
+    wide_etl_dump_file_path: [u16; TRACE_NAME_MAX_CHARS+1], // The +1 leaves space for the final null widechar.
 }
 
 
@@ -136,9 +201,11 @@ impl EventTraceProperties {
     /// Create a new instance
     ///
     /// # Notes
-    /// `trace_name` is limited to 200 characters.
+    /// `trace_name` is limited to 200 characters.<br/>
+    /// The path to the dump file is limited to 200 characters.
     pub(crate) fn new<T>(
         trace_name: &U16CStr,
+        etl_dump_file: Option<(&U16CStr, DumpFileLoggingMode, Option<u32>)>,
         trace_properties: &TraceProperties,
         enable_flags: Etw::EVENT_TRACE_FLAG,
     ) -> Self
@@ -166,22 +233,40 @@ impl EventTraceProperties {
         etw_trace_properties.LogFileMode |= T::augmented_file_mode();
         etw_trace_properties.EnableFlags = enable_flags;
 
-        // etw_trace_properties.LogFileNameOffset must be 0, but this will change when https://github.com/n4r1b/ferrisetw/issues/7 is resolved
-        // > If you do not want to log events to a log file (for example, if you specify EVENT_TRACE_REAL_TIME_MODE only), set LogFileNameOffset to 0.
-        // (https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties)
-        etw_trace_properties.LoggerNameOffset = offset_of!(EventTraceProperties, wide_trace_name) as u32;
+        let mut s = Self {
+            etw_trace_properties,
+            wide_trace_name: [0u16; TRACE_NAME_MAX_CHARS+1],
+            wide_etl_dump_file_path: [0u16; TRACE_NAME_MAX_CHARS+1],
+        };
 
         // https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties#remarks
         // > You do not copy the session name to the offset. The StartTrace function copies the name for you.
         //
         // Let's do it anyway, even though that's not required
-        let mut s = Self {
-            etw_trace_properties,
-            wide_trace_name: [0u16; TRACE_NAME_MAX_CHARS+1],
-            wide_log_file_name: [0u16; TRACE_NAME_MAX_CHARS+1],
-        };
         let name_len = trace_name.len().min(TRACE_NAME_MAX_CHARS);
         s.wide_trace_name[..name_len].copy_from_slice(&trace_name.as_slice()[..name_len]);
+        s.etw_trace_properties.LoggerNameOffset = offset_of!(EventTraceProperties, wide_trace_name) as u32;
+
+        // Also populate the file name, if any
+        match etl_dump_file {
+            None => {
+                // Here, we do not want to dump events to a file
+                // > If you do not want to log events to a log file (for example, if you specify EVENT_TRACE_REAL_TIME_MODE only), set LogFileNameOffset to 0.
+                // (https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties)
+                s.etw_trace_properties.LogFileNameOffset = 0;
+            },
+            Some((path, file_mode, max_size)) => {
+                // Set the file path, and set the dump-file-related flags
+                let path_len = path.len().min(TRACE_NAME_MAX_CHARS);
+                s.wide_etl_dump_file_path[..path_len].copy_from_slice(&path.as_slice()[..path_len]);
+                s.etw_trace_properties.LogFileNameOffset = offset_of!(EventTraceProperties, wide_etl_dump_file_path) as u32;
+
+                s.etw_trace_properties.LogFileMode |= file_mode.bits();
+                if let Some(max_file_size) = max_size {
+                    s.etw_trace_properties.MaximumFileSize = max_file_size;
+                }
+            },
+        }
 
         s
     }
