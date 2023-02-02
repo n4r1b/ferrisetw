@@ -18,6 +18,7 @@ use windows::Win32::System::Diagnostics::Etw;
 use widestring::U16CString;
 
 pub use crate::native::etw_types::LoggingMode;
+pub use crate::native::etw_types::DumpFileLoggingMode;
 
 pub(crate) mod callback_data;
 use callback_data::CallbackData;
@@ -190,11 +191,22 @@ pub struct KernelTrace {
     callback_data: Box<Arc<CallbackData>>,
 }
 
+/// Various parameters related to an ETL dump file
+#[derive(Clone, Default)]
+pub struct DumpFileParams {
+    pub file_path: PathBuf,
+    /// Options that control how the file is written. If you're not sure, you can use [`DumpFileLoggingMode::default()`].
+    pub file_logging_mode: DumpFileLoggingMode,
+    /// Maximum size of the dump file. This is expressed in MB, unless `file_logging_mode` requires it otherwise.
+    pub max_size: Option<u32>,
+}
+
 /// Provides a way to crate Trace objects.
 ///
 /// These builders are created using [`UserTrace::new`] or [`KernelTrace::new`]
 pub struct TraceBuilder<T: TraceTrait> {
     name: String,
+    etl_dump_file: Option<DumpFileParams>,
     properties: TraceProperties,
     callback_data: CallbackData,
     trace_kind: PhantomData<T>,
@@ -206,6 +218,7 @@ impl UserTrace {
         let name = format!("n4r1b-trace-{}", utils::rand_string());
         TraceBuilder {
             name,
+            etl_dump_file: None,
             callback_data: CallbackData::new(),
             properties: TraceProperties::default(),
             trace_kind: PhantomData,
@@ -226,6 +239,7 @@ impl KernelTrace {
     pub fn new() -> TraceBuilder<KernelTrace> {
         let builder = TraceBuilder {
             name: String::new(),
+            etl_dump_file: None,
             callback_data: CallbackData::new(),
             properties: TraceProperties::default(),
             trace_kind: PhantomData,
@@ -346,6 +360,21 @@ impl<T: TraceTrait + PrivateTraceTrait> TraceBuilder<T> {
         self
     }
 
+    /// Define a dump file for the events.
+    ///
+    /// If set, events will be dumped to a file on disk.<br/>
+    /// Such files usually have a `.etl` extension.<br/>
+    /// Dumped events will also be processed by the callbacks you'll specify with [`crate::provider::ProviderBuilder::add_callback`].
+    ///
+    /// It is possible to control many aspects of the logging file (whether its size is limited, whether it should be a circular buffer file, etc.).
+    /// If you're not sure, `params` has a safe [`default` value](`DumpFileParams::default`).
+    ///
+    /// Note: the file name may be truncated to a few hundred characters if it is too long.
+    pub fn set_etl_dump_file(mut self, params: DumpFileParams) -> Self {
+        self.etl_dump_file = Some(params);
+        self
+    }
+
     /// Enable a Provider for this trace
     ///
     /// This will invoke the provider's callback whenever an event is available
@@ -372,15 +401,28 @@ impl<T: TraceTrait + PrivateTraceTrait> TraceBuilder<T> {
     ///   This convenience function spawns a thread for you, call [`TraceBuilder::start`] on the trace, and returns immediately.<br/>
     ///   This option returns a `T`, so you can explicitly stop the trace, but there is no way to get the status code of the ProcessTrace API.
     pub fn start(self) -> TraceResult<(T, TraceHandle)> {
+        // Prepare a wide version of the trace name
         let trace_wide_name = U16CString::from_str_truncate(self.name);
         let mut trace_wide_vec = trace_wide_name.into_vec();
         trace_wide_vec.truncate(crate::native::etw_types::TRACE_NAME_MAX_CHARS);
         let trace_wide_name = U16CString::from_vec_truncate(trace_wide_vec);
 
+        // Prepare a wide version of the ETL dump file path
+        let wide_etl_dump_file = match self.etl_dump_file {
+            None => None,
+            Some(DumpFileParams { file_path, file_logging_mode, max_size }) => {
+                let wide_path = U16CString::from_os_str_truncate(file_path.as_os_str());
+                let mut wide_path_vec = wide_path.into_vec();
+                wide_path_vec.truncate(crate::native::etw_types::TRACE_NAME_MAX_CHARS);
+                Some((U16CString::from_vec_truncate(wide_path_vec), file_logging_mode, max_size))
+            }
+        };
+
         let callback_data = Box::new(Arc::new(self.callback_data));
         let flags = callback_data.provider_flags::<T>();
         let (full_properties, control_handle) = start_trace::<T>(
             &trace_wide_name,
+            wide_etl_dump_file.as_ref().map(|(path, params, max_size)| (path.as_ucstr(), *params, *max_size)),
             &self.properties,
             flags)?;
 
@@ -443,6 +485,7 @@ pub fn stop_trace_by_name(trace_name: &str) -> TraceResult<()> {
 
     let mut properties = EventTraceProperties::new::<UserTrace>( // for EVENT_TRACE_CONTROL_STOP, we don't really care about most of the contents of the EventTraceProperties, so using new::<UserTrace>() is fine, even when stopping a kernel trace
         &wide_name,
+        None,   // MSDN says the dump file name (if any) must be populated for a EVENT_TRACE_CONTROL_STOP, but experience shows this is not necessary.
         &trace_properties,
         flags);
 

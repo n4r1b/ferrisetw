@@ -154,11 +154,16 @@ fn filter_invalid_control_handle(h: ControlHandle) -> Option<ControlHandle> {
 /// Create a new session.
 ///
 /// This builds an `EventTraceProperties`, calls `StartTraceW` and returns the built `EventTraceProperties` as well as the trace ControlHandle
-pub(crate) fn start_trace<T>(trace_name: &U16CStr, trace_properties: &TraceProperties, enable_flags: Etw::EVENT_TRACE_FLAG) -> EvntraceNativeResult<(EventTraceProperties, ControlHandle)>
+pub(crate) fn start_trace<T>(
+    trace_name: &U16CStr,
+    etl_dump_file: Option<(&U16CStr, DumpFileLoggingMode, Option<u32>)>,
+    trace_properties: &TraceProperties,
+    enable_flags: Etw::EVENT_TRACE_FLAG
+) -> EvntraceNativeResult<(EventTraceProperties, ControlHandle)>
 where
     T: TraceTrait
 {
-    let mut properties = EventTraceProperties::new::<T>(trace_name, trace_properties, enable_flags);
+    let mut properties = EventTraceProperties::new::<T>(trace_name, etl_dump_file, trace_properties, enable_flags);
 
     let mut control_handle = ControlHandle::default();
     let status = unsafe {
