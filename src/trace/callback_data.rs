@@ -1,10 +1,10 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::trace::{TraceTrait, RealTimeTraceTrait};
+use windows::Win32::System::Diagnostics::Etw;
+
 use crate::native::etw_types::event_record::EventRecord;
 use crate::provider::Provider;
 use crate::schema_locator::SchemaLocator;
-use windows::Win32::System::Diagnostics::Etw;
 
 pub use crate::native::etw_types::LoggingMode;
 

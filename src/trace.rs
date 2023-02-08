@@ -6,6 +6,10 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
+use windows::core::GUID;
+use windows::Win32::System::Diagnostics::Etw;
+use widestring::U16CString;
+
 use self::private::{PrivateRealTimeTraceTrait, PrivateTraceTrait};
 
 use crate::native::etw_types::EventTraceProperties;
@@ -13,9 +17,6 @@ use crate::native::version_helper;
 use crate::native::evntrace::{ControlHandle, TraceHandle, start_trace, open_trace, process_trace, enable_provider, control_trace, control_trace_by_name, close_trace};
 use crate::provider::Provider;
 use crate::utils;
-use windows::core::GUID;
-use windows::Win32::System::Diagnostics::Etw;
-use widestring::U16CString;
 
 pub use crate::native::etw_types::LoggingMode;
 pub use crate::native::etw_types::DumpFileLoggingMode;
