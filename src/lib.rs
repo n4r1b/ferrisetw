@@ -123,6 +123,8 @@ pub mod trace;
 mod traits;
 mod utils;
 
+pub(crate) type EtwCallback = Box<dyn FnMut(&EventRecord, &SchemaLocator) + Send + Sync + 'static>;
+
 // Convenience re-exports.
 pub use crate::trace::UserTrace;
 pub use crate::trace::KernelTrace;
