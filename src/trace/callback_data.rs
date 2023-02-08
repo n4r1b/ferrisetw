@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::trace::TraceTrait;
+use crate::trace::{TraceTrait, RealTimeTraceTrait};
 use crate::native::etw_types::event_record::EventRecord;
 use crate::provider::Provider;
 use crate::schema_locator::SchemaLocator;
@@ -42,7 +42,7 @@ impl CallbackData {
         self.events_handled.load(Ordering::Relaxed)
     }
 
-    pub fn provider_flags<T: TraceTrait>(&self) -> Etw::EVENT_TRACE_FLAG {
+    pub fn provider_flags<T: RealTimeTraceTrait>(&self) -> Etw::EVENT_TRACE_FLAG {
         Etw::EVENT_TRACE_FLAG(T::enable_flags(&self.providers))
     }
 

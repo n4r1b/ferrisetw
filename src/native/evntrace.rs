@@ -27,7 +27,7 @@ use super::etw_types::*;
 use crate::provider::Provider;
 use crate::provider::event_filter::EventFilterDescriptor;
 use crate::native::etw_types::event_record::EventRecord;
-use crate::trace::{TraceProperties, TraceTrait};
+use crate::trace::{TraceProperties, RealTimeTraceTrait};
 use crate::trace::callback_data::CallbackData;
 
 
@@ -161,7 +161,7 @@ pub(crate) fn start_trace<T>(
     enable_flags: Etw::EVENT_TRACE_FLAG
 ) -> EvntraceNativeResult<(EventTraceProperties, ControlHandle)>
 where
-    T: TraceTrait
+    T: RealTimeTraceTrait
 {
     let mut properties = EventTraceProperties::new::<T>(trace_name, etl_dump_file, trace_properties, enable_flags);
 

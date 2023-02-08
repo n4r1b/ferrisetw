@@ -8,7 +8,7 @@
 //! needed by using the functions exposed by the modules at the crate level
 use crate::provider::event_filter::EventFilterDescriptor;
 use crate::provider::TraceFlags;
-use crate::trace::{TraceProperties, TraceTrait};
+use crate::trace::{TraceProperties, RealTimeTraceTrait};
 use crate::trace::callback_data::CallbackData;
 use std::ffi::{c_void, OsString};
 use std::fmt::Formatter;
@@ -210,7 +210,7 @@ impl EventTraceProperties {
         enable_flags: Etw::EVENT_TRACE_FLAG,
     ) -> Self
     where
-        T: TraceTrait
+        T: RealTimeTraceTrait
     {
         let mut etw_trace_properties = Etw::EVENT_TRACE_PROPERTIES::default();
 

@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
-use self::private::PrivateTraceTrait;
+use self::private::{PrivateRealTimeTraceTrait, PrivateTraceTrait};
 
 use crate::native::etw_types::EventTraceProperties;
 use crate::native::version_helper;
@@ -77,16 +77,12 @@ impl Default for TraceProperties {
     }
 }
 
-/// Trait for common methods to user and kernel traces
+/// Trait for common methods to user, kernel and file traces
 pub trait TraceTrait: private::PrivateTraceTrait + Sized {
-    // This differs between UserTrace and KernelTrace
-    fn trace_guid() -> GUID;
-
     // This must be implemented for every trace, as this getter is needed by other methods from this trait
     fn trace_handle(&self) -> TraceHandle;
 
-    // These utilities should be implemented for every trace
-    fn trace_name(&self) -> OsString;
+    // This utility function should be implemented for every trace
     fn events_handled(&self) -> usize;
 
     // The following are default implementations, that work on both user and kernel traces
@@ -117,21 +113,32 @@ pub trait TraceTrait: private::PrivateTraceTrait + Sized {
     }
 }
 
+/// Trait for common methods to real-time traces
+pub trait RealTimeTraceTrait: TraceTrait + private::PrivateRealTimeTraceTrait {
+    // This differs between UserTrace and KernelTrace
+    fn trace_guid() -> GUID;
+
+    // This utility function should be implemented for every trace
+    fn trace_name(&self) -> OsString;
+}
+
 impl TraceTrait for UserTrace {
     fn trace_handle(&self) -> TraceHandle {
         self.trace_handle
     }
 
-    fn trace_name(&self) -> OsString {
-        self.properties.name()
-    }
-
     fn events_handled(&self) -> usize {
         self.callback_data.events_handled()
     }
+}
 
+impl RealTimeTraceTrait for UserTrace {
     fn trace_guid() -> GUID {
         GUID::new().unwrap_or(GUID::zeroed())
+    }
+
+    fn trace_name(&self) -> OsString {
+        self.properties.name()
     }
 }
 
@@ -141,20 +148,22 @@ impl TraceTrait for KernelTrace {
         self.trace_handle
     }
 
-    fn trace_name(&self) -> OsString {
-        self.properties.name()
-    }
-
     fn events_handled(&self) -> usize {
         self.callback_data.events_handled()
     }
+}
 
+impl RealTimeTraceTrait for KernelTrace {
     fn trace_guid() -> GUID {
         if version_helper::is_win8_or_greater() {
             GUID::new().unwrap_or(GUID::zeroed())
         } else {
             GUID::from(SYSTEM_TRACE_CONTROL_GUID)
         }
+    }
+
+    fn trace_name(&self) -> OsString {
+        self.properties.name()
     }
 }
 
@@ -204,7 +213,7 @@ pub struct DumpFileParams {
 /// Provides a way to crate Trace objects.
 ///
 /// These builders are created using [`UserTrace::new`] or [`KernelTrace::new`]
-pub struct TraceBuilder<T: TraceTrait> {
+pub struct TraceBuilder<T: RealTimeTraceTrait> {
     name: String,
     etl_dump_file: Option<DumpFileParams>,
     properties: TraceProperties,
@@ -269,19 +278,22 @@ mod private {
         Kernel,
     }
 
-    pub trait PrivateTraceTrait {
+    pub trait PrivateRealTimeTraceTrait: PrivateTraceTrait {
         const TRACE_KIND: TraceKind;
         #[allow(clippy::redundant_allocation)] // Being Boxed is really important, let's keep the Box<...> in the function signature to make the intent clearer (see https://github.com/n4r1b/ferrisetw/issues/72)
         fn build(properties: EventTraceProperties, control_handle: ControlHandle, trace_handle: TraceHandle, callback_data: Box<Arc<CallbackData>>) -> Self;
         fn augmented_file_mode() -> u32;
         fn enable_flags(_providers: &[Provider]) -> u32;
+    }
+
+    pub trait PrivateTraceTrait {
         // This function aims at de-deduplicating code called by `impl Drop` and `Trace::stop`.
         // It is basically [`Self::stop`], without consuming self (because the `impl Drop` only has a `&mut self`, not a `self`)
         fn non_consuming_stop(&mut self) -> TraceResult<()>;
     }
 }
 
-impl private::PrivateTraceTrait for UserTrace {
+impl private::PrivateRealTimeTraceTrait for UserTrace {
     const TRACE_KIND: private::TraceKind = private::TraceKind::User;
 
     fn build(properties: EventTraceProperties, control_handle: ControlHandle, trace_handle: TraceHandle, callback_data: Box<Arc<CallbackData>>) -> Self {
@@ -299,7 +311,9 @@ impl private::PrivateTraceTrait for UserTrace {
     fn enable_flags(_providers: &[Provider]) -> u32 {
         0
     }
+}
 
+impl private::PrivateTraceTrait for UserTrace {
     fn non_consuming_stop(&mut self) -> TraceResult<()> {
         close_trace(self.trace_handle, &self.callback_data)?;
         control_trace(&mut self.properties, self.control_handle, Etw::EVENT_TRACE_CONTROL_STOP)?;
@@ -307,7 +321,7 @@ impl private::PrivateTraceTrait for UserTrace {
     }
 }
 
-impl private::PrivateTraceTrait for KernelTrace {
+impl private::PrivateRealTimeTraceTrait for KernelTrace {
     const TRACE_KIND: private::TraceKind = private::TraceKind::Kernel;
 
     fn build(properties: EventTraceProperties, control_handle: ControlHandle, trace_handle: TraceHandle, callback_data: Box<Arc<CallbackData>>) -> Self {
@@ -330,7 +344,9 @@ impl private::PrivateTraceTrait for KernelTrace {
     fn enable_flags(providers: &[Provider]) -> u32 {
         providers.iter().fold(0, |acc, x| acc | x.kernel_flags())
     }
+}
 
+impl private::PrivateTraceTrait for KernelTrace {
     fn non_consuming_stop(&mut self) -> TraceResult<()> {
         close_trace(self.trace_handle, &self.callback_data)?;
         control_trace(&mut self.properties, self.control_handle, Etw::EVENT_TRACE_CONTROL_STOP)?;
@@ -338,7 +354,7 @@ impl private::PrivateTraceTrait for KernelTrace {
     }
 }
 
-impl<T: TraceTrait + PrivateTraceTrait> TraceBuilder<T> {
+impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
     /// Define the trace name
     ///
     /// For kernel traces on Windows Versions older than Win8, this method won't change the trace name. In those versions the trace name will be set to "NT Kernel Logger".

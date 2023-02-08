@@ -7,6 +7,7 @@ use ferrisetw::EventRecord;
 use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::UserTrace;
 use ferrisetw::trace::TraceTrait;
+use ferrisetw::trace::RealTimeTraceTrait;
 
 
 #[derive(Clone, Copy, Debug)]
