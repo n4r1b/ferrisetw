@@ -172,6 +172,13 @@ impl std::default::Default for DumpFileLoggingMode {
     }
 }
 
+/// The data source the trace is subscribed to
+#[derive(Clone, Debug)]
+pub enum SubscriptionSource{
+    /// Subscribe to a real-time session
+    RealTimeSession(U16CString),
+}
+
 /// Wrapper over an [EVENT_TRACE_PROPERTIES](https://docs.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties), and its allocated companion members
 ///
 /// The [EventTraceProperties] struct contains the information about a tracing session, this struct
@@ -302,22 +309,17 @@ impl EventTraceProperties {
 #[derive(Clone)]
 pub struct EventTraceLogfile<'callbackdata> {
     native: Etw::EVENT_TRACE_LOGFILEW,
-    wide_logger_name: U16CString,
+    owned_subscription_source: SubscriptionSource,
     lifetime: PhantomData<&'callbackdata CallbackData>,
 }
 
 impl<'callbackdata> EventTraceLogfile<'callbackdata> {
     /// Create a new instance
     #[allow(clippy::borrowed_box)] // Being Boxed is really important, let's keep the Box<...> in the function signature to make the intent clearer (see https://github.com/n4r1b/ferrisetw/issues/72)
-    pub fn create(callback_data: &'callbackdata Box<Arc<CallbackData>>, mut wide_logger_name: U16CString, callback: unsafe extern "system" fn(*mut Etw::EVENT_RECORD)) -> Self {
+    pub fn create(callback_data: &'callbackdata Box<Arc<CallbackData>>, subscription_source: SubscriptionSource, callback: unsafe extern "system" fn(*mut Etw::EVENT_RECORD)) -> Self {
         let not_really_mut_ptr = callback_data.as_ref() as *const Arc<CallbackData> as *const c_void as *mut c_void; // That's kind-of fine because the user context is _not supposed_ to be changed by Windows APIs
 
         let native = Etw::EVENT_TRACE_LOGFILEW {
-            LoggerName: PWSTR(wide_logger_name.as_mut_ptr()),
-            Anonymous1: Etw::EVENT_TRACE_LOGFILEW_0 {
-                ProcessTraceMode: Etw::PROCESS_TRACE_MODE_REAL_TIME | Etw::PROCESS_TRACE_MODE_EVENT_RECORD
-                // In case you really want to use PROCESS_TRACE_MODE_RAW_TIMESTAMP, please review EventRecord::timestamp(), which could not be valid anymore
-            },
             Anonymous2: Etw::EVENT_TRACE_LOGFILEW_1 {
                 EventRecordCallback: Some(callback)
             },
@@ -325,11 +327,26 @@ impl<'callbackdata> EventTraceLogfile<'callbackdata> {
             ..Default::default()
         };
 
-        Self {
+        let mut log_file = Self {
             native,
-            wide_logger_name,
+            owned_subscription_source: subscription_source,
             lifetime: PhantomData,
+        };
+
+        // What should we subscribe to?
+        match &mut log_file.owned_subscription_source {
+            SubscriptionSource::RealTimeSession(wide_logger_name) => {
+                log_file.native.LoggerName = PWSTR(wide_logger_name.as_mut_ptr());
+
+                log_file.native.Anonymous1 = Etw::EVENT_TRACE_LOGFILEW_0 {
+                    ProcessTraceMode: Etw::PROCESS_TRACE_MODE_REAL_TIME | Etw::PROCESS_TRACE_MODE_EVENT_RECORD
+                    // In case you really want to use PROCESS_TRACE_MODE_RAW_TIMESTAMP, please review EventRecord::timestamp(), which could not be valid anymore
+                };
+            },
         }
+        }
+
+        log_file
     }
 
     /// Retrieve the windows-rs compatible pointer to the contained `EVENT_TRACE_LOGFILEA`

@@ -12,7 +12,7 @@ use widestring::U16CString;
 
 use self::private::{PrivateRealTimeTraceTrait, PrivateTraceTrait};
 
-use crate::native::etw_types::EventTraceProperties;
+use crate::native::etw_types::{EventTraceProperties, SubscriptionSource};
 use crate::native::version_helper;
 use crate::native::evntrace::{ControlHandle, TraceHandle, start_trace, open_trace, process_trace, enable_provider, control_trace, control_trace_by_name, close_trace};
 use crate::provider::Provider;
@@ -453,7 +453,7 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
             }
         }
 
-        let trace_handle = open_trace(trace_wide_name, &callback_data)?;
+        let trace_handle = open_trace(SubscriptionSource::RealTimeSession(trace_wide_name), &callback_data)?;
 
         Ok((T::build(
                 full_properties,

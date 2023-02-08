@@ -10,7 +10,7 @@ use std::ffi::c_void;
 
 use once_cell::sync::Lazy;
 
-use widestring::{U16CString, U16CStr};
+use widestring::U16CStr;
 use windows::Win32::System::Diagnostics::Etw::EVENT_CONTROL_CODE_ENABLE_PROVIDER;
 use windows::core::GUID;
 use windows::core::PCWSTR;
@@ -198,8 +198,8 @@ where
 ///
 /// Microsoft calls this "opening" the trace (and this calls `OpenTraceW`)
 #[allow(clippy::borrowed_box)] // Being Boxed is really important, let's keep the Box<...> in the function signature to make the intent clearer
-pub(crate) fn open_trace(trace_name: U16CString, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<TraceHandle> {
-    let mut log_file = EventTraceLogfile::create(callback_data, trace_name, trace_callback_thunk);
+pub(crate) fn open_trace(subscription_source: SubscriptionSource, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<TraceHandle> {
+    let mut log_file = EventTraceLogfile::create(callback_data, subscription_source, trace_callback_thunk);
 
     if let Err(ContextError::AlreadyExist) = UNIQUE_VALID_CONTEXTS.insert(log_file.context_ptr()) {
         // That's probably possible to get multiple handles to the same trace, by opening them multiple times.
