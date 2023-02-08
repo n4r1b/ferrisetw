@@ -17,7 +17,6 @@ use windows::core::PCWSTR;
 use windows::Win32::Foundation::FILETIME;
 use windows::Win32::System::Diagnostics::Etw;
 use windows::Win32::System::Diagnostics::Etw::TRACE_QUERY_INFO_CLASS;
-use windows::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
 use windows::Win32::Foundation::ERROR_SUCCESS;
 use windows::Win32::Foundation::ERROR_ALREADY_EXISTS;
 use windows::Win32::Foundation::ERROR_CTX_CLOSE_PENDING;
@@ -270,8 +269,11 @@ pub(crate) fn process_trace(trace_handle: TraceHandle) -> EvntraceNativeResult<(
         Err(EvntraceNativeError::InvalidHandle)
     } else {
         let result = unsafe {
-            let mut now = GetSystemTimeAsFileTime();
-            Etw::ProcessTrace(&[trace_handle], Some(&mut now as *mut FILETIME), None)
+            // We want to start processing events as soon as January 1601.
+            // * for ETL file traces, this is fine, this means "process everything from the file"
+            // * for real-time traces, this means we might process a few events already waiting in the buffers when the processing is starting. This is fine, I suppose.
+            let mut start = FILETIME::default();
+            Etw::ProcessTrace(&[trace_handle], Some(&mut start as *mut FILETIME), None)
         };
 
         if result == ERROR_SUCCESS {

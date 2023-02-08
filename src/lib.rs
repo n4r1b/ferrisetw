@@ -17,7 +17,8 @@
 //! * Consumers
 //!
 //! This crate provides the means to start and stop a controller, enable/disable providers and
-//! finally to consume the events within our own defined callback.
+//! finally to consume the events within our own defined callback.<br/>
+//! It is also able to process events from a file instead of a real-time trace session.
 //!
 //! # Motivation
 //! Even though ETW is a extremely powerful tracing mechanism, interacting with it is not easy by any
@@ -75,7 +76,7 @@
 //!         // .add_filter(event_filters)      // it is possible to filter by event ID, process ID, etc.
 //!         .build();
 //!
-//!     // We start a trace session for the previously registered provider
+//!     // We start a real-time trace session for the previously registered provider
 //!     // Callbacks will be run in a separate thread.
 //!     let mut trace = UserTrace::new()
 //!         .named(String::from("MyTrace"))
@@ -128,6 +129,7 @@ pub(crate) type EtwCallback = Box<dyn FnMut(&EventRecord, &SchemaLocator) + Send
 // Convenience re-exports.
 pub use crate::trace::UserTrace;
 pub use crate::trace::KernelTrace;
+pub use crate::trace::FileTrace;
 pub use crate::native::etw_types::event_record::EventRecord;
 pub use crate::schema_locator::SchemaLocator;
 

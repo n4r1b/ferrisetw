@@ -177,6 +177,8 @@ impl std::default::Default for DumpFileLoggingMode {
 pub enum SubscriptionSource{
     /// Subscribe to a real-time session
     RealTimeSession(U16CString),
+    /// Open an ETL file
+    FromFile(U16CString),
 }
 
 /// Wrapper over an [EVENT_TRACE_PROPERTIES](https://docs.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties), and its allocated companion members
@@ -343,7 +345,14 @@ impl<'callbackdata> EventTraceLogfile<'callbackdata> {
                     // In case you really want to use PROCESS_TRACE_MODE_RAW_TIMESTAMP, please review EventRecord::timestamp(), which could not be valid anymore
                 };
             },
-        }
+            SubscriptionSource::FromFile(wide_file_name) => {
+                log_file.native.LogFileName = PWSTR(wide_file_name.as_mut_ptr());
+
+                log_file.native.Anonymous1 = Etw::EVENT_TRACE_LOGFILEW_0 {
+                    ProcessTraceMode: Etw::PROCESS_TRACE_MODE_EVENT_RECORD
+                    // In case you really want to use PROCESS_TRACE_MODE_RAW_TIMESTAMP, please review EventRecord::timestamp(), which could not be valid anymore
+                };
+            }
         }
 
         log_file
