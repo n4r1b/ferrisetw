@@ -5,22 +5,29 @@ use std::ffi::OsString;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
+use std::path::PathBuf;
 
-use self::private::PrivateTraceTrait;
-
-use crate::native::etw_types::EventTraceProperties;
-use crate::native::version_helper;
-use crate::native::evntrace::{ControlHandle, TraceHandle, start_trace, open_trace, process_trace, enable_provider, control_trace, control_trace_by_name, close_trace};
-use crate::provider::Provider;
-use crate::utils;
 use windows::core::GUID;
 use windows::Win32::System::Diagnostics::Etw;
 use widestring::U16CString;
 
+use self::private::{PrivateRealTimeTraceTrait, PrivateTraceTrait};
+
+use crate::native::etw_types::{EventTraceProperties, SubscriptionSource};
+use crate::native::version_helper;
+use crate::native::evntrace::{ControlHandle, TraceHandle, start_trace, open_trace, process_trace, enable_provider, control_trace, control_trace_by_name, close_trace};
+use crate::provider::Provider;
+use crate::utils;
+use crate::EventRecord;
+use crate::SchemaLocator;
+
 pub use crate::native::etw_types::LoggingMode;
+pub use crate::native::etw_types::DumpFileLoggingMode;
 
 pub(crate) mod callback_data;
 use callback_data::CallbackData;
+use callback_data::RealTimeCallbackData;
+use callback_data::CallbackDataFromFile;
 
 const KERNEL_LOGGER_NAME: &str = "NT Kernel Logger";
 const SYSTEM_TRACE_CONTROL_GUID: &str = "9e814aad-3204-11d2-9a82-006008a86939";
@@ -76,16 +83,12 @@ impl Default for TraceProperties {
     }
 }
 
-/// Trait for common methods to user and kernel traces
+/// Trait for common methods to user, kernel and file traces
 pub trait TraceTrait: private::PrivateTraceTrait + Sized {
-    // This differs between UserTrace and KernelTrace
-    fn trace_guid() -> GUID;
-
     // This must be implemented for every trace, as this getter is needed by other methods from this trait
     fn trace_handle(&self) -> TraceHandle;
 
-    // These utilities should be implemented for every trace
-    fn trace_name(&self) -> OsString;
+    // This utility function should be implemented for every trace
     fn events_handled(&self) -> usize;
 
     // The following are default implementations, that work on both user and kernel traces
@@ -116,21 +119,32 @@ pub trait TraceTrait: private::PrivateTraceTrait + Sized {
     }
 }
 
+/// Trait for common methods to real-time traces
+pub trait RealTimeTraceTrait: TraceTrait + private::PrivateRealTimeTraceTrait {
+    // This differs between UserTrace and KernelTrace
+    fn trace_guid() -> GUID;
+
+    // This utility function should be implemented for every trace
+    fn trace_name(&self) -> OsString;
+}
+
 impl TraceTrait for UserTrace {
     fn trace_handle(&self) -> TraceHandle {
         self.trace_handle
     }
 
-    fn trace_name(&self) -> OsString {
-        self.properties.name()
-    }
-
     fn events_handled(&self) -> usize {
         self.callback_data.events_handled()
     }
+}
 
+impl RealTimeTraceTrait for UserTrace {
     fn trace_guid() -> GUID {
         GUID::new().unwrap_or(GUID::zeroed())
+    }
+
+    fn trace_name(&self) -> OsString {
+        self.properties.name()
     }
 }
 
@@ -140,14 +154,12 @@ impl TraceTrait for KernelTrace {
         self.trace_handle
     }
 
-    fn trace_name(&self) -> OsString {
-        self.properties.name()
-    }
-
     fn events_handled(&self) -> usize {
         self.callback_data.events_handled()
     }
+}
 
+impl RealTimeTraceTrait for KernelTrace {
     fn trace_guid() -> GUID {
         if version_helper::is_win8_or_greater() {
             GUID::new().unwrap_or(GUID::zeroed())
@@ -155,12 +167,26 @@ impl TraceTrait for KernelTrace {
             GUID::from(SYSTEM_TRACE_CONTROL_GUID)
         }
     }
+
+    fn trace_name(&self) -> OsString {
+        self.properties.name()
+    }
+}
+
+impl TraceTrait for FileTrace {
+    fn trace_handle(&self) -> TraceHandle {
+        self.trace_handle
+    }
+
+    fn events_handled(&self) -> usize {
+        self.callback_data.events_handled()
+    }
 }
 
 
 
 
-/// A trace session to collect events from user-mode applications
+/// A real-time trace session to collect events from user-mode applications
 ///
 /// To stop the session, you can drop this instance
 #[derive(Debug)]
@@ -175,7 +201,7 @@ pub struct UserTrace {
     callback_data: Box<Arc<CallbackData>>,
 }
 
-/// A trace session to collect events from kernel-mode drivers
+/// A real-time trace session to collect events from kernel-mode drivers
 ///
 /// To stop the session, you can drop this instance
 #[derive(Debug)]
@@ -190,14 +216,43 @@ pub struct KernelTrace {
     callback_data: Box<Arc<CallbackData>>,
 }
 
+/// A trace session that reads events from an ETL file
+///
+/// To stop the session, you can drop this instance
+#[derive(Debug)]
+#[allow(clippy::redundant_allocation)] // see https://github.com/n4r1b/ferrisetw/issues/72
+pub struct FileTrace {
+    trace_handle: TraceHandle,
+    // CallbackData is
+    // * `Arc`ed, so that dropping a Trace while a callback is still running is not an issue
+    // * `Boxed`, so that the `UserTrace` can be moved around the stack (e.g. returned by a function) but the pointers to the `CallbackData` given to Windows ETW API stay valid
+    callback_data: Box<Arc<CallbackData>>,
+}
+
+/// Various parameters related to an ETL dump file
+#[derive(Clone, Default)]
+pub struct DumpFileParams {
+    pub file_path: PathBuf,
+    /// Options that control how the file is written. If you're not sure, you can use [`DumpFileLoggingMode::default()`].
+    pub file_logging_mode: DumpFileLoggingMode,
+    /// Maximum size of the dump file. This is expressed in MB, unless `file_logging_mode` requires it otherwise.
+    pub max_size: Option<u32>,
+}
+
 /// Provides a way to crate Trace objects.
 ///
 /// These builders are created using [`UserTrace::new`] or [`KernelTrace::new`]
-pub struct TraceBuilder<T: TraceTrait> {
+pub struct TraceBuilder<T: RealTimeTraceTrait> {
     name: String,
+    etl_dump_file: Option<DumpFileParams>,
     properties: TraceProperties,
-    callback_data: CallbackData,
+    rt_callback_data: RealTimeCallbackData,
     trace_kind: PhantomData<T>,
+}
+
+pub struct FileTraceBuilder {
+    etl_file_path: PathBuf,
+    callback: crate::EtwCallback,
 }
 
 impl UserTrace {
@@ -206,7 +261,8 @@ impl UserTrace {
         let name = format!("n4r1b-trace-{}", utils::rand_string());
         TraceBuilder {
             name,
-            callback_data: CallbackData::new(),
+            etl_dump_file: None,
+            rt_callback_data: RealTimeCallbackData::new(),
             properties: TraceProperties::default(),
             trace_kind: PhantomData,
         }
@@ -226,7 +282,8 @@ impl KernelTrace {
     pub fn new() -> TraceBuilder<KernelTrace> {
         let builder = TraceBuilder {
             name: String::new(),
-            callback_data: CallbackData::new(),
+            etl_dump_file: None,
+            rt_callback_data: RealTimeCallbackData::new(),
             properties: TraceProperties::default(),
             trace_kind: PhantomData,
         };
@@ -255,19 +312,22 @@ mod private {
         Kernel,
     }
 
-    pub trait PrivateTraceTrait {
+    pub trait PrivateRealTimeTraceTrait: PrivateTraceTrait {
         const TRACE_KIND: TraceKind;
         #[allow(clippy::redundant_allocation)] // Being Boxed is really important, let's keep the Box<...> in the function signature to make the intent clearer (see https://github.com/n4r1b/ferrisetw/issues/72)
         fn build(properties: EventTraceProperties, control_handle: ControlHandle, trace_handle: TraceHandle, callback_data: Box<Arc<CallbackData>>) -> Self;
         fn augmented_file_mode() -> u32;
         fn enable_flags(_providers: &[Provider]) -> u32;
+    }
+
+    pub trait PrivateTraceTrait {
         // This function aims at de-deduplicating code called by `impl Drop` and `Trace::stop`.
         // It is basically [`Self::stop`], without consuming self (because the `impl Drop` only has a `&mut self`, not a `self`)
         fn non_consuming_stop(&mut self) -> TraceResult<()>;
     }
 }
 
-impl private::PrivateTraceTrait for UserTrace {
+impl private::PrivateRealTimeTraceTrait for UserTrace {
     const TRACE_KIND: private::TraceKind = private::TraceKind::User;
 
     fn build(properties: EventTraceProperties, control_handle: ControlHandle, trace_handle: TraceHandle, callback_data: Box<Arc<CallbackData>>) -> Self {
@@ -285,7 +345,9 @@ impl private::PrivateTraceTrait for UserTrace {
     fn enable_flags(_providers: &[Provider]) -> u32 {
         0
     }
+}
 
+impl private::PrivateTraceTrait for UserTrace {
     fn non_consuming_stop(&mut self) -> TraceResult<()> {
         close_trace(self.trace_handle, &self.callback_data)?;
         control_trace(&mut self.properties, self.control_handle, Etw::EVENT_TRACE_CONTROL_STOP)?;
@@ -293,7 +355,7 @@ impl private::PrivateTraceTrait for UserTrace {
     }
 }
 
-impl private::PrivateTraceTrait for KernelTrace {
+impl private::PrivateRealTimeTraceTrait for KernelTrace {
     const TRACE_KIND: private::TraceKind = private::TraceKind::Kernel;
 
     fn build(properties: EventTraceProperties, control_handle: ControlHandle, trace_handle: TraceHandle, callback_data: Box<Arc<CallbackData>>) -> Self {
@@ -316,7 +378,9 @@ impl private::PrivateTraceTrait for KernelTrace {
     fn enable_flags(providers: &[Provider]) -> u32 {
         providers.iter().fold(0, |acc, x| acc | x.kernel_flags())
     }
+}
 
+impl private::PrivateTraceTrait for KernelTrace {
     fn non_consuming_stop(&mut self) -> TraceResult<()> {
         close_trace(self.trace_handle, &self.callback_data)?;
         control_trace(&mut self.properties, self.control_handle, Etw::EVENT_TRACE_CONTROL_STOP)?;
@@ -324,10 +388,19 @@ impl private::PrivateTraceTrait for KernelTrace {
     }
 }
 
-impl<T: TraceTrait + PrivateTraceTrait> TraceBuilder<T> {
+impl private::PrivateTraceTrait for FileTrace {
+    fn non_consuming_stop(&mut self) -> TraceResult<()> {
+        close_trace(self.trace_handle, &self.callback_data)?;
+        Ok(())
+    }
+}
+
+impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
     /// Define the trace name
     ///
-    /// For kernel traces on Windows Versions older than Win8, this method won't change the trace name. In those versions the trace name will be set to "NT Kernel Logger"
+    /// For kernel traces on Windows Versions older than Win8, this method won't change the trace name. In those versions the trace name will be set to "NT Kernel Logger".
+    ///
+    /// Note: this trace name may be truncated to a few hundred characters if it is too long.
     pub fn named(mut self, name: String) -> Self {
         if T::TRACE_KIND == private::TraceKind::Kernel && version_helper::is_win8_or_greater() == false {
             self.name = String::from(KERNEL_LOGGER_NAME);
@@ -346,6 +419,21 @@ impl<T: TraceTrait + PrivateTraceTrait> TraceBuilder<T> {
         self
     }
 
+    /// Define a dump file for the events.
+    ///
+    /// If set, events will be dumped to a file on disk.<br/>
+    /// Such files usually have a `.etl` extension.<br/>
+    /// Dumped events will also be processed by the callbacks you'll specify with [`crate::provider::ProviderBuilder::add_callback`].
+    ///
+    /// It is possible to control many aspects of the logging file (whether its size is limited, whether it should be a circular buffer file, etc.).
+    /// If you're not sure, `params` has a safe [`default` value](`DumpFileParams::default`).
+    ///
+    /// Note: the file name may be truncated to a few hundred characters if it is too long.
+    pub fn set_etl_dump_file(mut self, params: DumpFileParams) -> Self {
+        self.etl_dump_file = Some(params);
+        self
+    }
+
     /// Enable a Provider for this trace
     ///
     /// This will invoke the provider's callback whenever an event is available
@@ -354,7 +442,7 @@ impl<T: TraceTrait + PrivateTraceTrait> TraceBuilder<T> {
     /// Windows API seems to support removing providers, or changing its properties when the session is processing events (see <https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-enabletraceex2#remarks>)    /// Currently, this crate only supports defining Providers and their settings when building the trace, because it is easier to ensure memory-safety this way.
     /// It probably would be possible to support changing Providers when the trace is processing, but this is left as a TODO (see <https://github.com/n4r1b/ferrisetw/issues/54>)
     pub fn enable(mut self, provider: Provider) -> Self {
-        self.callback_data.add_provider(provider);
+        self.rt_callback_data.add_provider(provider);
         self
     }
 
@@ -372,27 +460,40 @@ impl<T: TraceTrait + PrivateTraceTrait> TraceBuilder<T> {
     ///   This convenience function spawns a thread for you, call [`TraceBuilder::start`] on the trace, and returns immediately.<br/>
     ///   This option returns a `T`, so you can explicitly stop the trace, but there is no way to get the status code of the ProcessTrace API.
     pub fn start(self) -> TraceResult<(T, TraceHandle)> {
+        // Prepare a wide version of the trace name
         let trace_wide_name = U16CString::from_str_truncate(self.name);
         let mut trace_wide_vec = trace_wide_name.into_vec();
         trace_wide_vec.truncate(crate::native::etw_types::TRACE_NAME_MAX_CHARS);
         let trace_wide_name = U16CString::from_vec_truncate(trace_wide_vec);
 
-        let callback_data = Box::new(Arc::new(self.callback_data));
-        let flags = callback_data.provider_flags::<T>();
+        // Prepare a wide version of the ETL dump file path
+        let wide_etl_dump_file = match self.etl_dump_file {
+            None => None,
+            Some(DumpFileParams { file_path, file_logging_mode, max_size }) => {
+                let wide_path = U16CString::from_os_str_truncate(file_path.as_os_str());
+                let mut wide_path_vec = wide_path.into_vec();
+                wide_path_vec.truncate(crate::native::etw_types::TRACE_NAME_MAX_CHARS);
+                Some((U16CString::from_vec_truncate(wide_path_vec), file_logging_mode, max_size))
+            }
+        };
+
+        let flags = self.rt_callback_data.provider_flags::<T>();
         let (full_properties, control_handle) = start_trace::<T>(
             &trace_wide_name,
+            wide_etl_dump_file.as_ref().map(|(path, params, max_size)| (path.as_ucstr(), *params, *max_size)),
             &self.properties,
             flags)?;
 
         // TODO: For kernel traces, implement enable_provider function for providers that require call to TraceSetInformation with extended PERFINFO_GROUPMASK
 
         if T::TRACE_KIND == private::TraceKind::User {
-            for prov in callback_data.providers() {
+            for prov in self.rt_callback_data.providers() {
                 enable_provider(control_handle, prov)?;
             }
         }
 
-        let trace_handle = open_trace(trace_wide_name, &callback_data)?;
+        let callback_data = Box::new(Arc::new(CallbackData::RealTime(self.rt_callback_data)));
+        let trace_handle = open_trace(SubscriptionSource::RealTimeSession(trace_wide_name), &callback_data)?;
 
         Ok((T::build(
                 full_properties,
@@ -418,6 +519,60 @@ impl<T: TraceTrait + PrivateTraceTrait> TraceBuilder<T> {
     }
 }
 
+impl FileTrace {
+    /// Create a trace that will read events from a file
+    pub fn new<T>(path: PathBuf, callback: T) -> FileTraceBuilder
+        where T: FnMut(&EventRecord, &SchemaLocator) + Send + Sync + 'static,
+    {
+        FileTraceBuilder{
+            etl_file_path: path,
+            callback: Box::new(callback),
+        }
+    }
+
+    fn non_consuming_stop(&mut self) -> TraceResult<()> {
+        close_trace(self.trace_handle, &self.callback_data)?;
+        Ok(())
+    }
+}
+
+
+impl FileTraceBuilder{
+    /// Build the `FileTrace` and start the trace session
+    ///
+    /// See the documentation for [`TraceBuilder::start`] for more information.
+    pub fn start(self) -> TraceResult<(FileTrace, TraceHandle)> {
+        // Prepare a wide version of the source ETL file path
+        let wide_etl_file_path = U16CString::from_os_str_truncate(self.etl_file_path.as_os_str());
+
+        let from_file_cb = CallbackDataFromFile::new(self.callback);
+        let callback_data = Box::new(Arc::new(CallbackData::FromFile(from_file_cb)));
+        let trace_handle = open_trace(SubscriptionSource::FromFile(wide_etl_file_path), &callback_data)?;
+
+        Ok((FileTrace{
+                trace_handle,
+                callback_data,
+            },
+            trace_handle)
+        )
+    }
+
+    /// Convenience method that calls [`TraceBuilder::start`] then `process`
+    ///
+    /// # Notes
+    /// * See the documentation of [`TraceBuilder::start`] for more info
+    /// * `process` is called on a spawned thread, and thus this method does not give any way to retrieve the error of `process` (if any)
+    pub fn start_and_process(self) -> TraceResult<FileTrace> {
+        let (trace, trace_handle) = self.start()?;
+
+        std::thread::spawn(move || FileTrace::process_from_handle(trace_handle));
+
+        Ok(trace)
+    }
+}
+
+
+
 impl Drop for UserTrace {
     fn drop(&mut self) {
         let _ignored_error_in_drop = self.non_consuming_stop();
@@ -425,6 +580,12 @@ impl Drop for UserTrace {
 }
 
 impl Drop for KernelTrace {
+    fn drop(&mut self) {
+        let _ignored_error_in_drop = self.non_consuming_stop();
+    }
+}
+
+impl Drop for FileTrace {
     fn drop(&mut self) {
         let _ignored_error_in_drop = self.non_consuming_stop();
     }
@@ -443,6 +604,7 @@ pub fn stop_trace_by_name(trace_name: &str) -> TraceResult<()> {
 
     let mut properties = EventTraceProperties::new::<UserTrace>( // for EVENT_TRACE_CONTROL_STOP, we don't really care about most of the contents of the EventTraceProperties, so using new::<UserTrace>() is fine, even when stopping a kernel trace
         &wide_name,
+        None,   // MSDN says the dump file name (if any) must be populated for a EVENT_TRACE_CONTROL_STOP, but experience shows this is not necessary.
         &trace_properties,
         flags);
 
@@ -464,8 +626,8 @@ mod test {
         let prov = Provider::by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716").build();
         let prov1 = Provider::by_guid("A0C1853B-5C40-4B15-8766-3CF1C58F985A").build();
 
-        let trace = UserTrace::new().enable(prov).enable(prov1);
+        let trace_builder = UserTrace::new().enable(prov).enable(prov1);
 
-        assert_eq!(trace.callback_data.providers().len(), 2);
+        assert_eq!(trace_builder.rt_callback_data.providers().len(), 2);
     }
 }

@@ -28,8 +28,6 @@ impl From<crate::native::PlaError> for ProviderError {
     }
 }
 
-type EtwCallback = Box<dyn FnMut(&EventRecord, &SchemaLocator) + Send + Sync + 'static>;
-
 /// Describes an ETW Provider to use, along with its options
 pub struct Provider {
     /// Provider GUID
@@ -49,7 +47,7 @@ pub struct Provider {
     /// Provider filters
     filters: Vec<EventFilter>,
     /// Callbacks that will receive events from this Provider
-    callbacks: Arc<RwLock<Vec<EtwCallback>>>,
+    callbacks: Arc<RwLock<Vec<crate::EtwCallback>>>,
 }
 
 /// A Builder for a `Provider`
@@ -63,7 +61,7 @@ pub struct ProviderBuilder {
     trace_flags: TraceFlags,
     kernel_flags: u32,
     filters: Vec<EventFilter>,
-    callbacks: Arc<RwLock<Vec<EtwCallback>>>,
+    callbacks: Arc<RwLock<Vec<crate::EtwCallback>>>,
 }
 
 impl std::fmt::Debug for ProviderBuilder {

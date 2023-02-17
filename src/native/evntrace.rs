@@ -10,14 +10,13 @@ use std::ffi::c_void;
 
 use once_cell::sync::Lazy;
 
-use widestring::{U16CString, U16CStr};
+use widestring::U16CStr;
 use windows::Win32::System::Diagnostics::Etw::EVENT_CONTROL_CODE_ENABLE_PROVIDER;
 use windows::core::GUID;
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::FILETIME;
 use windows::Win32::System::Diagnostics::Etw;
 use windows::Win32::System::Diagnostics::Etw::TRACE_QUERY_INFO_CLASS;
-use windows::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
 use windows::Win32::Foundation::ERROR_SUCCESS;
 use windows::Win32::Foundation::ERROR_ALREADY_EXISTS;
 use windows::Win32::Foundation::ERROR_CTX_CLOSE_PENDING;
@@ -27,7 +26,7 @@ use super::etw_types::*;
 use crate::provider::Provider;
 use crate::provider::event_filter::EventFilterDescriptor;
 use crate::native::etw_types::event_record::EventRecord;
-use crate::trace::{TraceProperties, TraceTrait};
+use crate::trace::{TraceProperties, RealTimeTraceTrait};
 use crate::trace::callback_data::CallbackData;
 
 
@@ -154,11 +153,16 @@ fn filter_invalid_control_handle(h: ControlHandle) -> Option<ControlHandle> {
 /// Create a new session.
 ///
 /// This builds an `EventTraceProperties`, calls `StartTraceW` and returns the built `EventTraceProperties` as well as the trace ControlHandle
-pub(crate) fn start_trace<T>(trace_name: &U16CStr, trace_properties: &TraceProperties, enable_flags: Etw::EVENT_TRACE_FLAG) -> EvntraceNativeResult<(EventTraceProperties, ControlHandle)>
+pub(crate) fn start_trace<T>(
+    trace_name: &U16CStr,
+    etl_dump_file: Option<(&U16CStr, DumpFileLoggingMode, Option<u32>)>,
+    trace_properties: &TraceProperties,
+    enable_flags: Etw::EVENT_TRACE_FLAG
+) -> EvntraceNativeResult<(EventTraceProperties, ControlHandle)>
 where
-    T: TraceTrait
+    T: RealTimeTraceTrait
 {
-    let mut properties = EventTraceProperties::new::<T>(trace_name, trace_properties, enable_flags);
+    let mut properties = EventTraceProperties::new::<T>(trace_name, etl_dump_file, trace_properties, enable_flags);
 
     let mut control_handle = ControlHandle::default();
     let status = unsafe {
@@ -193,8 +197,8 @@ where
 ///
 /// Microsoft calls this "opening" the trace (and this calls `OpenTraceW`)
 #[allow(clippy::borrowed_box)] // Being Boxed is really important, let's keep the Box<...> in the function signature to make the intent clearer
-pub(crate) fn open_trace(trace_name: U16CString, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<TraceHandle> {
-    let mut log_file = EventTraceLogfile::create(callback_data, trace_name, trace_callback_thunk);
+pub(crate) fn open_trace(subscription_source: SubscriptionSource, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<TraceHandle> {
+    let mut log_file = EventTraceLogfile::create(callback_data, subscription_source, trace_callback_thunk);
 
     if let Err(ContextError::AlreadyExist) = UNIQUE_VALID_CONTEXTS.insert(log_file.context_ptr()) {
         // That's probably possible to get multiple handles to the same trace, by opening them multiple times.
@@ -265,8 +269,11 @@ pub(crate) fn process_trace(trace_handle: TraceHandle) -> EvntraceNativeResult<(
         Err(EvntraceNativeError::InvalidHandle)
     } else {
         let result = unsafe {
-            let mut now = GetSystemTimeAsFileTime();
-            Etw::ProcessTrace(&[trace_handle], Some(&mut now as *mut FILETIME), None)
+            // We want to start processing events as soon as January 1601.
+            // * for ETL file traces, this is fine, this means "process everything from the file"
+            // * for real-time traces, this means we might process a few events already waiting in the buffers when the processing is starting. This is fine, I suppose.
+            let mut start = FILETIME::default();
+            Etw::ProcessTrace(&[trace_handle], Some(&mut start as *mut FILETIME), None)
         };
 
         if result == ERROR_SUCCESS {
