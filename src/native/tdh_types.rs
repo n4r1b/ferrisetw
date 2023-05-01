@@ -29,10 +29,10 @@ pub struct Property {
     /// Represent the [PropertyFlags]
     pub flags: PropertyFlags,
     /// TDH In type of the property
-    length: u16,
-    in_type: TdhInType,
+    pub length: u16,
+    pub in_type: TdhInType,
     /// TDH Out type of the property
-    out_type: TdhOutType,
+    pub out_type: TdhOutType,
 }
 
 #[doc(hidden)]

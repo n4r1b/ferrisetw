@@ -10,7 +10,7 @@ use crate::native::tdh;
 use crate::native::tdh_types::{Property, PropertyFlags, TdhInType, TdhOutType};
 use crate::property::PropertySlice;
 use crate::schema::Schema;
-use crate::utils;
+use crate::native::time::{SystemTime, FileTime};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -63,6 +63,23 @@ impl From<std::str::Utf8Error> for ParserError {
 impl From<std::array::TryFromSliceError> for ParserError {
     fn from(err: std::array::TryFromSliceError) -> Self {
         ParserError::SliceError(err)
+    }
+}
+
+impl std::fmt::Display for ParserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotFound => write!(f, "not found"),
+            Self::InvalidType => write!(f, "invalid type"),
+            Self::UnsupportedProperties => write!(f, "unsupported properties"),
+            Self::ParseError => write!(f, "parse error"),
+            Self::LengthMismatch => write!(f, "length mismatch"),
+            Self::PropertyError(s) => write!(f, "property error {}", s),
+            Self::Utf8Error(e) => write!(f, "utf-8 error {}", e),
+            Self::SliceError(e) => write!(f, "slice error {}", e),
+            Self::SddlNativeError(e) => write!(f, "sddl native error {}", e),
+            Self::TdhNativeError(e) => write!(f, "tdh native error {}", e),
+        }
     }
 }
 
@@ -316,6 +333,8 @@ impl_try_parse_primitive!(u64);
 impl_try_parse_primitive!(i64);
 impl_try_parse_primitive!(usize);
 impl_try_parse_primitive!(isize);
+impl_try_parse_primitive!(f32);
+impl_try_parse_primitive!(f64);
 
 /// The `String` impl of the `TryParse` trait should be used to retrieve the following [TdhInTypes]:
 ///
@@ -378,13 +397,20 @@ impl private::TryParse<GUID> for Parser<'_, '_> {
     fn try_parse_impl(&self, name: &str) -> Result<GUID, ParserError> {
         let prop_slice = self.find_property(name)?;
 
-        let guid_string = utils::parse_utf16_guid(prop_slice.buffer);
+        if prop_slice.property.in_type != TdhInType::InTypeGuid {
+            return Err(ParserError::InvalidType);
+        }
 
-        if guid_string.len() != 36 {
+        if prop_slice.buffer.len() != 16 {
             return Err(ParserError::LengthMismatch);
         }
 
-        Ok(GUID::from(guid_string.as_str()))
+        Ok(GUID {
+            data1: u32::from_ne_bytes(prop_slice.buffer[0..4].try_into()?),
+            data2: u16::from_ne_bytes(prop_slice.buffer[4..6].try_into()?),
+            data3: u16::from_be_bytes(prop_slice.buffer[6..8].try_into()?),
+            data4: prop_slice.buffer[8..].try_into()?,
+        })
     }
 }
 
@@ -412,6 +438,47 @@ impl private::TryParse<IpAddr> for Parser<'_, '_> {
         };
 
         Ok(res)
+    }
+}
+
+impl private::TryParse<bool> for Parser<'_, '_> {
+    fn try_parse_impl(&self, name: &str) -> ParserResult<bool> {
+        let prop_slice = self.find_property(name)?;
+
+        if prop_slice.property.in_type() != TdhInType::InTypeBoolean {
+            return Err(ParserError::InvalidType);
+        }
+
+        match prop_slice.buffer.len() {
+            1 => Ok(prop_slice.buffer[0] != 0),
+            4 => Ok(u32::from_ne_bytes(prop_slice.buffer.try_into()?) != 0),
+            8 => Ok(u64::from_ne_bytes(prop_slice.buffer.try_into()?) != 0),
+            _ => return Err(ParserError::LengthMismatch),
+        }
+    }
+}
+
+impl private::TryParse<FileTime> for Parser<'_, '_> {
+    fn try_parse_impl(&self, name: &str) -> ParserResult<FileTime> {
+        let prop_slice = self.find_property(name)?;
+
+        if prop_slice.property.in_type() != TdhInType::InTypeFileTime {
+            return Err(ParserError::InvalidType);
+        }
+
+        Ok(FileTime::from_slice(prop_slice.buffer.try_into()?))
+    }
+}
+
+impl private::TryParse<SystemTime> for Parser<'_, '_> {
+    fn try_parse_impl(&self, name: &str) -> ParserResult<SystemTime> {
+        let prop_slice = self.find_property(name)?;
+
+        if prop_slice.property.in_type() != TdhInType::InTypeSystemTime {
+            return Err(ParserError::InvalidType);
+        }
+
+        Ok(SystemTime::from_slice(prop_slice.buffer.try_into()?))
     }
 }
 

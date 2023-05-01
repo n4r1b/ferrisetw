@@ -27,6 +27,15 @@ pub enum TdhNativeError {
 
 pub type TdhNativeResult<T> = Result<T, TdhNativeError>;
 
+impl std::fmt::Display for TdhNativeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::AllocationError => write!(f, "allocation error"),
+            Self::IoError(e) => write!(f, "i/o error {}", e),
+        }
+    }
+}
+
 
 /// Read-only wrapper over an [TRACE_EVENT_INFO]
 ///
