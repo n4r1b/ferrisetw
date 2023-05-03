@@ -402,7 +402,7 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
     ///
     /// Note: this trace name may be truncated to a few hundred characters if it is too long.
     pub fn named(mut self, name: String) -> Self {
-        if T::TRACE_KIND == private::TraceKind::Kernel && version_helper::is_win8_or_greater() == false {
+        if T::TRACE_KIND == private::TraceKind::Kernel && !version_helper::is_win8_or_greater() {
             self.name = String::from(KERNEL_LOGGER_NAME);
         } else {
             self.name = name;
@@ -521,6 +521,7 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
 
 impl FileTrace {
     /// Create a trace that will read events from a file
+    #[allow(clippy::new_ret_no_self)]
     pub fn new<T>(path: PathBuf, callback: T) -> FileTraceBuilder
         where T: FnMut(&EventRecord, &SchemaLocator) + Send + Sync + 'static,
     {

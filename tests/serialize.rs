@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-static BENCHMARK_PROVIDERS: &'static [&'static str] = &[
+static BENCHMARK_PROVIDERS: &[&str] = &[
     "C514638F-7723-485B-BCFC-96565D735D4A",
     "16A1ADC1-9B7F-4CD9-94B3-D8296AB1B130",
     "E02A841C-75A3-4FA7-AFC8-AE09CF9B7F23",
@@ -201,7 +201,7 @@ fn ser_json_test(name: &'static str, options: EventSerializerOptions, seconds_to
     let mut trace_builder = UserTrace::new().named(name.to_string());
     for guid in BENCHMARK_PROVIDERS {
         let s = stats.clone();
-        let opts = options.clone();
+        let opts = options;
         trace_builder = trace_builder.enable(
             Provider::by_guid(*guid)
                 .add_callback(move |record, schema_locator| {
@@ -224,7 +224,7 @@ fn ser_flexbuffer_test(name: &'static str, options: EventSerializerOptions, seco
     let mut trace_builder = UserTrace::new().named(name.to_string());
     for guid in BENCHMARK_PROVIDERS {
         let s = stats.clone();
-        let opts = options.clone();
+        let opts = options;
         trace_builder = trace_builder.enable(
             Provider::by_guid(*guid)
                 .add_callback(move |record, schema_locator| {

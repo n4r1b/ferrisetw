@@ -139,7 +139,7 @@ fn has_seen_resolution_to_test_domain(record: &EventRecord, parser: &Parser) -> 
     if record.event_id() == EVENT_ID_DNS_QUERY_INITIATED {
         let query_name: String = parser.try_parse("QueryName").unwrap();
         #[allow(unused_parens)]
-        return (&query_name == TEST_DOMAIN_NAME);
+        return (query_name == TEST_DOMAIN_NAME);
     }
     false
 }

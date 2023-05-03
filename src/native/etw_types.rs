@@ -232,7 +232,7 @@ impl EventTraceProperties {
         etw_trace_properties.MaximumBuffers = trace_properties.max_buffer;
         etw_trace_properties.FlushTimer = trace_properties.flush_timer.as_secs().clamp(1, u32::MAX as u64) as u32; // See https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties
 
-        if trace_properties.log_file_mode.is_empty() == false {
+        if !trace_properties.log_file_mode.is_empty() {
             etw_trace_properties.LogFileMode = trace_properties.log_file_mode.bits();
         } else {
             etw_trace_properties.LogFileMode =

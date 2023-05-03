@@ -160,9 +160,7 @@ impl<'schema, 'record> Parser<'schema, 'record> {
         //    e.g.: the WinInet provider manifest has fields such as `<data name="Verb" inType="win:AnsiString" length="_VerbLength"/>`
         //    In this case, we defer to TDH to know the right length.
 
-        if property
-            .flags
-            .contains(PropertyFlags::PROPERTY_PARAM_LENGTH) == false
+        if !property.flags.contains(PropertyFlags::PROPERTY_PARAM_LENGTH)
             && (property.len() > 0)
         {
             let size = if property.in_type() != TdhInType::InTypePointer {
@@ -194,7 +192,7 @@ impl<'schema, 'record> Parser<'schema, 'record> {
                 // If a string is null-terminated, propertyLength includes the null character.
                 // If a string is not-null terminated, propertyLength includes all bytes up
                 // to the end of the record buffer.
-                if property.flags.contains(PropertyFlags::PROPERTY_STRUCT) == false
+                if !property.flags.contains(PropertyFlags::PROPERTY_STRUCT)
                 && property.out_type() == TdhOutType::OutTypeString {
                     match property.in_type() {
                         TdhInType::InTypeAnsiString => {
@@ -453,7 +451,7 @@ impl private::TryParse<bool> for Parser<'_, '_> {
             1 => Ok(prop_slice.buffer[0] != 0),
             4 => Ok(u32::from_ne_bytes(prop_slice.buffer.try_into()?) != 0),
             8 => Ok(u64::from_ne_bytes(prop_slice.buffer.try_into()?) != 0),
-            _ => return Err(ParserError::LengthMismatch),
+            _ => Err(ParserError::LengthMismatch),
         }
     }
 }

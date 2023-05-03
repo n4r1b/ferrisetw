@@ -99,7 +99,7 @@ extern "system" fn trace_callback_thunk(p_record: *mut Etw::EVENT_RECORD) {
 
         if let Some(event_record) = record_from_ptr {
             let p_user_context = event_record.user_context();
-            if UNIQUE_VALID_CONTEXTS.is_valid(p_user_context) == false {
+            if !UNIQUE_VALID_CONTEXTS.is_valid(p_user_context) {
                 return;
             }
             let p_callback_data = p_user_context.cast::<Arc<CallbackData>>();

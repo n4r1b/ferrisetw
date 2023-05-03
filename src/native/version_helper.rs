@@ -93,7 +93,7 @@ mod test {
     // Let's assume this test won't be run on a version of Windows older than XP :D
     fn test_verify_system_version() {
         match verify_system_version(5, 1, 0) {
-            Ok(res) => assert_eq!(true, res),
+            Ok(res) => assert!(res),
             Err(err) => panic!("VersionHelper error: {:?}", err),
         };
     }

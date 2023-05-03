@@ -5,15 +5,9 @@ use windows::Win32::{
 };
 
 /// Wrapper for [FILETIME](https://learn.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime)
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 #[repr(transparent)]
 pub struct FileTime(pub(crate) FILETIME);
-
-impl std::default::Default for FileTime {
-    fn default() -> Self {
-        Self(Default::default())
-    }
-}
 
 const SECONDS_BETWEEN_1601_AND_1970: i64 = 11_644_473_600;
 const NS_IN_SECOND: i64 = 1_000_000_000;
@@ -63,9 +57,9 @@ impl FileTime {
 }
 
 #[cfg(feature = "time_rs")]
-impl Into<time::OffsetDateTime> for FileTime {
-    fn into(self) -> time::OffsetDateTime {
-        self.as_date_time()
+impl From<FileTime> for time::OffsetDateTime {
+    fn from(file_time: FileTime) -> Self {
+        file_time.as_date_time()
     }
 }
 
@@ -89,15 +83,9 @@ impl serde::ser::Serialize for FileTime {
 }
 
 /// Wrapper for [SYSTEMTIME](https://learn.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-systemtime)
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 #[repr(transparent)]
 pub struct SystemTime(pub(crate) SYSTEMTIME);
-
-impl std::default::Default for SystemTime {
-    fn default() -> Self {
-        Self(Default::default())
-    }
-}
 
 impl SystemTime {
     /// Converts to a unix timestamp with millisecond granularity.
@@ -141,9 +129,9 @@ impl SystemTime {
 }
 
 #[cfg(feature = "time_rs")]
-impl Into<time::OffsetDateTime> for SystemTime {
-    fn into(self) -> time::OffsetDateTime {
-        self.as_date_time()
+impl From<SystemTime> for time::OffsetDateTime {
+    fn from(file_time: SystemTime) -> Self {
+        file_time.as_date_time()
     }
 }
 

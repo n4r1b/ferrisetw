@@ -94,7 +94,7 @@ impl serde::ser::Serialize for EventSerializer<'_> {
         let mut state = serializer.serialize_struct("Record", 4)?;
 
         if self.options.include_schema {
-            let schema = SchemaSer::new(&self.schema);
+            let schema = SchemaSer::new(self.schema);
             state.serialize_field("Schema", &schema)?;
         } else {
             state.skip_field("Schema")?;
@@ -116,7 +116,7 @@ impl serde::ser::Serialize for EventSerializer<'_> {
             state.skip_field("Extended")?;
         }
 
-        let event = EventSer::new(&self.schema, &self.parser, &self.options);
+        let event = EventSer::new(self.schema, &self.parser, &self.options);
         state.serialize_field("Event", &event)?;
 
         state.end()
@@ -246,7 +246,7 @@ impl serde::ser::Serialize for EventSer<'_, '_> {
     {
         let mut len: usize = 0;
         for prop in self.schema.properties() {
-            if let Some(_) = prop.get_parser() {
+            if prop.get_parser().is_some() {
                 len += 1;
             } else if self.options.fail_unimplemented {
                 return Err(serde::ser::Error::custom(format!(
@@ -259,7 +259,7 @@ impl serde::ser::Serialize for EventSer<'_, '_> {
         let mut state = serializer.serialize_map(Some(len))?;
         for prop in self.schema.properties() {
             if let Some(s) = prop.get_parser() {
-                s.0.ser::<S>(&mut state, prop, &self.parser)?;
+                s.0.ser::<S>(&mut state, prop, self.parser)?;
             }
         }
         state.end()
@@ -289,7 +289,7 @@ enum PropHandler {
     String,
     FileTime,
     SystemTime,
-    GUID,
+    Guid,
     Binary,
     IpAddr,
 }
@@ -341,7 +341,7 @@ impl PropHandler {
                     prop_ser_type!(u32, map, prop, parser)
                 }
             }
-            PropHandler::GUID => {
+            PropHandler::Guid => {
                 let guid = parser
                     .try_parse::<GUID>(&prop.name)
                     .map_err(serde::ser::Error::custom)?;
@@ -368,7 +368,7 @@ impl PropSerable for TdhOutType {
             Self::OutTypeFloat => Some(PropSer(PropHandler::Float)),
             Self::OutTypeDouble => Some(PropSer(PropHandler::Double)),
             Self::OutTypeBoolean => Some(PropSer(PropHandler::Bool)),
-            Self::OutTypeGuid => Some(PropSer(PropHandler::GUID)),
+            Self::OutTypeGuid => Some(PropSer(PropHandler::Guid)),
             Self::OutTypeHexBinary => Some(PropSer(PropHandler::Binary)),
             Self::OutTypeHexInt8 => Some(PropSer(PropHandler::Int8)),
             Self::OutTypeHexInt16 => Some(PropSer(PropHandler::Int16)),
@@ -409,7 +409,7 @@ impl PropSerable for TdhInType {
             Self::InTypeDouble => Some(PropSer(PropHandler::Double)),
             Self::InTypeBoolean => Some(PropSer(PropHandler::Bool)),
             Self::InTypeBinary => Some(PropSer(PropHandler::Binary)),
-            Self::InTypeGuid => Some(PropSer(PropHandler::GUID)),
+            Self::InTypeGuid => Some(PropSer(PropHandler::Guid)),
             Self::InTypePointer => Some(PropSer(PropHandler::Pointer)),
             Self::InTypeFileTime => Some(PropSer(PropHandler::FileTime)),
             Self::InTypeSystemTime => Some(PropSer(PropHandler::SystemTime)),
@@ -423,13 +423,11 @@ impl PropSerable for TdhInType {
 
 impl PropSerable for Property {
     fn get_parser(&self) -> Option<PropSer> {
-        // give the output type parser first, if there is one otherwise use the input type
+        // give the output type parser first if there is one, otherwise use the input type
         if let Some(p) = self.out_type.get_parser() {
             Some(p)
-        } else if let Some(p) = self.in_type.get_parser() {
-            Some(p)
         } else {
-            None
+            self.in_type.get_parser()
         }
     }
 }

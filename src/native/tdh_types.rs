@@ -40,7 +40,7 @@ impl Property {
     pub fn new(name: String, property: &Etw::EVENT_PROPERTY_INFO) -> Result<Self, PropertyError> {
         let flags = PropertyFlags::from(property.Flags);
 
-        if flags.contains(PropertyFlags::PROPERTY_STRUCT) == false {
+        if !flags.contains(PropertyFlags::PROPERTY_STRUCT) {
             // The property is a non-struct type. It makes sense to access these fields of the unions
             let ot = unsafe { property.Anonymous1.nonStructType.OutType };
             let it = unsafe { property.Anonymous1.nonStructType.InType };
@@ -86,9 +86,10 @@ impl Property {
 
 /// Represent a TDH_IN_TYPE
 #[repr(u16)]
-#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq, Eq, Default)]
 pub enum TdhInType {
     // Deprecated values are not defined
+    #[default]
     InTypeNull,
     InTypeUnicodeString,
     InTypeAnsiString,
@@ -114,16 +115,11 @@ pub enum TdhInType {
     InTypeCountedString = 300,
 }
 
-impl Default for TdhInType {
-    fn default() -> TdhInType {
-        TdhInType::InTypeNull
-    }
-}
-
 /// Represent a TDH_OUT_TYPE
 #[repr(u16)]
-#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq, Eq, Default)]
 pub enum TdhOutType {
+    #[default]
     OutTypeNull,
     OutTypeString,
     OutTypeDateTime,
@@ -157,12 +153,6 @@ pub enum TdhOutType {
     OutTypePkcs7 = 36,
     OutTypeCodePointer = 37,
     OutTypeDatetimeUtc = 38,
-}
-
-impl Default for TdhOutType {
-    fn default() -> TdhOutType {
-        TdhOutType::OutTypeNull
-    }
 }
 
 bitflags! {

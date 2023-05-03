@@ -2,7 +2,7 @@ use std::time::Duration;
 use std::sync::mpsc;
 use std::sync::mpsc::{TrySendError, RecvTimeoutError};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TestKind {
     /// Test will pass if a success has been notified in the test duration
     ExpectSuccess,
@@ -18,28 +18,23 @@ pub struct StatusNotifier {
 
 impl StatusNotifier {
     pub fn notify_success(&self) {
-        match self.kind {
-            TestKind::ExpectSuccess => {
-                match self.tx.try_send(()) {
-                    Ok(()) => (),
-                    Err(TrySendError::Full(_)) => (), // this means we've sent a success signal already, we don't care
-                    Err(TrySendError::Disconnected(_)) => (), // Receiver disconnected when the test was still running. That's usually expected, since the callback can outlive the function that started the trace
-                }
-            },
-            _ => (),
+        if self.kind == TestKind::ExpectSuccess {
+            match self.tx.try_send(()) {
+                Ok(()) => (),
+                Err(TrySendError::Full(_)) => (), // this means we've sent a success signal already, we don't care
+                Err(TrySendError::Disconnected(_)) => (), // Receiver disconnected when the test was still running. That's usually expected, since the callback can outlive the function that started the trace
+            }
         }
     }
 
+    #[allow(dead_code)]
     pub fn notify_failure(&self) {
-        match self.kind {
-            TestKind::ExpectNoFailure => {
-                match self.tx.try_send(()) {
-                    Ok(()) => (),
-                    Err(TrySendError::Full(_)) => (), // this means we've sent a failure signal already, we don't care
-                    Err(TrySendError::Disconnected(_)) => (), // Receiver disconnected when the test was still running. That's usually expected, since the callback can outlive the function that started the trace
-                }
-            },
-            _ => (),
+        if self.kind == TestKind::ExpectNoFailure {
+            match self.tx.try_send(()) {
+                Ok(()) => (),
+                Err(TrySendError::Full(_)) => (), // this means we've sent a failure signal already, we don't care
+                Err(TrySendError::Disconnected(_)) => (), // Receiver disconnected when the test was still running. That's usually expected, since the callback can outlive the function that started the trace
+            }
         }
     }
 }
@@ -66,9 +61,7 @@ impl Status {
         match self.notifier.kind {
             TestKind::ExpectSuccess => {
                 match self.rx.recv_timeout(timeout) {
-                    Ok(()) => {
-                        return;
-                    },
+                    Ok(()) => {},
                     Err(RecvTimeoutError::Timeout) => {
                         panic!("Test did not pass within the allowed timeout");
                     },
@@ -81,9 +74,7 @@ impl Status {
                     Ok(()) => {
                         panic!("Test failed within the allowed timeout");
                     },
-                    Err(RecvTimeoutError::Timeout) => {
-                        return;
-                    },
+                    Err(RecvTimeoutError::Timeout) => {},
                     _ => panic!("Should not happen, the sending end has not hung up."),
                 }
             }
