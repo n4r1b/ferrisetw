@@ -103,6 +103,7 @@ impl BenchmarkStatistics {
         let event = EventSerializer::new(record, &schema, options);
         let res = serde_json::to_value(event);
         if res.is_err() {
+            println!("{:?}", res);
             self.error_count.fetch_add(1, Ordering::AcqRel);
             return;
         }
@@ -131,6 +132,7 @@ impl BenchmarkStatistics {
         let mut ser = flexbuffers::FlexbufferSerializer::new();
         let res = event.serialize(&mut ser);
         if res.is_err() {
+            println!("{:?}", res);
             self.error_count.fetch_add(1, Ordering::AcqRel);
             return;
         }

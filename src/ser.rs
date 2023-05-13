@@ -1,16 +1,16 @@
 //! Integrates with [serde](https://serde.rs/) enabling ['EventRecord`](crate::EventRecord) to be serialized to various formats.
-//! 
+//!
 //! Requires the `serde` feature be enabled.
 //!
-//! If the `time_rs` feature is enabled, then time stamps are serialized per the serialization format 
-//! of the time crate. Otherwise, if `time_rs` is not enabled, then timestamps are serialized as 64bit 
+//! If the `time_rs` feature is enabled, then time stamps are serialized per the serialization format
+//! of the time crate. Otherwise, if `time_rs` is not enabled, then timestamps are serialized as 64bit
 //! unix timestamps.
-//! 
+//!
 //! ```
 //! use ferrisetw::schema_locator::SchemaLocator;
 //! use ferrisetw::{EventRecord, EventSerializer};
 //! extern crate serde_json;
-//! 
+//!
 //! fn event_callback(record: &EventRecord, schema_locator: &SchemaLocator) {
 //!     match schema_locator.event_schema(record) {
 //!         Err(err) => println!("Error {:?}", err),
@@ -29,6 +29,7 @@
 #![cfg(feature = "serde")]
 
 use crate::native::etw_types::event_record::EventRecord;
+use crate::native::etw_types::EVENT_HEADER_FLAG_32_BIT_HEADER;
 use crate::native::tdh_types::{Property, TdhInType, TdhOutType};
 use crate::native::time::{FileTime, SystemTime};
 use crate::parser::Parser;
@@ -116,7 +117,7 @@ impl serde::ser::Serialize for EventSerializer<'_> {
             state.skip_field("Extended")?;
         }
 
-        let event = EventSer::new(self.schema, &self.parser, &self.options);
+        let event = EventSer::new(self.record, self.schema, &self.parser, &self.options);
         state.serialize_field("Event", &event)?;
 
         state.end()
@@ -220,6 +221,7 @@ impl serde::ser::Serialize for DescriptorSer<'_> {
 }
 
 struct EventSer<'a, 'b> {
+    record: &'a EventRecord,
     schema: &'a Schema,
     parser: &'a Parser<'b, 'b>,
     options: &'a EventSerializerOptions,
@@ -227,11 +229,13 @@ struct EventSer<'a, 'b> {
 
 impl<'a, 'b> EventSer<'a, 'b> {
     fn new(
+        record: &'a EventRecord,
         schema: &'a Schema,
         parser: &'a Parser<'b, 'b>,
         options: &'a EventSerializerOptions,
     ) -> Self {
         Self {
+            record,
             schema,
             parser,
             options,
@@ -245,10 +249,14 @@ impl serde::ser::Serialize for EventSer<'_, '_> {
         S: serde::Serializer,
     {
         let mut len: usize = 0;
-        let props = match self.schema.try_properties().map_err(serde::ser::Error::custom) {
+        let props = match self
+            .schema
+            .try_properties()
+            .map_err(serde::ser::Error::custom)
+        {
             Err(e) if self.options.fail_unimplemented => return Err(e),
             Ok(p) => p,
-            _ => &[]
+            _ => &[],
         };
 
         for prop in props {
@@ -265,7 +273,7 @@ impl serde::ser::Serialize for EventSer<'_, '_> {
         let mut state = serializer.serialize_map(Some(len))?;
         for prop in props {
             if let Some(s) = prop.get_parser() {
-                s.0.ser::<S>(&mut state, prop, self.parser)?;
+                s.0.ser::<S>(&mut state, prop, self.parser, self.record)?;
             }
         }
         state.end()
@@ -315,6 +323,7 @@ impl PropHandler {
         map: &mut S::SerializeMap,
         prop: &Property,
         parser: &Parser,
+        record: &EventRecord,
     ) -> Result<(), S::Error>
     where
         S: serde::ser::Serializer,
@@ -341,10 +350,10 @@ impl PropHandler {
                 map.serialize_entry(&prop.name, &value)
             }
             PropHandler::Pointer => {
-                if prop.length == 8 {
-                    prop_ser_type!(u64, map, prop, parser)
-                } else {
+                if record.event_flags() & EVENT_HEADER_FLAG_32_BIT_HEADER != 0 {
                     prop_ser_type!(u32, map, prop, parser)
+                } else {
+                    prop_ser_type!(u64, map, prop, parser)
                 }
             }
             PropHandler::Guid => {

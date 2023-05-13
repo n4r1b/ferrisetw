@@ -28,6 +28,20 @@ impl std::fmt::Display for PropertyError {
     }
 }
 
+/// Notes if the property length is a concrete length or an index to another property
+/// which contains the length.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PropertyLength {
+    Length(u16),
+    Index(u16),
+} 
+
+impl Default for PropertyLength {
+    fn default() -> Self {
+        PropertyLength::Length(0)
+    }
+} 
+
 /// Attributes of a property
 #[derive(Debug, Clone, Default)]
 pub struct Property {
@@ -35,8 +49,9 @@ pub struct Property {
     pub name: String,
     /// Represent the [PropertyFlags]
     pub flags: PropertyFlags,
+    /// The length of the property
+    pub length: PropertyLength,
     /// TDH In type of the property
-    pub length: u16,
     pub in_type: TdhInType,
     /// TDH Out type of the property
     pub out_type: TdhOutType,
@@ -53,11 +68,11 @@ impl Property {
             let it = unsafe { property.Anonymous1.nonStructType.InType };
 
             let length = if flags.contains(PropertyFlags::PROPERTY_PARAM_LENGTH) {
-                // TODO: support properties that point at sibling property to tell the length of the property
-                return Err(PropertyError::UnimplementedType);
+                // The property length is stored in another property, this is the index of that property
+                PropertyLength::Index(unsafe { property.Anonymous3.lengthPropertyIndex })
             } else {
                 // The property has no param for its length, it makes sense to access this field of the union
-                unsafe { property.Anonymous3.length }
+                PropertyLength::Length(unsafe { property.Anonymous3.length })
             };
 
             let out_type = FromPrimitive::from_u16(ot)
@@ -76,18 +91,6 @@ impl Property {
         }
 
         Err(PropertyError::UnimplementedType)
-    }
-
-    pub fn in_type(&self) -> TdhInType {
-        self.in_type
-    }
-
-    pub fn out_type(&self) -> TdhOutType {
-        self.out_type
-    }
-
-    pub fn len(&self) -> usize {
-        self.length as usize
     }
 }
 
