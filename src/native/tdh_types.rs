@@ -13,13 +13,20 @@ use num_traits::FromPrimitive;
 
 use windows::Win32::System::Diagnostics::Etw;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PropertyError{
     /// Parsing complex types in properties is not supported in this crate
     /// (yet? See <https://github.com/n4r1b/ferrisetw/issues/76>)
     UnimplementedType
 }
 
+impl std::fmt::Display for PropertyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnimplementedType => write!(f, "unimplemented type"),
+        }
+    }
+}
 
 /// Attributes of a property
 #[derive(Debug, Clone, Default)]

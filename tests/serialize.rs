@@ -247,6 +247,7 @@ fn serialize_json() {
             //include_schema: false,
             //include_header: false,
             //include_extended_data: false,
+            //fail_unimplemented: true,
             ..Default::default()
         },
         SECONDS_TO_RUN,
@@ -261,6 +262,7 @@ fn serialize_flexbuffer() {
             //include_schema: false,
             //include_header: false,
             //include_extended_data: false,
+            //fail_unimplemented: true,
             ..Default::default()
         },
         SECONDS_TO_RUN,

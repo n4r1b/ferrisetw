@@ -21,7 +21,7 @@ impl Schema {
     pub(crate) fn new(te_info: TraceEventInfo) -> Self {
         Schema {
             te_info,
-            cached_properties: OnceCell::new()
+            cached_properties: OnceCell::new(),
         }
     }
 
@@ -98,6 +98,16 @@ impl Schema {
     ///
     /// This is parsed on first call, and cached for later use
     pub(crate) fn properties(&self) -> &[Property] {
+        match self.try_properties() {
+            Err(PropertyError::UnimplementedType) => {
+                log::error!("Unable to list properties: a type is not implemented");
+                &[]
+            }
+            Ok(p) => p,
+        }
+    }
+
+    pub(crate) fn try_properties(&self) -> Result<&[Property], PropertyError> {
         let cache = self.cached_properties.get_or_init(|| {
             let mut cache = Vec::new();
             for property in self.te_info.properties() {
@@ -107,11 +117,8 @@ impl Schema {
         });
 
         match cache {
-            Err(PropertyError::UnimplementedType) => {
-                log::error!("Unable to list properties: a type is not implemented");
-                &[]
-            }
-            Ok(cache) => cache.as_slice()
+            Err(e) => Err(e.clone()),
+            Ok(cache) => Ok(cache.as_slice()),
         }
     }
 }

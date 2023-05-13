@@ -245,7 +245,13 @@ impl serde::ser::Serialize for EventSer<'_, '_> {
         S: serde::Serializer,
     {
         let mut len: usize = 0;
-        for prop in self.schema.properties() {
+        let props = match self.schema.try_properties().map_err(serde::ser::Error::custom) {
+            Err(e) if self.options.fail_unimplemented => return Err(e),
+            Ok(p) => p,
+            _ => &[]
+        };
+
+        for prop in props {
             if prop.get_parser().is_some() {
                 len += 1;
             } else if self.options.fail_unimplemented {
@@ -257,7 +263,7 @@ impl serde::ser::Serialize for EventSer<'_, '_> {
         }
 
         let mut state = serializer.serialize_map(Some(len))?;
-        for prop in self.schema.properties() {
+        for prop in props {
             if let Some(s) = prop.get_parser() {
                 s.0.ser::<S>(&mut state, prop, self.parser)?;
             }
