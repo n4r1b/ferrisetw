@@ -29,8 +29,7 @@
 #![cfg(feature = "serde")]
 
 use crate::native::etw_types::event_record::EventRecord;
-use crate::native::etw_types::EVENT_HEADER_FLAG_32_BIT_HEADER;
-use crate::native::tdh_types::{Property, TdhInType, TdhOutType};
+use crate::native::tdh_types::{Property, PropertyInfo, TdhInType, TdhOutType};
 use crate::native::time::{FileTime, SystemTime};
 use crate::parser::Parser;
 use crate::schema::Schema;
@@ -263,10 +262,27 @@ impl serde::ser::Serialize for EventSer<'_, '_> {
             if prop.get_parser().is_some() {
                 len += 1;
             } else if self.options.fail_unimplemented {
-                return Err(serde::ser::Error::custom(format!(
-                    "not implemented for in_typ: {:?} out_type: {:?}",
-                    prop.in_type, prop.out_type,
-                )));
+                match prop.info {
+                    PropertyInfo::Value {
+                        in_type, out_type, ..
+                    } => {
+                        return Err(serde::ser::Error::custom(format!(
+                            "not implemented {} in_type: {:?} out_type: {:?}",
+                            prop.name, in_type, out_type,
+                        )));
+                    }
+                    PropertyInfo::Array {
+                        in_type,
+                        out_type,
+                        count,
+                        ..
+                    } => {
+                        return Err(serde::ser::Error::custom(format!(
+                            "not implemented {} in_type: {:?} out_type: {:?} count: {:?}",
+                            prop.name, in_type, out_type, count
+                        )));
+                    }
+                }
             }
         }
 
@@ -306,6 +322,13 @@ enum PropHandler {
     Guid,
     Binary,
     IpAddr,
+    ArrayInt16,
+    ArrayUInt16,
+    ArrayInt32,
+    ArrayUInt32,
+    ArrayInt64,
+    ArrayUInt64,
+    ArrayPointer,
 }
 
 macro_rules! prop_ser_type {
@@ -345,15 +368,28 @@ impl PropHandler {
             PropHandler::IpAddr => prop_ser_type!(IpAddr, map, prop, parser),
             PropHandler::FileTime => prop_ser_type!(FileTime, map, prop, parser),
             PropHandler::SystemTime => prop_ser_type!(SystemTime, map, prop, parser),
+            PropHandler::ArrayInt16 => prop_ser_type!(&[i16], map, prop, parser),
+            PropHandler::ArrayUInt16 => prop_ser_type!(&[u16], map, prop, parser),
+            PropHandler::ArrayInt32 => prop_ser_type!(&[i32], map, prop, parser),
+            PropHandler::ArrayUInt32 => prop_ser_type!(&[u32], map, prop, parser),
+            PropHandler::ArrayInt64 => prop_ser_type!(&[i64], map, prop, parser),
+            PropHandler::ArrayUInt64 => prop_ser_type!(&[u64], map, prop, parser),
             PropHandler::Null => {
                 let value: Option<usize> = None;
                 map.serialize_entry(&prop.name, &value)
             }
             PropHandler::Pointer => {
-                if record.event_flags() & EVENT_HEADER_FLAG_32_BIT_HEADER != 0 {
+                if record.pointer_size() == 4 {
                     prop_ser_type!(u32, map, prop, parser)
                 } else {
                     prop_ser_type!(u64, map, prop, parser)
+                }
+            }
+            PropHandler::ArrayPointer => {
+                if record.pointer_size() == 4 {
+                    prop_ser_type!(&[u32], map, prop, parser)
+                } else {
+                    prop_ser_type!(&[u64], map, prop, parser)
                 }
             }
             PropHandler::Guid => {
@@ -366,83 +402,59 @@ impl PropHandler {
     }
 }
 
-impl PropSerable for TdhOutType {
+impl PropSerable for PropertyInfo {
     fn get_parser(&self) -> Option<PropSer> {
+        // give the output type parser first if there is one, otherwise use the input type
         match self {
-            Self::OutTypeNull => None, // intentionally handled by input type
-            Self::OutTypeString => Some(PropSer(PropHandler::String)),
-            Self::OutTypeDateTime => None, // intentionally handled by input type
-            Self::OutTypeInt8 => Some(PropSer(PropHandler::Int8)),
-            Self::OutTypeUInt8 => Some(PropSer(PropHandler::UInt8)),
-            Self::OutTypeInt16 => Some(PropSer(PropHandler::Int16)),
-            Self::OutTypeUInt16 => Some(PropSer(PropHandler::UInt16)),
-            Self::OutTypeInt32 => Some(PropSer(PropHandler::Int32)),
-            Self::OutTypeUInt32 => Some(PropSer(PropHandler::UInt32)),
-            Self::OutTypeInt64 => Some(PropSer(PropHandler::Int64)),
-            Self::OutTypeUInt64 => Some(PropSer(PropHandler::UInt64)),
-            Self::OutTypeFloat => Some(PropSer(PropHandler::Float)),
-            Self::OutTypeDouble => Some(PropSer(PropHandler::Double)),
-            Self::OutTypeBoolean => Some(PropSer(PropHandler::Bool)),
-            Self::OutTypeGuid => Some(PropSer(PropHandler::Guid)),
-            Self::OutTypeHexBinary => Some(PropSer(PropHandler::Binary)),
-            Self::OutTypeHexInt8 => Some(PropSer(PropHandler::Int8)),
-            Self::OutTypeHexInt16 => Some(PropSer(PropHandler::Int16)),
-            Self::OutTypeHexInt32 => Some(PropSer(PropHandler::Int32)),
-            Self::OutTypeHexInt64 => Some(PropSer(PropHandler::Int64)),
-            Self::OutTypePid => Some(PropSer(PropHandler::UInt32)),
-            Self::OutTypeTid => Some(PropSer(PropHandler::UInt32)),
-            Self::OutTypePort => Some(PropSer(PropHandler::UInt16)),
-            Self::OutTypeIpv4 => Some(PropSer(PropHandler::IpAddr)),
-            Self::OutTypeIpv6 => Some(PropSer(PropHandler::IpAddr)),
-            Self::OutTypeWin32Error => Some(PropSer(PropHandler::UInt32)),
-            Self::OutTypeNtStatus => Some(PropSer(PropHandler::Int32)),
-            Self::OutTypeHResult => Some(PropSer(PropHandler::Int32)),
-            Self::OutTypeJson => None, // TODO
-            Self::OutTypeUtf8 => Some(PropSer(PropHandler::String)),
-            Self::OutTypePkcs7 => None, // TODO
-            Self::OutTypeCodePointer => Some(PropSer(PropHandler::Pointer)),
-            Self::OutTypeDatetimeUtc => None, // intentionally handled by input type
-        }
-    }
-}
-
-impl PropSerable for TdhInType {
-    fn get_parser(&self) -> Option<PropSer> {
-        match self {
-            Self::InTypeNull => Some(PropSer(PropHandler::Null)),
-            Self::InTypeUnicodeString => Some(PropSer(PropHandler::String)),
-            Self::InTypeAnsiString => Some(PropSer(PropHandler::String)),
-            Self::InTypeInt8 => Some(PropSer(PropHandler::Int8)),
-            Self::InTypeUInt8 => Some(PropSer(PropHandler::UInt8)),
-            Self::InTypeInt16 => Some(PropSer(PropHandler::Int16)),
-            Self::InTypeUInt16 => Some(PropSer(PropHandler::UInt16)),
-            Self::InTypeInt32 => Some(PropSer(PropHandler::Int32)),
-            Self::InTypeUInt32 => Some(PropSer(PropHandler::UInt32)),
-            Self::InTypeInt64 => Some(PropSer(PropHandler::Int64)),
-            Self::InTypeUInt64 => Some(PropSer(PropHandler::UInt64)),
-            Self::InTypeFloat => Some(PropSer(PropHandler::Float)),
-            Self::InTypeDouble => Some(PropSer(PropHandler::Double)),
-            Self::InTypeBoolean => Some(PropSer(PropHandler::Bool)),
-            Self::InTypeBinary => Some(PropSer(PropHandler::Binary)),
-            Self::InTypeGuid => Some(PropSer(PropHandler::Guid)),
-            Self::InTypePointer => Some(PropSer(PropHandler::Pointer)),
-            Self::InTypeFileTime => Some(PropSer(PropHandler::FileTime)),
-            Self::InTypeSystemTime => Some(PropSer(PropHandler::SystemTime)),
-            Self::InTypeSid => Some(PropSer(PropHandler::String)),
-            Self::InTypeHexInt32 => Some(PropSer(PropHandler::Int32)),
-            Self::InTypeHexInt64 => Some(PropSer(PropHandler::Int64)),
-            Self::InTypeCountedString => None, // TODO
+            PropertyInfo::Value { in_type, out_type, .. } => {
+                match out_type {
+                    TdhOutType::OutTypeIpv4 => Some(PropSer(PropHandler::IpAddr)),
+                    TdhOutType::OutTypeIpv6 => Some(PropSer(PropHandler::IpAddr)),
+                    _ => match in_type {
+                        TdhInType::InTypeNull => Some(PropSer(PropHandler::Null)),
+                        TdhInType::InTypeUnicodeString => Some(PropSer(PropHandler::String)),
+                        TdhInType::InTypeAnsiString => Some(PropSer(PropHandler::String)),
+                        TdhInType::InTypeInt8 => Some(PropSer(PropHandler::Int8)),
+                        TdhInType::InTypeUInt8 => Some(PropSer(PropHandler::UInt8)),
+                        TdhInType::InTypeInt16 => Some(PropSer(PropHandler::Int16)),
+                        TdhInType::InTypeUInt16 => Some(PropSer(PropHandler::UInt16)),
+                        TdhInType::InTypeInt32 => Some(PropSer(PropHandler::Int32)),
+                        TdhInType::InTypeUInt32 => Some(PropSer(PropHandler::UInt32)),
+                        TdhInType::InTypeInt64 => Some(PropSer(PropHandler::Int64)),
+                        TdhInType::InTypeUInt64 => Some(PropSer(PropHandler::UInt64)),
+                        TdhInType::InTypeFloat => Some(PropSer(PropHandler::Float)),
+                        TdhInType::InTypeDouble => Some(PropSer(PropHandler::Double)),
+                        TdhInType::InTypeBoolean => Some(PropSer(PropHandler::Bool)),
+                        TdhInType::InTypeBinary => Some(PropSer(PropHandler::Binary)),
+                        TdhInType::InTypeGuid => Some(PropSer(PropHandler::Guid)),
+                        TdhInType::InTypePointer => Some(PropSer(PropHandler::Pointer)),
+                        TdhInType::InTypeFileTime => Some(PropSer(PropHandler::FileTime)),
+                        TdhInType::InTypeSystemTime => Some(PropSer(PropHandler::SystemTime)),
+                        TdhInType::InTypeSid => Some(PropSer(PropHandler::String)),
+                        TdhInType::InTypeHexInt32 => Some(PropSer(PropHandler::Int32)),
+                        TdhInType::InTypeHexInt64 => Some(PropSer(PropHandler::Int64)),
+                        TdhInType::InTypeCountedString => None, // TODO
+                    },
+                }
+            }
+            PropertyInfo::Array { in_type, .. } => {
+                match in_type {
+                    TdhInType::InTypeInt16 => Some(PropSer(PropHandler::ArrayInt16)),
+                    TdhInType::InTypeUInt16 => Some(PropSer(PropHandler::ArrayUInt16)),
+                    TdhInType::InTypeInt32 => Some(PropSer(PropHandler::ArrayInt32)),
+                    TdhInType::InTypeUInt32 => Some(PropSer(PropHandler::ArrayUInt32)),
+                    TdhInType::InTypeInt64 => Some(PropSer(PropHandler::ArrayInt64)),
+                    TdhInType::InTypeUInt64 => Some(PropSer(PropHandler::ArrayUInt64)),
+                    TdhInType::InTypePointer => Some(PropSer(PropHandler::ArrayPointer)),
+                    _ => None, // TODO
+                }
+            }
         }
     }
 }
 
 impl PropSerable for Property {
     fn get_parser(&self) -> Option<PropSer> {
-        // give the output type parser first if there is one, otherwise use the input type
-        if let Some(p) = self.out_type.get_parser() {
-            Some(p)
-        } else {
-            self.in_type.get_parser()
-        }
+        self.info.get_parser()
     }
 }

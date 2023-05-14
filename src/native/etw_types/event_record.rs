@@ -5,6 +5,8 @@ use windows::Win32::System::Diagnostics::Etw::EVENT_RECORD;
 
 use crate::native::etw_types::extended_data::EventHeaderExtendedDataItem;
 
+use super::EVENT_HEADER_FLAG_32_BIT_HEADER;
+
 /// A read-only wrapper over an [EVENT_RECORD](https://docs.microsoft.com/en-us/windows/win32/api/evntcons/ns-evntcons-event_record)
 #[repr(transparent)]
 pub struct EventRecord(pub(crate) EVENT_RECORD);
@@ -109,6 +111,14 @@ impl EventRecord {
                 self.0.UserData as *mut _,
                 self.0.UserDataLength.into(),
             )
+        }
+    }
+    
+    pub(crate) fn pointer_size(&self) -> usize {
+        if self.event_flags() & EVENT_HEADER_FLAG_32_BIT_HEADER != 0 {
+            4
+        } else {
+            8
         }
     }
 

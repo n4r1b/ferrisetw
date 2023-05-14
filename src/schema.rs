@@ -99,7 +99,7 @@ impl Schema {
     /// This is parsed on first call, and cached for later use
     pub(crate) fn properties(&self) -> &[Property] {
         match self.try_properties() {
-            Err(PropertyError::UnimplementedType) => {
+            Err(PropertyError::UnimplementedType(_)) => {
                 log::error!("Unable to list properties: a type is not implemented");
                 &[]
             }
