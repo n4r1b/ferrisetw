@@ -447,12 +447,18 @@ impl private::TryParse<String> for Parser<'_, '_> {
                         ));
                     }
 
-                    let wide = unsafe {
+                    let mut wide = unsafe {
                         std::slice::from_raw_parts(
                             prop_slice.buffer.as_ptr() as *const u16,
                             prop_slice.buffer.len() / 2,
                         )
                     };
+
+                    match wide.last() {
+                        // remove the null terminator from the slice
+                        Some(c) if c == &0 => wide = &wide[..wide.len() - 1],
+                        _ => (),
+                    }
 
                     Ok(widestring::decode_utf16_lossy(wide.iter().copied()).collect::<String>())
                 }
