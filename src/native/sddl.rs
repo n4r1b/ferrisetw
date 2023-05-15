@@ -3,7 +3,21 @@ use std::str::Utf8Error;
 use windows::core::PSTR;
 use windows::Win32::Foundation::{HLOCAL, PSID};
 use windows::Win32::Security::Authorization::ConvertSidToStringSidA;
-use windows::Win32::System::Memory::LocalFree;
+
+// N.B windows-rs has an incorrect implementation for local free
+// https://github.com/microsoft/windows-rs/issues/2488
+#[allow(non_snake_case)]
+pub unsafe fn LocalFree<P0>(hmem: P0) -> ::windows::core::Result<HLOCAL>
+where
+    P0: ::windows::core::IntoParam<HLOCAL>,
+{
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn LocalFree(hmem : HLOCAL ) -> HLOCAL;
+    }
+    let res = LocalFree(hmem.into_param().abi());
+    ::windows::imp::then(res.0 == 0, || res).ok_or_else(::windows::core::Error::from_win32)
+}
 
 /// SDDL native error
 #[derive(Debug)]
@@ -17,6 +31,15 @@ pub enum SddlNativeError {
 impl From<Utf8Error> for SddlNativeError {
     fn from(err: Utf8Error) -> Self {
         SddlNativeError::SidParseError(err)
+    }
+}
+
+impl std::fmt::Display for SddlNativeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SidParseError(e) => write!(f, "sid parse error {}", e),
+            Self::IoError(e) => write!(f, "i/o error {}", e),
+        }
     }
 }
 

@@ -55,7 +55,7 @@ fn trace_lifetime() {
                         how_to_process);
 
                     // Regardless of whether we explicitly stopped it, trace has been dropped and must no longer run
-                    assert_trace_exists(&ascii_part_to_look_for, false);
+                    assert_trace_exists(ascii_part_to_look_for, false);
                 }
             }
         }
@@ -97,8 +97,7 @@ fn test_wordpad_trace(
             trace
         },
         HowToProcess::StartAndProcess => {
-            let trace = trace_builder.start_and_process().unwrap();
-            trace
+            trace_builder.start_and_process().unwrap()
         }
     };
 
@@ -131,14 +130,13 @@ fn assert_trace_exists(ascii_part_of_the_trace_name: &str, expected: bool) {
         let res = stdout
             .split('\n')
             .any(|line| {
-                let val = line.contains(&ascii_part_of_the_trace_name);
-                val
+                line.contains(ascii_part_of_the_trace_name)
             });
 
         if status.success() {
             if res != expected {
                 println!("logman output (returned {}): {}", status, stdout);
-                assert!(false);
+                unreachable!();
             }
         } else {
             // Not sure why, but logman sometimes fails to list current traces (with "The GUID passed was not recognized as valid by a WMI data provider.")

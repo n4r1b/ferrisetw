@@ -1,13 +1,15 @@
 //! Safe wrappers over the EVENT_RECORD type
 
-use windows::Win32::System::Diagnostics::Etw::EVENT_RECORD;
 use windows::core::GUID;
+use windows::Win32::System::Diagnostics::Etw::EVENT_RECORD;
 
 use crate::native::etw_types::extended_data::EventHeaderExtendedDataItem;
 
+use super::EVENT_HEADER_FLAG_32_BIT_HEADER;
+
 /// A read-only wrapper over an [EVENT_RECORD](https://docs.microsoft.com/en-us/windows/win32/api/evntcons/ns-evntcons-event_record)
 #[repr(transparent)]
-pub struct EventRecord(EVENT_RECORD);
+pub struct EventRecord(pub(crate) EVENT_RECORD);
 
 impl EventRecord {
     /// Create a `&self` from a Windows pointer.
@@ -100,21 +102,7 @@ impl EventRecord {
     /// The `TimeStamp` field from the wrapped `EVENT_RECORD`, as a strongly-typed `time::OffsetDateTime`
     #[cfg(feature = "time_rs")]
     pub fn timestamp(&self) -> time::OffsetDateTime {
-        // "system time" means the count of hundreds of nanoseconds since midnight, January 1, 1601
-        let system_time = self.0.EventHeader.TimeStamp;
-
-        const SECONDS_BETWEEN_1601_AND_1970: i128 = 11_644_473_600;
-        const HUNDREDS_OF_NANOS_IN_SECOND: i128 = 10_000_000;
-        const HUNDREDS_OF_NANOSECONDS_BETWEEN_1601_AND_1970: i128 =
-            SECONDS_BETWEEN_1601_AND_1970 * HUNDREDS_OF_NANOS_IN_SECOND;
-
-        let unix_as_hundreds_of_nano_seconds = (system_time as i128) - HUNDREDS_OF_NANOSECONDS_BETWEEN_1601_AND_1970;
-        let unix_as_nano_seconds = unix_as_hundreds_of_nano_seconds * 100;
-
-        // Can't panic.
-        // A filetime can go from 1601 to 30828.
-        // OffsetDateTime (with the 'large-dates' feature) can represent any time from year -999_999 to +999_999. Meanwhile, .
-        time::OffsetDateTime::from_unix_timestamp_nanos(unix_as_nano_seconds).unwrap()
+        crate::native::time::FileTime::from_quad(self.0.EventHeader.TimeStamp).into()
     }
 
     pub(crate) fn user_buffer(&self) -> &[u8] {
@@ -123,6 +111,14 @@ impl EventRecord {
                 self.0.UserData as *mut _,
                 self.0.UserDataLength.into(),
             )
+        }
+    }
+    
+    pub(crate) fn pointer_size(&self) -> usize {
+        if self.event_flags() & EVENT_HEADER_FLAG_32_BIT_HEADER != 0 {
+            4
+        } else {
+            8
         }
     }
 

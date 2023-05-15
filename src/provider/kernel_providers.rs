@@ -253,7 +253,7 @@ mod test {
         let kernel_provider = Provider::kernel(&IMAGE_LOAD_PROVIDER).build();
 
         assert_eq!(EVENT_TRACE_FLAG_IMAGE_LOAD, kernel_provider.kernel_flags());
-        assert_eq!(GUID::from(IMAGE_LOAD_GUID), kernel_provider.guid());
+        assert_eq!(IMAGE_LOAD_GUID, kernel_provider.guid());
     }
 
     #[test]

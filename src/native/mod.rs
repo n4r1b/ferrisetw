@@ -8,6 +8,7 @@ pub(crate) mod sddl;
 pub(crate) mod tdh;
 pub(crate) mod tdh_types;
 pub(crate) mod version_helper;
+pub mod time;
 
 // These are used in our custom error types, and must be part of the public API
 pub use pla::PlaError;

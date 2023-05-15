@@ -25,7 +25,7 @@ impl From<tdh::TdhNativeError> for SchemaError {
     }
 }
 
-type SchemaResult<T> = Result<T, SchemaError>;
+pub(crate) type SchemaResult<T> = Result<T, SchemaError>;
 
 /// A way to group events that share the same [`Schema`]
 ///

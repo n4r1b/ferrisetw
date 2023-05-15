@@ -53,13 +53,19 @@ impl CallbackData {
     }
 }
 
-impl RealTimeCallbackData {
-    pub fn new() -> Self {
+impl std::default::Default for RealTimeCallbackData {
+    fn default() -> Self {
         Self {
             events_handled: AtomicUsize::new(0),
             schema_locator: SchemaLocator::new(),
             providers: Vec::new(),
         }
+    }
+}
+
+impl RealTimeCallbackData {
+    pub fn new() -> Self {
+        Default::default()
     }
 
     pub fn add_provider(&mut self, provider: Provider) {

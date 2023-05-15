@@ -25,7 +25,6 @@ fn dns_etw_callback(
                 "Unable to get the ETW schema for a DNS event: {:?}",
                 err
             );
-            return;
         },
 
         Ok(schema) => {

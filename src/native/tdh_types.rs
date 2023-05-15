@@ -13,13 +13,79 @@ use num_traits::FromPrimitive;
 
 use windows::Win32::System::Diagnostics::Etw;
 
-#[derive(Debug)]
-pub enum PropertyError{
+#[derive(Debug, Clone)]
+pub enum PropertyError {
     /// Parsing complex types in properties is not supported in this crate
     /// (yet? See <https://github.com/n4r1b/ferrisetw/issues/76>)
-    UnimplementedType
+    UnimplementedType(&'static str),
 }
 
+impl std::fmt::Display for PropertyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnimplementedType(s) => write!(f, "unimplemented type: {}", s),
+        }
+    }
+}
+
+/// Notes if the property count is a concrete length or an index into another property.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PropertyCount {
+    Count(u16),
+    Index(u16),
+}
+
+impl Default for PropertyCount {
+    fn default() -> Self {
+        PropertyCount::Count(0)
+    }
+}
+
+/// Notes if the property length is a concrete length or an index to another property
+/// which contains the length.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PropertyLength {
+    Length(u16),
+    Index(u16),
+}
+
+impl Default for PropertyLength {
+    fn default() -> Self {
+        PropertyLength::Length(0)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum PropertyInfo {
+    Value {
+        /// TDH In type of the property
+        in_type: TdhInType,
+        /// TDH Out type of the property
+        out_type: TdhOutType,
+        /// The length of the property
+        length: PropertyLength,
+    },
+    Array {
+        /// TDH In type of the property
+        in_type: TdhInType,
+        /// TDH Out type of the property
+        out_type: TdhOutType,
+        /// The length of the property
+        length: PropertyLength,
+        /// Number of elements.
+        count: PropertyCount,
+    },
+}
+
+impl Default for PropertyInfo {
+    fn default() -> Self {
+        PropertyInfo::Value {
+            in_type: Default::default(),
+            out_type: Default::default(),
+            length: Default::default(),
+        }
+    }
+}
 
 /// Attributes of a property
 #[derive(Debug, Clone, Default)]
@@ -28,11 +94,8 @@ pub struct Property {
     pub name: String,
     /// Represent the [PropertyFlags]
     pub flags: PropertyFlags,
-    /// TDH In type of the property
-    length: u16,
-    in_type: TdhInType,
-    /// TDH Out type of the property
-    out_type: TdhOutType,
+    /// Information about the property.
+    pub info: PropertyInfo,
 }
 
 #[doc(hidden)]
@@ -40,55 +103,76 @@ impl Property {
     pub fn new(name: String, property: &Etw::EVENT_PROPERTY_INFO) -> Result<Self, PropertyError> {
         let flags = PropertyFlags::from(property.Flags);
 
-        if flags.contains(PropertyFlags::PROPERTY_STRUCT) == false {
+        if flags.contains(PropertyFlags::PROPERTY_STRUCT) {
+            Err(PropertyError::UnimplementedType("structure"))
+        } else if flags.contains(PropertyFlags::PROPERTY_HAS_CUSTOM_SCHEMA) {
+            Err(PropertyError::UnimplementedType("has custom schema"))
+        } else {
             // The property is a non-struct type. It makes sense to access these fields of the unions
             let ot = unsafe { property.Anonymous1.nonStructType.OutType };
             let it = unsafe { property.Anonymous1.nonStructType.InType };
 
             let length = if flags.contains(PropertyFlags::PROPERTY_PARAM_LENGTH) {
-                // TODO: support properties that point at sibling property to tell the length of the property
-                return Err(PropertyError::UnimplementedType);
+                // The property length is stored in another property, this is the index of that property
+                PropertyLength::Index(unsafe { property.Anonymous3.lengthPropertyIndex })
             } else {
                 // The property has no param for its length, it makes sense to access this field of the union
-                unsafe { property.Anonymous3.length }
+                PropertyLength::Length(unsafe { property.Anonymous3.length })
             };
 
-            let out_type = FromPrimitive::from_u16(ot)
-                .unwrap_or(TdhOutType::OutTypeNull);
+            let count = if flags.contains(PropertyFlags::PROPERTY_PARAM_COUNT) {
+                unsafe {
+                    if property.Anonymous2.countPropertyIndex > 1 {
+                        Some(PropertyCount::Index(property.Anonymous2.countPropertyIndex))
+                    } else {
+                        None
+                    }
+                }
+            } else {
+                unsafe {
+                    if property.Anonymous2.count > 1 {
+                        Some(PropertyCount::Count(property.Anonymous2.count))
+                    } else {
+                        None
+                    }
+                }
+            };
 
-            let in_type = FromPrimitive::from_u16(it)
-                .unwrap_or(TdhInType::InTypeNull);
+            let out_type = FromPrimitive::from_u16(ot).unwrap_or(TdhOutType::OutTypeNull);
 
-            return Ok(Property {
-                name,
-                flags,
-                length,
-                in_type,
-                out_type,
-            });
+            let in_type = FromPrimitive::from_u16(it).unwrap_or(TdhInType::InTypeNull);
+
+            match count {
+                Some(c) => Ok(Property {
+                    name,
+                    flags,
+                    info: PropertyInfo::Array {
+                        in_type,
+                        out_type,
+                        length,
+                        count: c,
+                    },
+                }),
+                None => Ok(Property {
+                    name,
+                    flags,
+                    info: PropertyInfo::Value {
+                        in_type,
+                        out_type,
+                        length,
+                    },
+                }),
+            }
         }
-
-        Err(PropertyError::UnimplementedType)
-    }
-
-    pub fn in_type(&self) -> TdhInType {
-        self.in_type
-    }
-
-    pub fn out_type(&self) -> TdhOutType {
-        self.out_type
-    }
-
-    pub fn len(&self) -> usize {
-        self.length as usize
     }
 }
 
 /// Represent a TDH_IN_TYPE
 #[repr(u16)]
-#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq, Eq, Default)]
 pub enum TdhInType {
     // Deprecated values are not defined
+    #[default]
     InTypeNull,
     InTypeUnicodeString,
     InTypeAnsiString,
@@ -114,16 +198,11 @@ pub enum TdhInType {
     InTypeCountedString = 300,
 }
 
-impl Default for TdhInType {
-    fn default() -> TdhInType {
-        TdhInType::InTypeNull
-    }
-}
-
 /// Represent a TDH_OUT_TYPE
 #[repr(u16)]
-#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive, PartialEq, Eq, Default)]
 pub enum TdhOutType {
+    #[default]
     OutTypeNull,
     OutTypeString,
     OutTypeDateTime,
@@ -157,12 +236,6 @@ pub enum TdhOutType {
     OutTypePkcs7 = 36,
     OutTypeCodePointer = 37,
     OutTypeDatetimeUtc = 38,
-}
-
-impl Default for TdhOutType {
-    fn default() -> TdhOutType {
-        TdhOutType::OutTypeNull
-    }
 }
 
 bitflags! {

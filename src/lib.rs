@@ -123,6 +123,7 @@ pub mod schema_locator;
 pub mod trace;
 mod traits;
 mod utils;
+pub mod ser;
 
 pub(crate) type EtwCallback = Box<dyn FnMut(&EventRecord, &SchemaLocator) + Send + Sync + 'static>;
 
@@ -132,6 +133,8 @@ pub use crate::trace::KernelTrace;
 pub use crate::trace::FileTrace;
 pub use crate::native::etw_types::event_record::EventRecord;
 pub use crate::schema_locator::SchemaLocator;
+#[cfg(feature = "serde")]
+pub use crate::ser::{EventSerializer, EventSerializerOptions};
 
 // These types are returned by some public APIs of this crate.
 // They must be re-exported, so that users of the crate have a way to avoid version conflicts
