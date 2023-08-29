@@ -16,7 +16,10 @@ where
         fn LocalFree(hmem : HLOCAL ) -> HLOCAL;
     }
     let res = LocalFree(hmem.into_param().abi());
-    ::windows::imp::then(res.0 == 0, || res).ok_or_else(::windows::core::Error::from_win32)
+    match res.0 as usize {
+        0 => Ok(res),
+        _ => Err(::windows::core::Error::from_win32()),
+    }
 }
 
 /// SDDL native error
@@ -48,16 +51,14 @@ pub(crate) type SddlResult<T> = Result<T, SddlNativeError>;
 pub fn convert_sid_to_string(sid: *const c_void) -> SddlResult<String> {
     let mut tmp = PSTR::null();
     unsafe {
-        let not_really_mut_sid = sid as *mut _; // That's OK to widely change the constness here, because it will be given as an _input_ of ConvertSidToStringSidA and will not be modified
-        if !ConvertSidToStringSidA(PSID(not_really_mut_sid), &mut tmp).as_bool() {
+        let not_really_mut_sid = sid.cast_mut(); // That's OK to widely change the constness here, because it will be given as an _input_ of ConvertSidToStringSidA and will not be modified
+        if ConvertSidToStringSidA(PSID(not_really_mut_sid), &mut tmp).is_err() {
             return Err(SddlNativeError::IoError(std::io::Error::last_os_error()));
         }
 
-        let sid_string = std::ffi::CStr::from_ptr(tmp.0 as *mut _)
-            .to_str()?
-            .to_owned();
+        let sid_string = std::ffi::CStr::from_ptr(tmp.0.cast()).to_str()?.to_owned();
 
-        LocalFree(HLOCAL(tmp.0 as isize)).map_err(|e| SddlNativeError::IoError(e.into()))?;
+        LocalFree(HLOCAL(tmp.0.cast())).map_err(|e| SddlNativeError::IoError(e.into()))?;
 
         Ok(sid_string)
     }
