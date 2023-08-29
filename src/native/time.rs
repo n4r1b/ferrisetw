@@ -1,4 +1,4 @@
-///! Implements wrappers for various Windows time structures.
+//! Implements wrappers for various Windows time structures.
 use windows::Win32::{
     Foundation::{FILETIME, SYSTEMTIME},
     System::Time::SystemTimeToFileTime,
