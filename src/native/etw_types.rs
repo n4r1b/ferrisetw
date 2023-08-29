@@ -6,6 +6,8 @@
 //!
 //! In most cases a user of the crate won't have to deal with this and can directly obtain the data
 //! needed by using the functions exposed by the modules at the crate level
+#![allow(clippy::bad_bit_mask)]
+
 use crate::provider::event_filter::EventFilterDescriptor;
 use crate::provider::TraceFlags;
 use crate::trace::{TraceProperties, RealTimeTraceTrait};

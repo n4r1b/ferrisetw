@@ -62,12 +62,10 @@ fn verify_system_version(major: u8, minor: u8, sp_major: u16) -> VersionHelperRe
     let error = unsafe{ GetLastError() };
 
     // See https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-verifyversioninfoa#return-value
-    match (res.as_bool(), error) {
+    match (res.is_ok(), error) {
         (true, _) => Ok(true),
-        (false, ERROR_OLD_WIN_VERSION) => Ok(false),
-        (false, _err) => Err(
-            VersionHelperError::IoError(std::io::Error::last_os_error())
-        ),
+        (false, Err(err)) if err.code() == ERROR_OLD_WIN_VERSION.to_hresult() => Ok(false),
+        (false, _err) => Err(VersionHelperError::IoError(std::io::Error::last_os_error())),
     }
 }
 

@@ -133,7 +133,7 @@ fn filter_invalid_trace_handles(h: TraceHandle) -> Option<TraceHandle> {
     // See https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-opentracew#return-value
     // We're conservative and we always filter out u32::MAX, although it could be valid on 64-bit setups.
     // But it turns out runtime detection of the current OS bitness is not that easy. Plus, it is not clear whether this depends on how the architecture the binary is compiled for, or the actual OS architecture.
-    if h.0 == u64::MAX || h.0 == u32::MAX as u64 {
+    if h.Value == u64::MAX || h.Value == u32::MAX as u64 {
         None
     } else {
         Some(h)
@@ -143,7 +143,7 @@ fn filter_invalid_trace_handles(h: TraceHandle) -> Option<TraceHandle> {
 fn filter_invalid_control_handle(h: ControlHandle) -> Option<ControlHandle> {
     // The control handle is 0 if the handle is not valid.
     // (https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-starttracew)
-    if h.0 == 0 {
+    if h.Value == 0 {
         None
     } else {
         Some(h)
@@ -178,12 +178,16 @@ where
         )
     };
 
-    if status == ERROR_ALREADY_EXISTS {
-        return Err(EvntraceNativeError::AlreadyExist);
-    } else if status != ERROR_SUCCESS {
-        return Err(EvntraceNativeError::IoError(
-            std::io::Error::from_raw_os_error(status.0 as i32),
-        ));
+    if let Err(status) = status {
+        let code = status.code();
+
+        if code == ERROR_ALREADY_EXISTS.to_hresult() {
+            return Err(EvntraceNativeError::AlreadyExist);
+        } else if code != ERROR_SUCCESS.to_hresult() {
+            return Err(EvntraceNativeError::IoError(
+                std::io::Error::from_raw_os_error(code.0),
+            ));
+        }
     }
 
     match filter_invalid_control_handle(control_handle) {
@@ -248,15 +252,9 @@ pub(crate) fn enable_provider(control_handle: ControlHandle, provider: &Provider
                 )
             };
 
-            if res == ERROR_SUCCESS {
-                Ok(())
-            } else {
-                Err(
-                    EvntraceNativeError::IoError(
-                        std::io::Error::from_raw_os_error(res.0 as i32)
-                    )
-                )
-            }
+            res.map_err(|err| {
+                EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(err.code().0))
+            })
         }
     }
 }
@@ -276,11 +274,9 @@ pub(crate) fn process_trace(trace_handle: TraceHandle) -> EvntraceNativeResult<(
             Etw::ProcessTrace(&[trace_handle], Some(&mut start as *mut FILETIME), None)
         };
 
-        if result == ERROR_SUCCESS {
-            Ok(())
-        } else {
-            Err(EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(result.0 as i32)))
-        }
+        result.map_err(|err| {
+            EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(err.code().0))
+        })
     }
 }
 
@@ -299,7 +295,7 @@ pub(crate) fn control_trace(
     match filter_invalid_control_handle(control_handle) {
         None => Err(EvntraceNativeError::InvalidHandle),
         Some(handle) => {
-            let status = unsafe {
+            let result = unsafe {
                 // Safety:
                 //  * the trace handle is valid (by construction)
                 //  * depending on the control code, the `Properties` can be mutated. This is fine because properties is declared as `&mut` in this function, which means no other Rust function has a reference to it, and the mutation can only happen in the call to `ControlTraceW`, which returns immediately.
@@ -311,13 +307,9 @@ pub(crate) fn control_trace(
                 )
             };
 
-            if status != ERROR_SUCCESS {
-                return Err(EvntraceNativeError::IoError(
-                    std::io::Error::from_raw_os_error(status.0 as i32),
-                ));
-            }
-
-            Ok(())
+            result.map_err(|err| {
+                EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(err.code().0))
+            })
         }
     }
 }
@@ -328,24 +320,20 @@ pub(crate) fn control_trace_by_name(
     trace_name: &U16CStr,
     control_code: Etw::EVENT_TRACE_CONTROL,
 ) -> EvntraceNativeResult<()> {
-    let status = unsafe {
+    let result = unsafe {
         // Safety:
         //  * depending on the control code, the `Properties` can be mutated. This is fine because properties is declared as `&mut` in this function, which means no other Rust function has a reference to it, and the mutation can only happen in the call to `ControlTraceW`, which returns immediately.
         Etw::ControlTraceW(
-            Etw::CONTROLTRACE_HANDLE(0),
+            Etw::CONTROLTRACE_HANDLE { Value: 0 },
             PCWSTR::from_raw(trace_name.as_ptr()),
             properties.as_mut_ptr(),
             control_code,
         )
     };
 
-    if status != ERROR_SUCCESS {
-        return Err(EvntraceNativeError::IoError(
-            std::io::Error::from_raw_os_error(status.0 as i32),
-        ));
-    }
-
-    Ok(())
+    result.map_err(|err| {
+        EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(err.code().0))
+    })
 }
 
 /// Close the trace
@@ -368,30 +356,29 @@ pub(crate) fn close_trace(trace_handle: TraceHandle, callback_data: &Box<Arc<Cal
             };
 
             match status {
-                ERROR_SUCCESS => Ok(false),
-                ERROR_CTX_CLOSE_PENDING => Ok(true),
-                status => Err(EvntraceNativeError::IoError(
-                    std::io::Error::from_raw_os_error(status.0 as i32),
-                ))
+                Ok(()) => Ok(false),
+                Err(err) if err.code() == ERROR_CTX_CLOSE_PENDING.to_hresult() => Ok(true),
+                Err(err) => Err(EvntraceNativeError::IoError(
+                    std::io::Error::from_raw_os_error(err.code().0),
+                )),
             }
-        },
+        }
     }
 }
 
 /// Queries the system for system-wide ETW information (that does not require an active session).
 pub(crate) fn query_info(class: TraceInformation, buf: &mut [u8]) -> EvntraceNativeResult<()> {
-    match unsafe {
+    let result = unsafe {
         Etw::TraceQueryInformation(
-            Etw::CONTROLTRACE_HANDLE(0),
+            Etw::CONTROLTRACE_HANDLE { Value: 0 },
             TRACE_QUERY_INFO_CLASS(class as i32),
-            buf.as_mut_ptr() as *mut c_void,
+            buf.as_mut_ptr().cast(),
             buf.len() as u32,
             None,
         )
-    } {
-        ERROR_SUCCESS => Ok(()),
-        e => Err(EvntraceNativeError::IoError(
-            std::io::Error::from_raw_os_error(e.0 as i32),
-        )),
-    }
+    };
+
+    result.map_err(|err| {
+        EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(err.code().0))
+    })
 }

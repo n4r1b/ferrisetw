@@ -124,7 +124,7 @@ impl EventFilterDescriptor {
             return Err("Too many PIDs are filtered".into());
         }
 
-        let data_size = pids.len() * std::mem::size_of::<u16>(); // PIDs are WORD, i.e. 16bits
+        let data_size = std::mem::size_of_val(pids); // PIDs are WORD, i.e. 16bits
 
         let mut s = Self::try_new::<u16>(data_size)?;
         s.ty = EVENT_FILTER_TYPE_PID;
