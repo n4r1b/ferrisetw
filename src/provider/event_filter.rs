@@ -84,34 +84,26 @@ impl EventFilterDescriptor {
 
         // Fill the data with an array of `EVENT_FILTER_EVENT_ID`s
         let p = s.data.cast::<EVENT_FILTER_EVENT_ID>();
-        let mut p_evt = unsafe {
+        unsafe {
             (*p).FilterIn = BOOLEAN(1);
             (*p).Reserved = 0;
             (*p).Count = eids.len() as u16; // we've checked the array was less than 1024 items
-            &((*p).Events[0]) as *const u16 as *mut u16
+        }
+
+        let evts = unsafe {
+            std::slice::from_raw_parts_mut(
+                &((*p).Events[0]) as *const u16 as *mut u16,
+                std::cmp::max(1, eids.len()),
+            )
         };
+
         if eids.is_empty() {
             // Just to avoid an unintialized data, but should never be accessed anyway since p->Count = 0
-            unsafe{
-                *p_evt = 0;
-            };
+            evts[0] = 0;
             return Ok(s);
         }
 
-        for event_id in eids {
-            unsafe{
-                *p_evt = *event_id;
-            };
-
-            p_evt = unsafe {
-                // Safety:
-                // * both the starting and resulting pointer are within the same allocated object
-                //   (except for the very last item, but that will not be written to)
-                // * thus, the offset is smaller than an isize
-                p_evt.offset(1)
-            };
-        }
-
+        evts.copy_from_slice(eids);
         Ok(s)
     }
 
