@@ -160,15 +160,15 @@ impl Provider {
 impl std::fmt::Debug for Provider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Provider")
-         .field("guid", &self.guid)
-         .field("any", &self.any)
-         .field("all", &self.all)
-         .field("level", &self.level)
-         .field("trace_flags", &self.trace_flags)
-         .field("kernel_flags", &self.kernel_flags)
-         .field("filters", &self.filters)
-         .field("callbacks", &self.callbacks.read().unwrap().len())
-         .finish()
+            .field("guid", &self.guid)
+            .field("any", &self.any)
+            .field("all", &self.all)
+            .field("level", &self.level)
+            .field("trace_flags", &self.trace_flags)
+            .field("kernel_flags", &self.kernel_flags)
+            .field("filters", &self.filters)
+            .field("callbacks", &self.callbacks.read().unwrap().len())
+            .finish()
     }
 }
 

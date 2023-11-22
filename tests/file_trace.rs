@@ -1,18 +1,18 @@
-use std::time::Duration;
 use std::path::PathBuf;
+use std::time::Duration;
 
-use ferrisetw::EventRecord;
-use ferrisetw::{UserTrace, FileTrace};
 use ferrisetw::provider::Provider;
 use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::DumpFileParams;
 use ferrisetw::trace::TraceTrait;
+use ferrisetw::EventRecord;
+use ferrisetw::{FileTrace, UserTrace};
 
 #[test]
 fn etl_file() {
     env_logger::init(); // this is optional. This makes the (rare) error logs of ferrisetw to be printed to stderr
 
-    let dump_file = DumpFileParams{
+    let dump_file = DumpFileParams {
         file_path: PathBuf::from("etw-dump-file.etl"),
         ..Default::default()
     };
@@ -26,8 +26,7 @@ fn etl_file() {
 fn empty_callback(_record: &EventRecord, _schema_locator: &SchemaLocator) {}
 
 fn save_a_trace(dump_file: DumpFileParams) -> usize {
-    let process_provider = Provider
-        ::by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716") // Microsoft-Windows-Kernel-Process
+    let process_provider = Provider::by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716") // Microsoft-Windows-Kernel-Process
         .add_callback(empty_callback)
         .build();
 
@@ -46,9 +45,7 @@ fn save_a_trace(dump_file: DumpFileParams) -> usize {
 }
 
 fn process_from_file(input_file: PathBuf) -> usize {
-    let (trace, handle) = FileTrace::new(input_file, empty_callback)
-        .start()
-        .unwrap();
+    let (trace, handle) = FileTrace::new(input_file, empty_callback).start().unwrap();
 
     FileTrace::process_from_handle(handle).unwrap();
 

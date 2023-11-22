@@ -10,18 +10,18 @@
 
 use crate::provider::event_filter::EventFilterDescriptor;
 use crate::provider::TraceFlags;
-use crate::trace::{TraceProperties, RealTimeTraceTrait};
 use crate::trace::callback_data::CallbackData;
+use crate::trace::{RealTimeTraceTrait, TraceProperties};
 use std::ffi::{c_void, OsString};
 use std::fmt::Formatter;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use widestring::{U16CStr, U16CString};
 use windows::core::GUID;
 use windows::core::PWSTR;
 use windows::Win32::System::Diagnostics::Etw;
 use windows::Win32::System::Diagnostics::Etw::EVENT_FILTER_DESCRIPTOR;
-use widestring::{U16CStr, U16CString};
 
 pub(crate) mod event_record;
 pub(crate) mod extended_data;
@@ -176,7 +176,7 @@ impl std::default::Default for DumpFileLoggingMode {
 
 /// The data source the trace is subscribed to
 #[derive(Clone, Debug)]
-pub enum SubscriptionSource{
+pub enum SubscriptionSource {
     /// Subscribe to a real-time session
     RealTimeSession(U16CString),
     /// Open an ETL file
@@ -193,11 +193,10 @@ pub enum SubscriptionSource{
 pub struct EventTraceProperties {
     etw_trace_properties: Etw::EVENT_TRACE_PROPERTIES,
     /// The trace name to subscribe to
-    wide_trace_name: [u16; TRACE_NAME_MAX_CHARS+1],    // The +1 leaves space for the final null widechar.
+    wide_trace_name: [u16; TRACE_NAME_MAX_CHARS + 1], // The +1 leaves space for the final null widechar.
     /// The file name (if any) we store our events to
-    wide_etl_dump_file_path: [u16; TRACE_NAME_MAX_CHARS+1], // The +1 leaves space for the final null widechar.
+    wide_etl_dump_file_path: [u16; TRACE_NAME_MAX_CHARS + 1], // The +1 leaves space for the final null widechar.
 }
-
 
 impl std::fmt::Debug for EventTraceProperties {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -221,7 +220,7 @@ impl EventTraceProperties {
         enable_flags: Etw::EVENT_TRACE_FLAG,
     ) -> Self
     where
-        T: RealTimeTraceTrait
+        T: RealTimeTraceTrait,
     {
         let mut etw_trace_properties = Etw::EVENT_TRACE_PROPERTIES::default();
 
@@ -232,13 +231,17 @@ impl EventTraceProperties {
         etw_trace_properties.BufferSize = trace_properties.buffer_size;
         etw_trace_properties.MinimumBuffers = trace_properties.min_buffer;
         etw_trace_properties.MaximumBuffers = trace_properties.max_buffer;
-        etw_trace_properties.FlushTimer = trace_properties.flush_timer.as_secs().clamp(1, u32::MAX as u64) as u32; // See https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties
+        etw_trace_properties.FlushTimer = trace_properties
+            .flush_timer
+            .as_secs()
+            .clamp(1, u32::MAX as u64) as u32; // See https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties
 
         if !trace_properties.log_file_mode.is_empty() {
             etw_trace_properties.LogFileMode = trace_properties.log_file_mode.bits();
         } else {
-            etw_trace_properties.LogFileMode =
-                (LoggingMode::EVENT_TRACE_REAL_TIME_MODE | LoggingMode::EVENT_TRACE_NO_PER_PROCESSOR_BUFFERING).bits()
+            etw_trace_properties.LogFileMode = (LoggingMode::EVENT_TRACE_REAL_TIME_MODE
+                | LoggingMode::EVENT_TRACE_NO_PER_PROCESSOR_BUFFERING)
+                .bits()
         }
 
         etw_trace_properties.LogFileMode |= T::augmented_file_mode();
@@ -246,8 +249,8 @@ impl EventTraceProperties {
 
         let mut s = Self {
             etw_trace_properties,
-            wide_trace_name: [0u16; TRACE_NAME_MAX_CHARS+1],
-            wide_etl_dump_file_path: [0u16; TRACE_NAME_MAX_CHARS+1],
+            wide_trace_name: [0u16; TRACE_NAME_MAX_CHARS + 1],
+            wide_etl_dump_file_path: [0u16; TRACE_NAME_MAX_CHARS + 1],
         };
 
         // https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties#remarks
@@ -256,7 +259,8 @@ impl EventTraceProperties {
         // Let's do it anyway, even though that's not required
         let name_len = trace_name.len().min(TRACE_NAME_MAX_CHARS);
         s.wide_trace_name[..name_len].copy_from_slice(&trace_name.as_slice()[..name_len]);
-        s.etw_trace_properties.LoggerNameOffset = offset_of!(EventTraceProperties, wide_trace_name) as u32;
+        s.etw_trace_properties.LoggerNameOffset =
+            offset_of!(EventTraceProperties, wide_trace_name) as u32;
 
         // Also populate the file name, if any
         match etl_dump_file {
@@ -265,18 +269,19 @@ impl EventTraceProperties {
                 // > If you do not want to log events to a log file (for example, if you specify EVENT_TRACE_REAL_TIME_MODE only), set LogFileNameOffset to 0.
                 // (https://learn.microsoft.com/en-us/windows/win32/api/evntrace/ns-evntrace-event_trace_properties)
                 s.etw_trace_properties.LogFileNameOffset = 0;
-            },
+            }
             Some((path, file_mode, max_size)) => {
                 // Set the file path, and set the dump-file-related flags
                 let path_len = path.len().min(TRACE_NAME_MAX_CHARS);
                 s.wide_etl_dump_file_path[..path_len].copy_from_slice(&path.as_slice()[..path_len]);
-                s.etw_trace_properties.LogFileNameOffset = offset_of!(EventTraceProperties, wide_etl_dump_file_path) as u32;
+                s.etw_trace_properties.LogFileNameOffset =
+                    offset_of!(EventTraceProperties, wide_etl_dump_file_path) as u32;
 
                 s.etw_trace_properties.LogFileMode |= file_mode.bits();
                 if let Some(max_file_size) = max_size {
                     s.etw_trace_properties.MaximumFileSize = max_file_size;
                 }
-            },
+            }
         }
 
         s
@@ -320,12 +325,17 @@ pub struct EventTraceLogfile<'callbackdata> {
 impl<'callbackdata> EventTraceLogfile<'callbackdata> {
     /// Create a new instance
     #[allow(clippy::borrowed_box)] // Being Boxed is really important, let's keep the Box<...> in the function signature to make the intent clearer (see https://github.com/n4r1b/ferrisetw/issues/72)
-    pub fn create(callback_data: &'callbackdata Box<Arc<CallbackData>>, subscription_source: SubscriptionSource, callback: unsafe extern "system" fn(*mut Etw::EVENT_RECORD)) -> Self {
-        let not_really_mut_ptr = callback_data.as_ref() as *const Arc<CallbackData> as *const c_void as *mut c_void; // That's kind-of fine because the user context is _not supposed_ to be changed by Windows APIs
+    pub fn create(
+        callback_data: &'callbackdata Box<Arc<CallbackData>>,
+        subscription_source: SubscriptionSource,
+        callback: unsafe extern "system" fn(*mut Etw::EVENT_RECORD),
+    ) -> Self {
+        let not_really_mut_ptr =
+            callback_data.as_ref() as *const Arc<CallbackData> as *const c_void as *mut c_void; // That's kind-of fine because the user context is _not supposed_ to be changed by Windows APIs
 
         let native = Etw::EVENT_TRACE_LOGFILEW {
             Anonymous2: Etw::EVENT_TRACE_LOGFILEW_1 {
-                EventRecordCallback: Some(callback)
+                EventRecordCallback: Some(callback),
             },
             Context: not_really_mut_ptr,
             ..Default::default()
@@ -343,16 +353,15 @@ impl<'callbackdata> EventTraceLogfile<'callbackdata> {
                 log_file.native.LoggerName = PWSTR(wide_logger_name.as_mut_ptr());
 
                 log_file.native.Anonymous1 = Etw::EVENT_TRACE_LOGFILEW_0 {
-                    ProcessTraceMode: Etw::PROCESS_TRACE_MODE_REAL_TIME | Etw::PROCESS_TRACE_MODE_EVENT_RECORD
-                    // In case you really want to use PROCESS_TRACE_MODE_RAW_TIMESTAMP, please review EventRecord::timestamp(), which could not be valid anymore
+                    ProcessTraceMode: Etw::PROCESS_TRACE_MODE_REAL_TIME
+                        | Etw::PROCESS_TRACE_MODE_EVENT_RECORD, // In case you really want to use PROCESS_TRACE_MODE_RAW_TIMESTAMP, please review EventRecord::timestamp(), which could not be valid anymore
                 };
-            },
+            }
             SubscriptionSource::FromFile(wide_file_name) => {
                 log_file.native.LogFileName = PWSTR(wide_file_name.as_mut_ptr());
 
                 log_file.native.Anonymous1 = Etw::EVENT_TRACE_LOGFILEW_0 {
-                    ProcessTraceMode: Etw::PROCESS_TRACE_MODE_EVENT_RECORD
-                    // In case you really want to use PROCESS_TRACE_MODE_RAW_TIMESTAMP, please review EventRecord::timestamp(), which could not be valid anymore
+                    ProcessTraceMode: Etw::PROCESS_TRACE_MODE_EVENT_RECORD, // In case you really want to use PROCESS_TRACE_MODE_RAW_TIMESTAMP, please review EventRecord::timestamp(), which could not be valid anymore
                 };
             }
         }
@@ -381,7 +390,7 @@ impl<'callbackdata> EventTraceLogfile<'callbackdata> {
 /// [ENABLE_TRACE_PARAMETERS]: https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Diagnostics/Etw/struct.ENABLE_TRACE_PARAMETERS.html
 #[repr(C)]
 #[derive(Clone, Default)]
-pub struct EnableTraceParameters<'filters>{
+pub struct EnableTraceParameters<'filters> {
     native: Etw::ENABLE_TRACE_PARAMETERS,
     /// `native` has pointers to an array of EVENT_FILTER_DESCRIPTOR, let's store it here
     array_of_event_filter_descriptor: Vec<EVENT_FILTER_DESCRIPTOR>,
@@ -390,13 +399,16 @@ pub struct EnableTraceParameters<'filters>{
 }
 
 impl<'filters> EnableTraceParameters<'filters> {
-    pub fn create(guid: GUID, trace_flags: TraceFlags, filters: &'filters [EventFilterDescriptor]) -> Self {
+    pub fn create(
+        guid: GUID,
+        trace_flags: TraceFlags,
+        filters: &'filters [EventFilterDescriptor],
+    ) -> Self {
         let mut params = EnableTraceParameters::default();
         params.native.ControlFlags = 0;
         params.native.Version = Etw::ENABLE_TRACE_PARAMETERS_VERSION_2;
         params.native.SourceId = guid;
         params.native.EnableProperty = trace_flags.bits();
-
 
         // Note: > Each type of filter (a specific Type member) may only appear once in a call to the EnableTraceEx2 function.
         //       https://learn.microsoft.com/en-us/windows/win32/api/evntrace/nf-evntrace-enabletraceex2#remarks

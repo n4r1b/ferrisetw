@@ -107,13 +107,10 @@ impl EventRecord {
 
     pub(crate) fn user_buffer(&self) -> &[u8] {
         unsafe {
-            std::slice::from_raw_parts(
-                self.0.UserData as *mut _,
-                self.0.UserDataLength.into(),
-            )
+            std::slice::from_raw_parts(self.0.UserData as *mut _, self.0.UserDataLength.into())
         }
     }
-    
+
     pub(crate) fn pointer_size(&self) -> usize {
         if self.event_flags() & EVENT_HEADER_FLAG_32_BIT_HEADER != 0 {
             4
@@ -153,7 +150,8 @@ impl EventRecord {
         unsafe {
             std::slice::from_raw_parts(
                 p_ed_array as *const EventHeaderExtendedDataItem,
-                n_extended_data as usize)
+                n_extended_data as usize,
+            )
         }
     }
 }

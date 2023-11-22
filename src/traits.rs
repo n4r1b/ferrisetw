@@ -1,6 +1,5 @@
 use std::iter;
 
-
 pub trait EncodeUtf16 {
     fn into_utf16(self) -> Vec<u16>;
 }

@@ -8,13 +8,13 @@
 use std::alloc::Layout;
 
 use super::etw_types::*;
-use crate::traits::*;
-use crate::native::tdh_types::Property;
 use crate::native::etw_types::event_record::EventRecord;
-use windows::Win32::System::Diagnostics::Etw::{self, TRACE_EVENT_INFO, EVENT_PROPERTY_INFO};
-use windows::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
-use windows::core::GUID;
+use crate::native::tdh_types::Property;
+use crate::traits::*;
 use widestring::U16CStr;
+use windows::core::GUID;
+use windows::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
+use windows::Win32::System::Diagnostics::Etw::{self, EVENT_PROPERTY_INFO, TRACE_EVENT_INFO};
 
 /// Tdh native module errors
 #[derive(Debug)]
@@ -36,11 +36,10 @@ impl std::fmt::Display for TdhNativeError {
     }
 }
 
-
 /// Read-only wrapper over an [TRACE_EVENT_INFO]
 ///
 /// [TRACE_EVENT_INFO]: https://docs.microsoft.com/en-us/windows/win32/api/tdh/ns-tdh-trace_event_info
-pub struct TraceEventInfo{
+pub struct TraceEventInfo {
     /// Pointer to a valid TRACE_EVENT_INFO buffer
     data: *const u8,
     /// Pointer to the same buffer, but mutable (used only when deallocating the data)
@@ -71,7 +70,7 @@ macro_rules! extract_utf16_string {
             U16CStr::from_ptr_str(provider_name_ptr as *const u16)
         };
         return provider_name.to_string_lossy();
-    }
+    };
 }
 
 impl TraceEventInfo {
@@ -81,23 +80,23 @@ impl TraceEventInfo {
         let status = unsafe {
             // Safety:
             //  * the `EVENT_RECORD` was passed by Microsoft and has not been modified: it is thus valid and correctly aligned
-            Etw::TdhGetEventInformation(
-                event.as_raw_ptr(),
-                None,
-                None,
-                &mut buffer_size,
-            )
+            Etw::TdhGetEventInformation(event.as_raw_ptr(), None, None, &mut buffer_size)
         };
         if status != ERROR_INSUFFICIENT_BUFFER.0 {
-            return Err(TdhNativeError::IoError(std::io::Error::from_raw_os_error(status as i32)));
+            return Err(TdhNativeError::IoError(std::io::Error::from_raw_os_error(
+                status as i32,
+            )));
         }
 
         if buffer_size == 0 {
             return Err(TdhNativeError::AllocationError);
         }
 
-        let layout = Layout::from_size_align(buffer_size as usize, std::mem::align_of::<Etw::TRACE_EVENT_INFO>())
-            .map_err(|_| TdhNativeError::AllocationError)?;
+        let layout = Layout::from_size_align(
+            buffer_size as usize,
+            std::mem::align_of::<Etw::TRACE_EVENT_INFO>(),
+        )
+        .map_err(|_| TdhNativeError::AllocationError)?;
         let data = unsafe {
             // Safety: size is not zero
             std::alloc::alloc(layout)
@@ -119,11 +118,16 @@ impl TraceEventInfo {
         };
 
         if status != 0 {
-            return Err(TdhNativeError::IoError(std::io::Error::from_raw_os_error(status as i32)));
+            return Err(TdhNativeError::IoError(std::io::Error::from_raw_os_error(
+                status as i32,
+            )));
         }
 
-        Ok(Self { data, mut_data_for_dealloc: data, layout })
-
+        Ok(Self {
+            data,
+            mut_data_for_dealloc: data,
+            layout,
+        })
     }
 
     fn as_raw(&self) -> &TRACE_EVENT_INFO {
@@ -188,7 +192,11 @@ pub struct PropertyIterator<'info> {
 impl<'info> PropertyIterator<'info> {
     fn new(te_info: &'info TraceEventInfo) -> Self {
         let count = te_info.as_raw().PropertyCount;
-        Self { next_index: 0, count, te_info }
+        Self {
+            next_index: 0,
+            count,
+            te_info,
+        }
     }
 }
 
@@ -205,7 +213,7 @@ impl<'info> Iterator for PropertyIterator<'info> {
         let cur_property_ptr = unsafe {
             // Safety:
             //  * index being in the right bounds, this guarantees the resulting pointer lies in the same allocated object
-            properties_array.offset(self.next_index as isize)   // we assume there will not be more than 2 billion properties for an event
+            properties_array.offset(self.next_index as isize) // we assume there will not be more than 2 billion properties for an event
         };
         let curr_prop = unsafe {
             // Safety:
@@ -249,19 +257,14 @@ pub fn property_size(event: &EventRecord, name: &str) -> TdhNativeResult<u32> {
     let mut property_size = 0;
 
     let name = name.into_utf16();
-    let desc = Etw::PROPERTY_DATA_DESCRIPTOR{
+    let desc = Etw::PROPERTY_DATA_DESCRIPTOR {
         ArrayIndex: u32::MAX,
         PropertyName: name.as_ptr() as u64,
         ..Default::default()
     };
 
     unsafe {
-        let status = Etw::TdhGetPropertySize(
-            event.as_raw_ptr(),
-            None,
-            &[desc],
-            &mut property_size,
-        );
+        let status = Etw::TdhGetPropertySize(event.as_raw_ptr(), None, &[desc], &mut property_size);
         if status != 0 {
             return Err(TdhNativeError::IoError(std::io::Error::from_raw_os_error(
                 status as i32,

@@ -1,8 +1,8 @@
-use ferrisetw::EventRecord;
 use ferrisetw::parser::Parser;
 use ferrisetw::provider::*;
 use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::*;
+use ferrisetw::EventRecord;
 use std::time::Duration;
 
 fn main() {
@@ -28,8 +28,7 @@ fn main() {
             Err(err) => println!("Error {:?}", err),
         };
 
-    let provider = Provider
-        ::kernel(&kernel_providers::IMAGE_LOAD_PROVIDER)
+    let provider = Provider::kernel(&kernel_providers::IMAGE_LOAD_PROVIDER)
         .add_callback(image_load_callback)
         .build();
 

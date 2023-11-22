@@ -1,6 +1,6 @@
-use std::time::Duration;
 use std::sync::mpsc;
-use std::sync::mpsc::{TrySendError, RecvTimeoutError};
+use std::sync::mpsc::{RecvTimeoutError, TrySendError};
+use std::time::Duration;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum TestKind {
@@ -48,7 +48,10 @@ pub struct Status {
 impl Status {
     pub fn new(kind: TestKind) -> Self {
         let (tx, rx) = mpsc::sync_channel(1);
-        Self { notifier: StatusNotifier{kind, tx}, rx }
+        Self {
+            notifier: StatusNotifier { kind, tx },
+            rx,
+        }
     }
 
     pub fn notifier(&self) -> StatusNotifier {
@@ -59,25 +62,21 @@ impl Status {
         let timeout = Duration::from_secs(10);
 
         match self.notifier.kind {
-            TestKind::ExpectSuccess => {
-                match self.rx.recv_timeout(timeout) {
-                    Ok(()) => {},
-                    Err(RecvTimeoutError::Timeout) => {
-                        panic!("Test did not pass within the allowed timeout");
-                    },
-                    _ => panic!("Should not happen, the sending end has not hung up."),
+            TestKind::ExpectSuccess => match self.rx.recv_timeout(timeout) {
+                Ok(()) => {}
+                Err(RecvTimeoutError::Timeout) => {
+                    panic!("Test did not pass within the allowed timeout");
                 }
+                _ => panic!("Should not happen, the sending end has not hung up."),
             },
 
-            TestKind::ExpectNoFailure => {
-                match self.rx.recv_timeout(timeout) {
-                    Ok(()) => {
-                        panic!("Test failed within the allowed timeout");
-                    },
-                    Err(RecvTimeoutError::Timeout) => {},
-                    _ => panic!("Should not happen, the sending end has not hung up."),
+            TestKind::ExpectNoFailure => match self.rx.recv_timeout(timeout) {
+                Ok(()) => {
+                    panic!("Test failed within the allowed timeout");
                 }
-            }
+                Err(RecvTimeoutError::Timeout) => {}
+                _ => panic!("Should not happen, the sending end has not hung up."),
+            },
         }
     }
 }

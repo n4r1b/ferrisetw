@@ -3,12 +3,11 @@
 use std::process::Command;
 
 use ferrisetw::provider::Provider;
-use ferrisetw::EventRecord;
 use ferrisetw::schema_locator::SchemaLocator;
-use ferrisetw::trace::UserTrace;
-use ferrisetw::trace::TraceTrait;
 use ferrisetw::trace::RealTimeTraceTrait;
-
+use ferrisetw::trace::TraceTrait;
+use ferrisetw::trace::UserTrace;
+use ferrisetw::EventRecord;
 
 #[derive(Clone, Copy, Debug)]
 enum HowToProcess {
@@ -36,11 +35,11 @@ fn trace_lifetime() {
     // Setup: make sure no trace is still running from an older interrupted test
     for (requested_trace_name, _ascii_part_to_look_for) in NAME_EXAMPLES {
         let _output = Command::new("logman")
-        .arg("stop")
-        .arg("-ets")
-        .arg(requested_trace_name)
-        .output()
-        .unwrap();
+            .arg("stop")
+            .arg("-ets")
+            .arg(requested_trace_name)
+            .output()
+            .unwrap();
     }
 
     for provider_count in 0..2 {
@@ -52,7 +51,8 @@ fn trace_lifetime() {
                         requested_trace_name,
                         ascii_part_to_look_for,
                         explicit_stop,
-                        how_to_process);
+                        how_to_process,
+                    );
 
                     // Regardless of whether we explicitly stopped it, trace has been dropped and must no longer run
                     assert_trace_exists(ascii_part_to_look_for, false);
@@ -67,19 +67,21 @@ fn test_wordpad_trace(
     requested_trace_name: &str,
     ascii_part_of_the_trace_name: &str,
     explicit_stop: bool,
-    how_to_process: HowToProcess
+    how_to_process: HowToProcess,
 ) {
-    println!("Testing a trace with {} providers, processed as {:?}, stopped:{}, name contains {}...", provider_count, how_to_process, explicit_stop, ascii_part_of_the_trace_name);
+    println!(
+        "Testing a trace with {} providers, processed as {:?}, stopped:{}, name contains {}...",
+        provider_count, how_to_process, explicit_stop, ascii_part_of_the_trace_name
+    );
 
     // Create a provider
-    let mut provider_builder = Provider
-        ::by_guid("54FFD262-99FE-4576-96E7-1ADB500370DC"); // Microsoft-Windows-Wordpad
+    let mut provider_builder = Provider::by_guid("54FFD262-99FE-4576-96E7-1ADB500370DC"); // Microsoft-Windows-Wordpad
     for _i in 0..provider_count {
-        provider_builder = provider_builder.add_callback(|_record: &EventRecord, _locator: &SchemaLocator| {})
+        provider_builder =
+            provider_builder.add_callback(|_record: &EventRecord, _locator: &SchemaLocator| {})
     }
     let wordpad_provider = provider_builder.build();
     assert_trace_exists(requested_trace_name, false);
-
 
     // Create a trace
     let trace_builder = UserTrace::new()
@@ -90,15 +92,13 @@ fn test_wordpad_trace(
         HowToProcess::StartOnly => {
             let (trace, _handle) = trace_builder.start().unwrap();
             trace // the trace is running, but not processing anything
-        },
+        }
         HowToProcess::ProcessFromHandle => {
             let (trace, handle) = trace_builder.start().unwrap();
             std::thread::spawn(move || UserTrace::process_from_handle(handle));
             trace
-        },
-        HowToProcess::StartAndProcess => {
-            trace_builder.start_and_process().unwrap()
         }
+        HowToProcess::StartAndProcess => trace_builder.start_and_process().unwrap(),
     };
 
     let actual_trace_name = trace.trace_name().to_string_lossy().to_string();
@@ -129,9 +129,7 @@ fn assert_trace_exists(ascii_part_of_the_trace_name: &str, expected: bool) {
 
         let res = stdout
             .split('\n')
-            .any(|line| {
-                line.contains(ascii_part_of_the_trace_name)
-            });
+            .any(|line| line.contains(ascii_part_of_the_trace_name));
 
         if status.success() {
             if res != expected {

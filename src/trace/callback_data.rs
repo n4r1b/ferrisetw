@@ -3,10 +3,10 @@ use std::sync::RwLock;
 
 use windows::Win32::System::Diagnostics::Etw;
 
-use crate::trace::RealTimeTraceTrait;
 use crate::native::etw_types::event_record::EventRecord;
 use crate::provider::Provider;
 use crate::schema_locator::SchemaLocator;
+use crate::trace::RealTimeTraceTrait;
 use crate::EtwCallback;
 
 pub use crate::native::etw_types::LoggingMode;
@@ -95,7 +95,6 @@ impl RealTimeCallbackData {
         }
     }
 }
-
 
 impl CallbackDataFromFile {
     pub fn new(callback: EtwCallback) -> Self {

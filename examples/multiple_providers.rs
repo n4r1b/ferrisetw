@@ -1,8 +1,8 @@
-use ferrisetw::EventRecord;
 use ferrisetw::parser::{Parser, Pointer};
 use ferrisetw::provider::*;
 use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::*;
+use ferrisetw::EventRecord;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
@@ -52,13 +52,11 @@ fn tcpip_callback(record: &EventRecord, schema_locator: &SchemaLocator) {
 fn main() {
     env_logger::init(); // this is optional. This makes the (rare) error logs of ferrisetw to be printed to stderr
 
-    let tcpip_provider = Provider
-        ::by_guid("7dd42a49-5329-4832-8dfd-43d979153a88") // Microsoft-Windows-Kernel-Network
+    let tcpip_provider = Provider::by_guid("7dd42a49-5329-4832-8dfd-43d979153a88") // Microsoft-Windows-Kernel-Network
         .add_callback(tcpip_callback)
         .build();
 
-    let process_provider = Provider
-        ::by_guid("70eb4f03-c1de-4f73-a051-33d13d5413bd") // Microsoft-Windows-Kernel-Registry
+    let process_provider = Provider::by_guid("70eb4f03-c1de-4f73-a051-33d13d5413bd") // Microsoft-Windows-Kernel-Registry
         .add_callback(registry_callback)
         .build();
 
