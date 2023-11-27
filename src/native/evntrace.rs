@@ -3,32 +3,30 @@
 //! This module makes sure the calls are safe memory-wise, but does not attempt to ensure they are called in the right order.<br/>
 //! Thus, you should prefer using `UserTrace`s, `KernelTrace`s and `TraceBuilder`s, that will ensure these API are correctly used.
 use std::collections::HashSet;
+use std::ffi::c_void;
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::ffi::c_void;
 
 use once_cell::sync::Lazy;
 
 use widestring::U16CStr;
-use windows::Win32::System::Diagnostics::Etw::EVENT_CONTROL_CODE_ENABLE_PROVIDER;
 use windows::core::GUID;
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::FILETIME;
-use windows::Win32::System::Diagnostics::Etw;
-use windows::Win32::System::Diagnostics::Etw::TRACE_QUERY_INFO_CLASS;
-use windows::Win32::Foundation::ERROR_SUCCESS;
 use windows::Win32::Foundation::ERROR_ALREADY_EXISTS;
 use windows::Win32::Foundation::ERROR_CTX_CLOSE_PENDING;
-
+use windows::Win32::Foundation::ERROR_SUCCESS;
+use windows::Win32::Foundation::FILETIME;
+use windows::Win32::System::Diagnostics::Etw;
+use windows::Win32::System::Diagnostics::Etw::EVENT_CONTROL_CODE_ENABLE_PROVIDER;
+use windows::Win32::System::Diagnostics::Etw::TRACE_QUERY_INFO_CLASS;
 
 use super::etw_types::*;
-use crate::provider::Provider;
-use crate::provider::event_filter::EventFilterDescriptor;
 use crate::native::etw_types::event_record::EventRecord;
-use crate::trace::{TraceProperties, RealTimeTraceTrait};
+use crate::provider::event_filter::EventFilterDescriptor;
+use crate::provider::Provider;
 use crate::trace::callback_data::CallbackData;
-
+use crate::trace::{RealTimeTraceTrait, TraceProperties};
 
 pub type TraceHandle = Etw::PROCESSTRACE_HANDLE;
 pub type ControlHandle = Etw::CONTROLTRACE_HANDLE;
@@ -63,8 +61,8 @@ pub(crate) type EvntraceNativeResult<T> = Result<T, EvntraceNativeError>;
 ///       That's <https://github.com/n4r1b/ferrisetw/issues/62>
 static UNIQUE_VALID_CONTEXTS: UniqueValidContexts = UniqueValidContexts::new();
 struct UniqueValidContexts(Lazy<Mutex<HashSet<u64>>>);
-enum ContextError{
-    AlreadyExist
+enum ContextError {
+    AlreadyExist,
 }
 
 impl UniqueValidContexts {
@@ -87,7 +85,6 @@ impl UniqueValidContexts {
         self.0.lock().unwrap().contains(&(ctx_ptr as u64))
     }
 }
-
 
 /// This will be called by the ETW framework whenever an ETW event is available
 extern "system" fn trace_callback_thunk(p_record: *mut Etw::EVENT_RECORD) {
@@ -157,12 +154,13 @@ pub(crate) fn start_trace<T>(
     trace_name: &U16CStr,
     etl_dump_file: Option<(&U16CStr, DumpFileLoggingMode, Option<u32>)>,
     trace_properties: &TraceProperties,
-    enable_flags: Etw::EVENT_TRACE_FLAG
+    enable_flags: Etw::EVENT_TRACE_FLAG,
 ) -> EvntraceNativeResult<(EventTraceProperties, ControlHandle)>
 where
-    T: RealTimeTraceTrait
+    T: RealTimeTraceTrait,
 {
-    let mut properties = EventTraceProperties::new::<T>(trace_name, etl_dump_file, trace_properties, enable_flags);
+    let mut properties =
+        EventTraceProperties::new::<T>(trace_name, etl_dump_file, trace_properties, enable_flags);
 
     let mut control_handle = ControlHandle::default();
     let status = unsafe {
@@ -196,13 +194,16 @@ where
     }
 }
 
-
 /// Subscribe to a started trace
 ///
 /// Microsoft calls this "opening" the trace (and this calls `OpenTraceW`)
 #[allow(clippy::borrowed_box)] // Being Boxed is really important, let's keep the Box<...> in the function signature to make the intent clearer
-pub(crate) fn open_trace(subscription_source: SubscriptionSource, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<TraceHandle> {
-    let mut log_file = EventTraceLogfile::create(callback_data, subscription_source, trace_callback_thunk);
+pub(crate) fn open_trace(
+    subscription_source: SubscriptionSource,
+    callback_data: &Box<Arc<CallbackData>>,
+) -> EvntraceNativeResult<TraceHandle> {
+    let mut log_file =
+        EventTraceLogfile::create(callback_data, subscription_source, trace_callback_thunk);
 
     if let Err(ContextError::AlreadyExist) = UNIQUE_VALID_CONTEXTS.insert(log_file.context_ptr()) {
         // That's probably possible to get multiple handles to the same trace, by opening them multiple times.
@@ -227,17 +228,24 @@ pub(crate) fn open_trace(subscription_source: SubscriptionSource, callback_data:
 }
 
 /// Attach a provider to a trace
-pub(crate) fn enable_provider(control_handle: ControlHandle, provider: &Provider) -> EvntraceNativeResult<()> {
+pub(crate) fn enable_provider(
+    control_handle: ControlHandle,
+    provider: &Provider,
+) -> EvntraceNativeResult<()> {
     match filter_invalid_control_handle(control_handle) {
         None => Err(EvntraceNativeError::InvalidHandle),
         Some(handle) => {
-            let owned_event_filter_descriptors: Vec<EventFilterDescriptor> = provider.filters()
+            let owned_event_filter_descriptors: Vec<EventFilterDescriptor> = provider
+                .filters()
                 .iter()
                 .filter_map(|filter| filter.to_event_filter_descriptor().ok()) // Silently ignoring invalid filters (basically, empty ones)
                 .collect();
 
-            let parameters =
-                EnableTraceParameters::create(provider.guid(), provider.trace_flags(), &owned_event_filter_descriptors);
+            let parameters = EnableTraceParameters::create(
+                provider.guid(),
+                provider.trace_flags(),
+                &owned_event_filter_descriptors,
+            );
 
             let res = unsafe {
                 Etw::EnableTraceEx2(
@@ -344,16 +352,18 @@ pub(crate) fn control_trace_by_name(
 /// If no further event callback will be invoked, this returns Ok(false)<br/>
 /// On error, this returns an `Err`
 #[allow(clippy::borrowed_box)] // Being Boxed is really important, let's keep the Box<...> in the function signature to make the intent clearer
-pub(crate) fn close_trace(trace_handle: TraceHandle, callback_data: &Box<Arc<CallbackData>>) -> EvntraceNativeResult<bool> {
+pub(crate) fn close_trace(
+    trace_handle: TraceHandle,
+    callback_data: &Box<Arc<CallbackData>>,
+) -> EvntraceNativeResult<bool> {
     match filter_invalid_trace_handles(trace_handle) {
         None => Err(EvntraceNativeError::InvalidHandle),
         Some(handle) => {
             // By contruction, only one Provider used this context in its callback. It is safe to remove it, it won't be used by anyone else.
-            UNIQUE_VALID_CONTEXTS.remove(callback_data.as_ref() as *const Arc<CallbackData> as *const c_void);
+            UNIQUE_VALID_CONTEXTS
+                .remove(callback_data.as_ref() as *const Arc<CallbackData> as *const c_void);
 
-            let status = unsafe {
-                Etw::CloseTrace(handle)
-            };
+            let status = unsafe { Etw::CloseTrace(handle) };
 
             match status {
                 Ok(()) => Ok(false),

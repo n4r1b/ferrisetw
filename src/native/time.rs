@@ -16,20 +16,21 @@ const MS_IN_SECOND: i64 = 1_000;
 impl FileTime {
     /// Converts to a unix timestamp with millisecond granularity.
     pub fn as_unix_timestamp(&self) -> i64 {
-        self.as_quad() / 10_000 - (SECONDS_BETWEEN_1601_AND_1970 * MS_IN_SECOND) 
+        self.as_quad() / 10_000 - (SECONDS_BETWEEN_1601_AND_1970 * MS_IN_SECOND)
     }
 
     /// Converts to a unix timestamp with nanosecond granularity.
     pub fn as_unix_timestamp_nanos(&self) -> i128 {
-        self.as_quad() as i128 * 100 - (SECONDS_BETWEEN_1601_AND_1970 as i128 * NS_IN_SECOND as i128)
+        self.as_quad() as i128 * 100
+            - (SECONDS_BETWEEN_1601_AND_1970 as i128 * NS_IN_SECOND as i128)
     }
-    
+
     /// Converts to OffsetDateTime
     #[cfg(feature = "time_rs")]
     pub fn as_date_time(&self) -> time::OffsetDateTime {
         time::OffsetDateTime::from_unix_timestamp_nanos(self.as_unix_timestamp_nanos()).unwrap()
     }
-    
+
     fn as_quad(&self) -> i64 {
         let mut quad = self.0.dwHighDateTime as i64;
         quad <<= 32;

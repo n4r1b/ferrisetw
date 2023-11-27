@@ -2,8 +2,13 @@ use std::alloc::Layout;
 use std::error::Error;
 
 use windows::Win32::Foundation::BOOLEAN;
-use windows::Win32::System::Diagnostics::Etw::{EVENT_FILTER_DESCRIPTOR, EVENT_FILTER_TYPE_PID, EVENT_FILTER_TYPE_EVENT_ID, EVENT_FILTER_EVENT_ID};
-use windows::Win32::System::Diagnostics::Etw::{MAX_EVENT_FILTER_EVENT_ID_COUNT, MAX_EVENT_FILTER_PID_COUNT};
+use windows::Win32::System::Diagnostics::Etw::{
+    EVENT_FILTER_DESCRIPTOR, EVENT_FILTER_EVENT_ID, EVENT_FILTER_TYPE_EVENT_ID,
+    EVENT_FILTER_TYPE_PID,
+};
+use windows::Win32::System::Diagnostics::Etw::{
+    MAX_EVENT_FILTER_EVENT_ID_COUNT, MAX_EVENT_FILTER_PID_COUNT,
+};
 
 /// Specifies how this provider will filter its events
 ///
@@ -52,8 +57,8 @@ impl EventFilterDescriptor {
             1..=1024 => data_size as u32,
             _ => {
                 // See https://docs.microsoft.com/en-us/windows/win32/api/evntprov/ns-evntprov-event_filter_descriptor
-                return Err("Exceeded filter size limits".into())
-            },
+                return Err("Exceeded filter size limits".into());
+            }
         };
 
         let layout = Layout::from_size_align(data_size as usize, std::mem::align_of::<T>())?;
@@ -64,7 +69,11 @@ impl EventFilterDescriptor {
         if data.is_null() {
             return Err("Invalid allocation".into());
         }
-        Ok(Self { data, layout, ty: 0 })
+        Ok(Self {
+            data,
+            layout,
+            ty: 0,
+        })
     }
 
     /// Build a new instance that will filter by event ID.
@@ -76,9 +85,8 @@ impl EventFilterDescriptor {
             return Err("Too many event IDs are filtered".into());
         }
 
-        let data_size = std::mem::size_of::<EVENT_FILTER_EVENT_ID>() + (
-            (eids.len().saturating_sub(1)) * std::mem::size_of::<u16>()
-        );
+        let data_size = std::mem::size_of::<EVENT_FILTER_EVENT_ID>()
+            + ((eids.len().saturating_sub(1)) * std::mem::size_of::<u16>());
         let mut s = Self::try_new::<EVENT_FILTER_EVENT_ID>(data_size)?;
         s.ty = EVENT_FILTER_TYPE_EVENT_ID;
 
@@ -126,7 +134,7 @@ impl EventFilterDescriptor {
         } else {
             let mut p = s.data.cast::<u16>();
             for pid in pids {
-                unsafe{
+                unsafe {
                     *p = *pid;
                 };
 
@@ -160,7 +168,7 @@ impl EventFilterDescriptor {
 
 impl Drop for EventFilterDescriptor {
     fn drop(&mut self) {
-        unsafe{
+        unsafe {
             // Safety:
             // * ptr is a block of memory currently allocated via alloc::alloc
             // * layout is th one that was used to allocate that block of memory

@@ -406,7 +406,9 @@ impl PropSerable for PropertyInfo {
     fn get_parser(&self) -> Option<PropSer> {
         // give the output type parser first if there is one, otherwise use the input type
         match self {
-            PropertyInfo::Value { in_type, out_type, .. } => {
+            PropertyInfo::Value {
+                in_type, out_type, ..
+            } => {
                 match out_type {
                     TdhOutType::OutTypeIpv4 => Some(PropSer(PropHandler::IpAddr)),
                     TdhOutType::OutTypeIpv6 => Some(PropSer(PropHandler::IpAddr)),

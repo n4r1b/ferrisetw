@@ -13,7 +13,7 @@ where
 {
     #[link(name = "kernel32")]
     extern "system" {
-        fn LocalFree(hmem : HLOCAL ) -> HLOCAL;
+        fn LocalFree(hmem: HLOCAL) -> HLOCAL;
     }
     let res = LocalFree(hmem.into_param().abi());
     match res.0 as usize {

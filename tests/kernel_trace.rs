@@ -2,24 +2,21 @@
 
 use std::time::Duration;
 
-use ferrisetw::provider::{Provider, EventFilter};
-use ferrisetw::EventRecord;
-use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::parser::Parser;
-use ferrisetw::trace::KernelTrace;
 use ferrisetw::provider::kernel_providers;
+use ferrisetw::provider::{EventFilter, Provider};
+use ferrisetw::schema_locator::SchemaLocator;
+use ferrisetw::trace::KernelTrace;
+use ferrisetw::EventRecord;
 
-use windows::Win32::Foundation::HANDLE;
 use windows::core::HSTRING;
-use windows::Win32::System::LibraryLoader::{LOAD_LIBRARY_FLAGS, LoadLibraryExW};
-
+use windows::Win32::Foundation::HANDLE;
+use windows::Win32::System::LibraryLoader::{LoadLibraryExW, LOAD_LIBRARY_FLAGS};
 
 mod utils;
-use utils::{Status, TestKind, StatusNotifier};
+use utils::{Status, StatusNotifier, TestKind};
 
 const TEST_LIBRARY_NAME: &str = "crypt32.dll"; // this DLL is available on all Windows versions (so that the test can run everywhere)
-
-
 
 #[test]
 fn kernel_trace_tests() {
@@ -43,20 +40,21 @@ fn create_simple_kernel_trace_trace(notifier: StatusNotifier) -> KernelTrace {
 
     let kernel_provider = Provider::kernel(&kernel_providers::IMAGE_LOAD_PROVIDER)
         .add_filter(our_process_only)
-        .add_callback(move |record: &EventRecord, schema_locator: &SchemaLocator| {
-            let schema = schema_locator.event_schema(record).unwrap();
-            let parser = Parser::create(record, &schema);
+        .add_callback(
+            move |record: &EventRecord, schema_locator: &SchemaLocator| {
+                let schema = schema_locator.event_schema(record).unwrap();
+                let parser = Parser::create(record, &schema);
 
-            // By-PID filters are not working (yet?)
-            // See See https://github.com/n4r1b/ferrisetw/issues/51
-            // if has_seen_other_pid(record) {
-            //     notifier2.notify_failure();
-            // }
-            if has_seen_dll_load(record, &parser) {
-                notifier.notify_success();
-            }
-
-        })
+                // By-PID filters are not working (yet?)
+                // See See https://github.com/n4r1b/ferrisetw/issues/51
+                // if has_seen_other_pid(record) {
+                //     notifier2.notify_failure();
+                // }
+                if has_seen_dll_load(record, &parser) {
+                    notifier.notify_success();
+                }
+            },
+        )
         .build();
 
     KernelTrace::new()
@@ -69,13 +67,8 @@ fn load_library(libname: &str) {
     let widename = HSTRING::from(libname);
 
     // Safety: LoadLibraryExW expects a valid string in lpLibFileName.
-    let res = unsafe {
-            LoadLibraryExW(
-            &widename,
-            HANDLE::default(),
-            LOAD_LIBRARY_FLAGS::default(),
-        )
-    };
+    let res =
+        unsafe { LoadLibraryExW(&widename, HANDLE::default(), LOAD_LIBRARY_FLAGS::default()) };
 
     res.unwrap();
 }
@@ -86,8 +79,6 @@ fn generate_image_load_events() {
     load_library(TEST_LIBRARY_NAME);
     println!("Loading done.");
 }
-
-
 
 fn has_seen_dll_load(record: &EventRecord, parser: &Parser) -> bool {
     if record.process_id() == std::process::id() {
@@ -102,4 +93,3 @@ fn has_seen_dll_load(record: &EventRecord, parser: &Parser) -> bool {
 
     false
 }
-

@@ -22,6 +22,11 @@ jobs:
         profile: minimal
         toolchain: stable
         override: true
+    # Cargo fmt check
+    - uses: actions-rs/cargo@v1
+      with:
+        command: fmt
+        args: --check
     # Cargo check
     - uses: actions-rs/cargo@v1
       with:

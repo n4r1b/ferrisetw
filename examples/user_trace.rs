@@ -1,8 +1,8 @@
-use ferrisetw::EventRecord;
 use ferrisetw::parser::Parser;
 use ferrisetw::provider::*;
 use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::*;
+use ferrisetw::EventRecord;
 use std::time::Duration;
 
 fn main() {
@@ -30,8 +30,7 @@ fn main() {
             Err(err) => println!("Error {:?}", err),
         };
 
-    let process_provider = Provider
-        ::by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716") // Microsoft-Windows-Kernel-Process
+    let process_provider = Provider::by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716") // Microsoft-Windows-Kernel-Process
         .add_callback(process_callback)
         .build();
 

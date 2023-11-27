@@ -186,10 +186,7 @@ fn do_benchmark(
         .expect("thread panic")
         .expect("trace processing error");
 
-    println!(
-        "{:<32}: {} b {} s {} e",
-        name, last_b, last_s, last_e
-    );
+    println!("{:<32}: {} b {} s {} e", name, last_b, last_s, last_e);
     assert_eq!(last_e, 0, "encountered errors when benchmarking");
 }
 
