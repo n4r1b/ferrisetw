@@ -4,6 +4,7 @@ use windows::core::GUID;
 use windows::Win32::System::Diagnostics::Etw::EVENT_RECORD;
 
 use crate::native::etw_types::extended_data::EventHeaderExtendedDataItem;
+use crate::native::ExtendedDataItem;
 
 use super::EVENT_HEADER_FLAG_32_BIT_HEADER;
 
@@ -152,6 +153,24 @@ impl EventRecord {
                 p_ed_array as *const EventHeaderExtendedDataItem,
                 n_extended_data as usize,
             )
+        }
+    }
+
+    /// Returns the `eventName` for manifest-free events
+    pub fn event_name(&self) -> String {
+        if self.event_id() != 0 {
+            return String::new();
+        }
+
+        if let Some(ExtendedDataItem::TraceLogging(name)) = self
+            .extended_data()
+            .iter()
+            .find(|ext_data| ext_data.is_tlg())
+            .map(|ext_data| ext_data.to_extended_data_item())
+        {
+            name
+        } else {
+            String::new()
         }
     }
 }

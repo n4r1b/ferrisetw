@@ -50,6 +50,13 @@ struct SchemaKey {
     //       see https://github.com/microsoft/krabsetw/issues/195
     opcode: u8,
     level: u8,
+    //
+    // From MS documentation `evntprov.h`
+    // For manifest-free events (i.e. TraceLogging), Event.Id and Event.Version are not useful
+    // and should be ignored. Use Event name, level, keyword, and opcode for event filtering and
+    // identification.
+    //
+    event_name: String,
 }
 
 impl SchemaKey {
@@ -60,6 +67,7 @@ impl SchemaKey {
             opcode: event.opcode(),
             version: event.version(),
             level: event.level(),
+            event_name: event.event_name(),
         }
     }
 }
