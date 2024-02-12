@@ -66,6 +66,11 @@ impl EventRecord {
         self.0.EventHeader.EventDescriptor.Level
     }
 
+    /// The `Keyword` field from the wrapped `EVENT_RECORD`
+    pub fn keyword(&self) -> u64 {
+        self.0.EventHeader.EventDescriptor.Keyword
+    }
+
     /// The `Flags` field from the wrapped `EVENT_RECORD`
     pub fn event_flags(&self) -> u16 {
         self.0.EventHeader.Flags
