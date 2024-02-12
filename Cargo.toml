@@ -47,3 +47,4 @@ log = "0.4"
 env_logger = "0.10" # used in examples
 serde_json = "1.0"
 flexbuffers = "2.0"
+tracelogging = "1.2"
