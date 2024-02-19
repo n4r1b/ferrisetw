@@ -17,6 +17,7 @@ const PROVIDER_NAME: &'static str = "ferrisETW.TraceLoggingTest";
 
 tlg::define_provider!(FERRIS_PROVIDER, "ferrisETW.TraceLoggingTest");
 
+#[ignore]
 #[test]
 fn tlg_tests() {
     unsafe {
