@@ -9,8 +9,6 @@ use crate::schema_locator::SchemaLocator;
 use crate::trace::RealTimeTraceTrait;
 use crate::EtwCallback;
 
-pub use crate::native::etw_types::LoggingMode;
-
 /// Data used by callbacks when the trace is running
 // NOTE: this structure is accessed in an unsafe block in a separate thread (see the `trace_callback_thunk` function)
 //       Thus, this struct must not be mutated (outside of interior mutability and/or using Mutex and other synchronization mechanisms) when the associated trace is running.
