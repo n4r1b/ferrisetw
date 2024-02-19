@@ -170,7 +170,6 @@ impl EventHeaderExtendedDataItem {
         let size = data_ptr.read_unaligned() as u16;
         data_ptr = data_ptr.add(mem::size_of::<u16>());
 
-        // TODO: Check we don't overflow the size!
         let mut n = 0;
         while n < size {
             // Read until you hit a byte with high bit unset.
