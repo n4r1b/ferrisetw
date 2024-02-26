@@ -17,7 +17,7 @@ time_rs = ["time"]
 serde = [ "dep:serde", "time?/serde", "time?/serde-human-readable" ]
 
 [dependencies]
-windows = { version = "0.52", features = [
+windows = { version = "0.53", features = [
     "Win32_Foundation",
     "Win32_Security_Authorization",
     "Win32_System_Diagnostics_Etw",
