@@ -20,6 +20,55 @@ use crate::native::{
     EVENT_EXTENDED_ITEM_STACK_TRACE64,
 };
 
+const OFFSET_OF_ADDRESS_IN_ITEM: usize = offset_of!(EVENT_EXTENDED_ITEM_STACK_TRACE64, Address);
+const _: () =
+    assert!(OFFSET_OF_ADDRESS_IN_ITEM == offset_of!(EVENT_EXTENDED_ITEM_STACK_TRACE32, Address));
+
+/// A fixed-size representation of EVENT_EXTENDED_ITEM_STACK_TRACE32 (if Address is u32)
+///                            and EVENT_EXTENDED_ITEM_STACK_TRACE64 (if Address is u64)
+///
+/// See <https://learn.microsoft.com/en-us/windows/win32/api/evntcons/ns-evntcons-event_extended_item_stack_trace32>
+/// See <https://learn.microsoft.com/en-us/windows/win32/api/evntcons/ns-evntcons-event_extended_item_stack_trace64>
+#[derive(Debug)]
+pub struct StackTraceItem<Address>
+where
+    Address: Copy,
+{
+    match_id: u64,
+    addresses: Box<[Address]>,
+}
+
+impl<Address> StackTraceItem<Address>
+where
+    Address: Copy,
+{
+    /// Accessor for the MatchId field
+    pub fn match_id(&self) -> u64 {
+        self.match_id
+    }
+
+    /// Accessor for the ANYSIZE_ARRAY Address field
+    pub fn addresses(&self) -> &[Address] {
+        self.addresses.as_ref()
+    }
+
+    unsafe fn from_raw(
+        match_id: u64,
+        first_address: *const Address,
+        item_size: usize,
+    ) -> StackTraceItem<Address> {
+        let array_size_in_bytes = item_size
+            .checked_sub(OFFSET_OF_ADDRESS_IN_ITEM)
+            .unwrap_or(0);
+        let array_size = array_size_in_bytes / core::mem::size_of::<Address>();
+        let addresses = unsafe { std::slice::from_raw_parts(first_address, array_size) }.into();
+        StackTraceItem {
+            match_id,
+            addresses,
+        }
+    }
+}
+
 /// A wrapper over [`windows::Win32::System::Diagnostics::Etw::EVENT_HEADER_EXTENDED_DATA_ITEM`]
 #[repr(transparent)]
 pub struct EventHeaderExtendedDataItem(EVENT_HEADER_EXTENDED_DATA_ITEM);
@@ -39,9 +88,9 @@ pub enum ExtendedDataItem {
     TsId(u32),
     InstanceInfo(EVENT_EXTENDED_ITEM_INSTANCE),
     /// Call stack (if the event is captured on a 32-bit computer)
-    StackTrace32(EVENT_EXTENDED_ITEM_STACK_TRACE32),
+    StackTrace32(StackTraceItem<u32>),
     /// Call stack (if the event is captured on a 64-bit computer)
-    StackTrace64(EVENT_EXTENDED_ITEM_STACK_TRACE64),
+    StackTrace64(StackTraceItem<u64>),
     /// TraceLogging event metadata information
     TraceLogging(String),
     // /// Provider traits data
@@ -96,12 +145,22 @@ impl EventHeaderExtendedDataItem {
 
             EVENT_HEADER_EXT_TYPE_STACK_TRACE32 => {
                 let data_ptr = data_ptr as *const EVENT_EXTENDED_ITEM_STACK_TRACE32;
-                ExtendedDataItem::StackTrace32(unsafe { *data_ptr })
+                ExtendedDataItem::StackTrace32(unsafe {
+                    let match_id = (*data_ptr).MatchId;
+                    let first_address = &(*data_ptr).Address[0] as *const _;
+                    let item_size = self.0.DataSize as usize;
+                    StackTraceItem::from_raw(match_id, first_address, item_size)
+                })
             }
 
             EVENT_HEADER_EXT_TYPE_STACK_TRACE64 => {
                 let data_ptr = data_ptr as *const EVENT_EXTENDED_ITEM_STACK_TRACE64;
-                ExtendedDataItem::StackTrace64(unsafe { *data_ptr })
+                ExtendedDataItem::StackTrace64(unsafe {
+                    let match_id = (*data_ptr).MatchId;
+                    let first_address = &(*data_ptr).Address[0] as *const _;
+                    let item_size = self.0.DataSize as usize;
+                    StackTraceItem::from_raw(match_id, first_address, item_size)
+                })
             }
 
             EVENT_HEADER_EXT_TYPE_PROCESS_START_KEY => {
