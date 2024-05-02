@@ -471,7 +471,7 @@ impl private::TryParse<String> for Parser<'_, '_> {
                     }
 
                     if prop_slice.buffer.as_ptr() as usize % align != 0 {
-                        println!("[ferrisetw] buffer alignment mismatch");
+                        println!("[ferrisetw] buffer alignment mismatch. align: {} size: {}", align, prop_slice.buffer.as_ptr() as usize);
                         return Err(ParserError::PropertyError(
                             "buffer alignment mismatch".into(),
                         ));
