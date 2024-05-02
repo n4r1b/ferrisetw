@@ -375,18 +375,21 @@ macro_rules! impl_try_parse_primitive_array {
                         let align = std::mem::align_of::<$T>();
 
                         if prop_slice.buffer.len() % size != 0 {
+                            println!("[ferrisetw] length mismatch");
                             return Err(ParserError::LengthMismatch);
                         }
 
                         let count = prop_slice.buffer.len() / size;
 
                         if prop_slice.buffer.as_ptr() as usize % align != 0 {
+                            println!("[ferrisetw] buffer alignment mismatch");
                             return Err(ParserError::PropertyError(
                                 "buffer alignment mismatch".into()
                             ));
                         }
 
                         if size.checked_mul(count).is_none() || (size * count) > isize::MAX as usize {
+                            println!("[ferrisetw] size overflow");
                             return Err(ParserError::PropertyError(
                                 "size overflow".into()
                             ));
@@ -461,12 +464,14 @@ impl private::TryParse<String> for Parser<'_, '_> {
                     let align = std::mem::align_of::<u16>();
 
                     if prop_slice.buffer.len() % 2 != 0 {
+                        println!("[ferrisetw] odd length in bytes for a wide string");
                         return Err(ParserError::PropertyError(
                             "odd length in bytes for a wide string".into(),
                         ));
                     }
 
                     if prop_slice.buffer.as_ptr() as usize % align != 0 {
+                        println!("[ferrisetw] buffer alignment mismatch");
                         return Err(ParserError::PropertyError(
                             "buffer alignment mismatch".into(),
                         ));
