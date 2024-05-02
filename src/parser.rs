@@ -461,7 +461,7 @@ impl private::TryParse<String> for Parser<'_, '_> {
         match prop_slice.property.info {
             PropertyInfo::Value { in_type, .. } => match in_type {
                 TdhInType::InTypeUnicodeString => {
-                    let align = std::mem::align_of::<u16>();
+                    //let align = std::mem::align_of::<u16>();
 
                     if prop_slice.buffer.len() % 2 != 0 {
                         println!("[ferrisetw] odd length in bytes for a wide string");
@@ -470,12 +470,12 @@ impl private::TryParse<String> for Parser<'_, '_> {
                         ));
                     }
 
-                    if prop_slice.buffer.as_ptr() as usize % align != 0 {
-                        println!("[ferrisetw] buffer alignment mismatch. align: {} size: {}", align, prop_slice.buffer.as_ptr() as usize);
-                        return Err(ParserError::PropertyError(
-                            "buffer alignment mismatch".into(),
-                        ));
-                    }
+                    // if prop_slice.buffer.as_ptr() as usize % align != 0 {
+                    //     println!("[ferrisetw] buffer alignment mismatch. align: {} size: {}", align, prop_slice.buffer.as_ptr() as usize);
+                    //     return Err(ParserError::PropertyError(
+                    //         "buffer alignment mismatch".into(),
+                    //     ));
+                    // }
 
                     let mut wide = unsafe {
                         std::slice::from_raw_parts(
