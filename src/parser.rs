@@ -470,6 +470,14 @@ impl private::TryParse<String> for Parser<'_, '_> {
                         ));
                     }
 
+                    let mut aligned_buffer = Vec::with_capacity(prop_slice.buffer.len() / 2);
+                    for chunk in prop_slice.buffer.chunks_exact(2) {
+                        let part = u16::from_ne_bytes([chunk[0], chunk[1]]);
+                        aligned_buffer.push(part);
+                    }
+
+
+
                     // if prop_slice.buffer.as_ptr() as usize % align != 0 {
                     //     println!("[ferrisetw] buffer alignment mismatch. align: {} size: {}", align, prop_slice.buffer.as_ptr() as usize);
                     //     return Err(ParserError::PropertyError(
@@ -477,12 +485,14 @@ impl private::TryParse<String> for Parser<'_, '_> {
                     //     ));
                     // }
 
-                    let mut wide = unsafe {
-                        std::slice::from_raw_parts(
-                            prop_slice.buffer.as_ptr() as *const u16,
-                            prop_slice.buffer.len() / 2,
-                        )
-                    };
+                    // let mut wide = unsafe {
+                    //     std::slice::from_raw_parts(
+                    //         prop_slice.buffer.as_ptr() as *const u16,
+                    //         prop_slice.buffer.len() / 2,
+                    //     )
+                    // };
+
+                    let mut wide = aligned_buffer.as_slice();
 
                     match wide.last() {
                         // remove the null terminator from the slice
