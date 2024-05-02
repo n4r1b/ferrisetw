@@ -372,16 +372,33 @@ macro_rules! impl_try_parse_primitive_array {
                     PropertyInfo::Array { .. } => {
                         // TODO: Check In and Out type and do a better type checking
                         let size = std::mem::size_of::<$T>();
+                        let align = std::mem::align_of::<$T>();
+
                         if prop_slice.buffer.len() % size != 0 {
                             return Err(ParserError::LengthMismatch);
                         }
+
                         let count = prop_slice.buffer.len() / size;
+
+                        if prop_slice.buffer.as_ptr() as usize % align != 0 {
+                            return Err(ParserError::PropertyError(
+                                "buffer alignment mismatch".into()
+                            ));
+                        }
+
+                        if size.checked_mul(count).is_none() || (size * count) > isize::MAX as usize {
+                            return Err(ParserError::PropertyError(
+                                "size overflow".into()
+                            ));
+                        }
+
                         let slice = unsafe {
                             std::slice::from_raw_parts(
                                 prop_slice.buffer.as_ptr() as *const $T,
                                 count,
                             )
                         };
+
                         Ok(slice)
                     }
                     _ => Err(ParserError::InvalidType),
@@ -441,9 +458,17 @@ impl private::TryParse<String> for Parser<'_, '_> {
         match prop_slice.property.info {
             PropertyInfo::Value { in_type, .. } => match in_type {
                 TdhInType::InTypeUnicodeString => {
+                    let align = std::mem::align_of::<u16>();
+
                     if prop_slice.buffer.len() % 2 != 0 {
                         return Err(ParserError::PropertyError(
                             "odd length in bytes for a wide string".into(),
+                        ));
+                    }
+
+                    if prop_slice.buffer.as_ptr() as usize % align != 0 {
+                        return Err(ParserError::PropertyError(
+                            "buffer alignment mismatch".into(),
                         ));
                     }
 
@@ -460,6 +485,7 @@ impl private::TryParse<String> for Parser<'_, '_> {
                         _ => (),
                     }
 
+                    // Decode UTF-16 to String
                     Ok(widestring::decode_utf16_lossy(wide.iter().copied()).collect::<String>())
                 }
                 TdhInType::InTypeAnsiString => {
