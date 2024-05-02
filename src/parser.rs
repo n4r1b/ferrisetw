@@ -371,25 +371,26 @@ macro_rules! impl_try_parse_primitive_array {
                 match prop_slice.property.info {
                     PropertyInfo::Array { .. } => {
                         // TODO: Check In and Out type and do a better type checking
+
+                        // This property type has not been tested yet as I don't have a
+                        // provider that uses it. It's possible that the buffer is not
+                        // aligned correctly, which would cause this to fail.
                         let size = std::mem::size_of::<$T>();
                         let align = std::mem::align_of::<$T>();
 
                         if prop_slice.buffer.len() % size != 0 {
-                            println!("[ferrisetw] length mismatch");
                             return Err(ParserError::LengthMismatch);
                         }
 
                         let count = prop_slice.buffer.len() / size;
 
                         if prop_slice.buffer.as_ptr() as usize % align != 0 {
-                            println!("[ferrisetw] buffer alignment mismatch");
                             return Err(ParserError::PropertyError(
                                 "buffer alignment mismatch".into()
                             ));
                         }
 
                         if size.checked_mul(count).is_none() || (size * count) > isize::MAX as usize {
-                            println!("[ferrisetw] size overflow");
                             return Err(ParserError::PropertyError(
                                 "size overflow".into()
                             ));
@@ -461,36 +462,22 @@ impl private::TryParse<String> for Parser<'_, '_> {
         match prop_slice.property.info {
             PropertyInfo::Value { in_type, .. } => match in_type {
                 TdhInType::InTypeUnicodeString => {
-                    //let align = std::mem::align_of::<u16>();
-
                     if prop_slice.buffer.len() % 2 != 0 {
-                        println!("[ferrisetw] odd length in bytes for a wide string");
                         return Err(ParserError::PropertyError(
                             "odd length in bytes for a wide string".into(),
                         ));
                     }
 
+                    // std::slice::from_raw_parts requires a pointer to be aligned, but we can't 
+                    // guarantee that the buffer is aligned. In testing, I found that the buffer 
+                    // is in fact never aligned appropriately, so a cheap workaround is to copy 
+                    // the buffer into a new Vec<u16> and use that as the source for the slice
+                    // until we can find a better solution.
                     let mut aligned_buffer = Vec::with_capacity(prop_slice.buffer.len() / 2);
                     for chunk in prop_slice.buffer.chunks_exact(2) {
                         let part = u16::from_ne_bytes([chunk[0], chunk[1]]);
                         aligned_buffer.push(part);
                     }
-
-
-
-                    // if prop_slice.buffer.as_ptr() as usize % align != 0 {
-                    //     println!("[ferrisetw] buffer alignment mismatch. align: {} size: {}", align, prop_slice.buffer.as_ptr() as usize);
-                    //     return Err(ParserError::PropertyError(
-                    //         "buffer alignment mismatch".into(),
-                    //     ));
-                    // }
-
-                    // let mut wide = unsafe {
-                    //     std::slice::from_raw_parts(
-                    //         prop_slice.buffer.as_ptr() as *const u16,
-                    //         prop_slice.buffer.len() / 2,
-                    //     )
-                    // };
 
                     let mut wide = aligned_buffer.as_slice();
 
