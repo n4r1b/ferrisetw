@@ -386,14 +386,13 @@ macro_rules! impl_try_parse_primitive_array {
 
                         if prop_slice.buffer.as_ptr() as usize % align != 0 {
                             return Err(ParserError::PropertyError(
-                                "buffer alignment mismatch".into()
+                                "buffer alignment mismatch".into(),
                             ));
                         }
 
-                        if size.checked_mul(count).is_none() || (size * count) > isize::MAX as usize {
-                            return Err(ParserError::PropertyError(
-                                "size overflow".into()
-                            ));
+                        if size.checked_mul(count).is_none() || (size * count) > isize::MAX as usize
+                        {
+                            return Err(ParserError::PropertyError("size overflow".into()));
                         }
 
                         let slice = unsafe {
@@ -468,9 +467,9 @@ impl private::TryParse<String> for Parser<'_, '_> {
                         ));
                     }
 
-                    // std::slice::from_raw_parts requires a pointer to be aligned, but we can't 
-                    // guarantee that the buffer is aligned. In testing, I found that the buffer 
-                    // is in fact never aligned appropriately, so a cheap workaround is to copy 
+                    // std::slice::from_raw_parts requires a pointer to be aligned, but we can't
+                    // guarantee that the buffer is aligned. In testing, I found that the buffer
+                    // is in fact never aligned appropriately, so a cheap workaround is to copy
                     // the buffer into a new Vec<u16> and use that as the source for the slice
                     // until we can find a better solution.
                     let mut aligned_buffer = Vec::with_capacity(prop_slice.buffer.len() / 2);
