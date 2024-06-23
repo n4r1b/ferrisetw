@@ -50,7 +50,7 @@ fn verify_system_version(major: u8, minor: u8, sp_major: u16) -> VersionHelperRe
         )
     };
 
-    let error = unsafe { GetLastError() };
+    let error = unsafe { GetLastError() }.ok();
 
     // See https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-verifyversioninfoa#return-value
     match (res.is_ok(), error) {

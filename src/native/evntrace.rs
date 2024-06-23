@@ -174,7 +174,8 @@ where
             PCWSTR::from_raw(properties.trace_name_array().as_ptr()),
             properties.as_mut_ptr(),
         )
-    };
+    }
+    .ok();
 
     if let Err(status) = status {
         let code = status.code();
@@ -258,7 +259,8 @@ pub(crate) fn enable_provider(
                     0,
                     Some(parameters.as_ptr()),
                 )
-            };
+            }
+            .ok();
 
             res.map_err(|err| {
                 EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(err.code().0))
@@ -280,7 +282,8 @@ pub(crate) fn process_trace(trace_handle: TraceHandle) -> EvntraceNativeResult<(
             // * for real-time traces, this means we might process a few events already waiting in the buffers when the processing is starting. This is fine, I suppose.
             let mut start = FILETIME::default();
             Etw::ProcessTrace(&[trace_handle], Some(&mut start as *mut FILETIME), None)
-        };
+        }
+        .ok();
 
         result.map_err(|err| {
             EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(err.code().0))
@@ -313,7 +316,8 @@ pub(crate) fn control_trace(
                     properties.as_mut_ptr(),
                     control_code,
                 )
-            };
+            }
+            .ok();
 
             result.map_err(|err| {
                 EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(err.code().0))
@@ -337,7 +341,8 @@ pub(crate) fn control_trace_by_name(
             properties.as_mut_ptr(),
             control_code,
         )
-    };
+    }
+    .ok();
 
     result.map_err(|err| {
         EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(err.code().0))
@@ -363,7 +368,7 @@ pub(crate) fn close_trace(
             UNIQUE_VALID_CONTEXTS
                 .remove(callback_data.as_ref() as *const Arc<CallbackData> as *const c_void);
 
-            let status = unsafe { Etw::CloseTrace(handle) };
+            let status = unsafe { Etw::CloseTrace(handle) }.ok();
 
             match status {
                 Ok(()) => Ok(false),
@@ -386,7 +391,8 @@ pub(crate) fn query_info(class: TraceInformation, buf: &mut [u8]) -> EvntraceNat
             buf.len() as u32,
             None,
         )
-    };
+    }
+    .ok();
 
     result.map_err(|err| {
         EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(err.code().0))

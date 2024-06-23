@@ -1,26 +1,8 @@
 use core::ffi::c_void;
 use std::str::Utf8Error;
 use windows::core::PSTR;
-use windows::Win32::Foundation::{HLOCAL, PSID};
+use windows::Win32::Foundation::{LocalFree, HLOCAL, PSID};
 use windows::Win32::Security::Authorization::ConvertSidToStringSidA;
-
-// N.B windows-rs has an incorrect implementation for local free
-// https://github.com/microsoft/windows-rs/issues/2488
-#[allow(non_snake_case)]
-pub unsafe fn LocalFree<P0>(hmem: P0) -> ::windows::core::Result<HLOCAL>
-where
-    P0: ::windows::core::IntoParam<HLOCAL>,
-{
-    #[link(name = "kernel32")]
-    extern "system" {
-        fn LocalFree(hmem: HLOCAL) -> HLOCAL;
-    }
-    let res = LocalFree(hmem.into_param().abi());
-    match res.0 as usize {
-        0 => Ok(res),
-        _ => Err(::windows::core::Error::from_win32()),
-    }
-}
 
 /// SDDL native error
 #[derive(Debug)]
@@ -58,7 +40,9 @@ pub fn convert_sid_to_string(sid: *const c_void) -> SddlResult<String> {
 
         let sid_string = std::ffi::CStr::from_ptr(tmp.0.cast()).to_str()?.to_owned();
 
-        LocalFree(HLOCAL(tmp.0.cast())).map_err(|e| SddlNativeError::IoError(e.into()))?;
+        if LocalFree(HLOCAL(tmp.0.cast())) != HLOCAL(std::ptr::null_mut()) {
+            return Err(SddlNativeError::IoError(std::io::Error::last_os_error()));
+        }
 
         Ok(sid_string)
     }
