@@ -1,6 +1,6 @@
 [package]
 name = "ferrisetw"
-version = "1.1.0"
+version = "1.2.0"
 license = "MIT OR Apache-2.0"
 description = "Basically a KrabsETW rip-off written in Rust"
 keywords = ["etw", "krabsetw", "event", "tracing", "windows"]
