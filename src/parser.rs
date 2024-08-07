@@ -499,6 +499,28 @@ impl private::TryParse<String> for Parser<'_, '_> {
                     Ok(string)
                 }
                 TdhInType::InTypeCountedString => unimplemented!(),
+                TdhInType::InTypeCountedAnsiString => {
+                    if prop_slice.buffer.len() < 2 {
+                        return Err(ParserError::PropertyError(
+                            "counted string does not have length".into(),
+                        ));
+                    }
+                    let str_length = u16::from_le_bytes(
+                        prop_slice.buffer[..std::mem::size_of::<u16>()]
+                            .try_into()
+                            .unwrap(),
+                    ) as usize;
+                    if prop_slice.buffer[std::mem::size_of::<u16>()..].len() < str_length {
+                        return Err(ParserError::PropertyError(
+                            "invalid counted string length".into(),
+                        ));
+                    }
+                    let string = std::str::from_utf8(
+                        &prop_slice.buffer
+                            [std::mem::size_of::<u16>()..std::mem::size_of::<u16>() + str_length],
+                    )?;
+                    Ok(string.to_string())
+                }
                 _ => Err(ParserError::InvalidType),
             },
             _ => Err(ParserError::InvalidType),
