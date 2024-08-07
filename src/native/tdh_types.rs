@@ -196,6 +196,7 @@ pub enum TdhInType {
     InTypeHexInt32,
     InTypeHexInt64,
     InTypeCountedString = 300,
+    InTypeCountedAnsiString,
 }
 
 /// Represent a TDH_OUT_TYPE
