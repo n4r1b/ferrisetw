@@ -13,13 +13,15 @@ use once_cell::sync::Lazy;
 use widestring::U16CStr;
 use windows::core::GUID;
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::ERROR_ALREADY_EXISTS;
 use windows::Win32::Foundation::ERROR_CTX_CLOSE_PENDING;
 use windows::Win32::Foundation::ERROR_SUCCESS;
 use windows::Win32::Foundation::FILETIME;
+use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, ERROR_WMI_INSTANCE_NOT_FOUND};
 use windows::Win32::System::Diagnostics::Etw;
-use windows::Win32::System::Diagnostics::Etw::EVENT_CONTROL_CODE_ENABLE_PROVIDER;
-use windows::Win32::System::Diagnostics::Etw::TRACE_QUERY_INFO_CLASS;
+use windows::Win32::System::Diagnostics::Etw::{
+    EVENT_CONTROL_CODE_ENABLE_PROVIDER, EVENT_TRACE_CONTROL_QUERY,
+};
+use windows::Win32::System::Diagnostics::Etw::{EVENT_TRACE_CONTROL_STOP, TRACE_QUERY_INFO_CLASS};
 
 use super::etw_types::*;
 use crate::native::etw_types::event_record::EventRecord;
@@ -331,8 +333,8 @@ pub(crate) fn control_trace_by_name(
     properties: &mut EventTraceProperties,
     trace_name: &U16CStr,
     control_code: Etw::EVENT_TRACE_CONTROL,
-) -> EvntraceNativeResult<()> {
-    let result = unsafe {
+) -> windows::core::Result<()> {
+    unsafe {
         // Safety:
         //  * depending on the control code, the `Properties` can be mutated. This is fine because properties is declared as `&mut` in this function, which means no other Rust function has a reference to it, and the mutation can only happen in the call to `ControlTraceW`, which returns immediately.
         Etw::ControlTraceW(
@@ -342,11 +344,7 @@ pub(crate) fn control_trace_by_name(
             control_code,
         )
     }
-    .ok();
-
-    result.map_err(|err| {
-        EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(err.code().0))
-    })
+    .ok()
 }
 
 /// Close the trace

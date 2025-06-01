@@ -67,8 +67,7 @@ fn load_library(libname: &str) {
     let widename = HSTRING::from(libname);
 
     // Safety: LoadLibraryExW expects a valid string in lpLibFileName.
-    let res =
-        unsafe { LoadLibraryExW(&widename, HANDLE::default(), LOAD_LIBRARY_FLAGS::default()) };
+    let res = unsafe { LoadLibraryExW(&widename, None, LOAD_LIBRARY_FLAGS::default()) };
 
     res.unwrap();
 }

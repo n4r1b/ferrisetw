@@ -1,7 +1,6 @@
 use std::alloc::Layout;
 use std::error::Error;
 
-use windows::Win32::Foundation::BOOLEAN;
 use windows::Win32::System::Diagnostics::Etw::{
     EVENT_FILTER_DESCRIPTOR, EVENT_FILTER_EVENT_ID, EVENT_FILTER_TYPE_EVENT_ID,
     EVENT_FILTER_TYPE_PID,
@@ -93,7 +92,7 @@ impl EventFilterDescriptor {
         // Fill the data with an array of `EVENT_FILTER_EVENT_ID`s
         let p = s.data.cast::<EVENT_FILTER_EVENT_ID>();
         unsafe {
-            (*p).FilterIn = BOOLEAN(1);
+            (*p).FilterIn = true;
             (*p).Reserved = 0;
             (*p).Count = eids.len() as u16; // we've checked the array was less than 1024 items
         }

@@ -26,7 +26,7 @@ fn etl_file() {
 fn empty_callback(_record: &EventRecord, _schema_locator: &SchemaLocator) {}
 
 fn save_a_trace(dump_file: DumpFileParams) -> usize {
-    let process_provider = Provider::by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716") // Microsoft-Windows-Kernel-Process
+    let process_provider = Provider::by_guid(0x22fb2cd6_0e7b_422b_a0c7_2fad1fd0e716) // Microsoft-Windows-Kernel-Process
         .add_callback(empty_callback)
         .build();
 
