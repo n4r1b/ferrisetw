@@ -309,7 +309,7 @@ pub static DISK_IO_PROVIDER: KernelProvider = KernelProvider::new(
 );
 /// Represents the Disk File IO Kernel Provider
 pub static DISK_FILE_IO_PROVIDER: KernelProvider = KernelProvider::new(
-    kernel_guids::DISK_IO_GUID,
+    kernel_guids::FILE_IO_GUID,
     kernel_flags::EVENT_TRACE_FLAG_DISK_FILE_IO,
 );
 /// Represents the Dbg Pring Kernel Provider
