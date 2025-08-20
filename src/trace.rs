@@ -95,6 +95,8 @@ pub trait TraceTrait: private::PrivateTraceTrait + Sized {
     // This utility function should be implemented for every trace
     fn events_handled(&self) -> usize;
 
+    fn close(self) -> TraceResult<bool>;
+
     // The following are default implementations, that work on both user and kernel traces
 
     /// This is blocking and starts triggerring the callbacks.
@@ -138,6 +140,10 @@ impl TraceTrait for UserTrace {
     fn events_handled(&self) -> usize {
         self.callback_data.events_handled()
     }
+
+    fn close(self) -> TraceResult<bool> {
+        close_trace(self.trace_handle, &self.callback_data).map_err(TraceError::EtwNativeError)
+    }
 }
 
 impl RealTimeTraceTrait for UserTrace {
@@ -158,6 +164,10 @@ impl TraceTrait for KernelTrace {
 
     fn events_handled(&self) -> usize {
         self.callback_data.events_handled()
+    }
+
+    fn close(self) -> TraceResult<bool> {
+        close_trace(self.trace_handle, &self.callback_data).map_err(TraceError::EtwNativeError)
     }
 }
 
@@ -182,6 +192,10 @@ impl TraceTrait for FileTrace {
 
     fn events_handled(&self) -> usize {
         self.callback_data.events_handled()
+    }
+
+    fn close(self) -> TraceResult<bool> {
+        close_trace(self.trace_handle, &self.callback_data).map_err(TraceError::EtwNativeError)
     }
 }
 
@@ -533,6 +547,71 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
 
         Ok((
             T::build(full_properties, control_handle, trace_handle, callback_data),
+            trace_handle,
+        ))
+    }
+
+    /// Build the `UserTrace` by opening a trace session, without starting it
+    ///
+    /// Internally, this calls the `OpenTraceW`.
+    ///
+    /// This function is to be used when you want to receive events on a trace you don't own.
+    /// This can be useful when dealing with sources that only authorize one trace to be created, such as EventLog-Security.
+    ///
+    /// Since the trace is not owed, it cannot be stopped using StopTraceW or controlled using ControlTraceW, but can be closed using CloseTraceW.
+    ///
+    /// To start receiving events, see the [`TraceBuilder::start`] function to see the options, while keeping in mind that the trace cannot be stopped.
+    pub fn open_existing(self) -> TraceResult<(T, TraceHandle)> {
+        // Prepare a wide version of the trace name
+        let trace_wide_name = U16CString::from_str_truncate(self.name);
+        let mut trace_wide_vec = trace_wide_name.into_vec();
+        trace_wide_vec.truncate(crate::native::etw_types::TRACE_NAME_MAX_CHARS);
+        let trace_wide_name = U16CString::from_vec_truncate(trace_wide_vec);
+
+        let flags = self.rt_callback_data.provider_flags::<T>();
+        let callback_data = Box::new(Arc::new(CallbackData::RealTime(self.rt_callback_data)));
+
+        // Prepare a wide version of the ETL dump file path
+        let wide_etl_dump_file = match self.etl_dump_file {
+            None => None,
+            Some(DumpFileParams {
+                file_path,
+                file_logging_mode,
+                max_size,
+            }) => {
+                let wide_path = U16CString::from_os_str_truncate(file_path.as_os_str());
+                let mut wide_path_vec = wide_path.into_vec();
+                wide_path_vec.truncate(crate::native::etw_types::TRACE_NAME_MAX_CHARS);
+                Some((
+                    U16CString::from_vec_truncate(wide_path_vec),
+                    file_logging_mode,
+                    max_size,
+                ))
+            }
+        };
+
+        let trace_handle = open_trace(
+            SubscriptionSource::RealTimeSession(trace_wide_name.clone()),
+            &callback_data,
+        )
+        .map_err(TraceError::EtwNativeError)?;
+
+        // Build the User/Kernel Trace using an invalid ControlHandle (value is 0)
+        // This Trace will fail to stop, but the handle can still be closed to stop receiving events
+        Ok((
+            T::build(
+                EventTraceProperties::new::<T>(
+                    &trace_wide_name,
+                    wide_etl_dump_file
+                        .as_ref()
+                        .map(|(path, params, max_size)| (path.as_ucstr(), *params, *max_size)),
+                    &self.properties,
+                    flags,
+                ),
+                ControlHandle { Value: 0 },
+                trace_handle,
+                callback_data,
+            ),
             trace_handle,
         ))
     }
