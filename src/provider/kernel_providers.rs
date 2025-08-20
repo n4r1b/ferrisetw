@@ -68,10 +68,10 @@ mod kernel_guids {
         [0x9d, 0xda, 0x00, 0xc0, 0x4f, 0xd7, 0xba, 0x7c],
     );
     pub const REGISTRY_GUID: GUID = GUID::from_values(
-        0xAE53722E,
-        0xC863,
+        0xae53722e,
+        0xc863,
         0x11d2,
-        [0x86, 0x59, 0x00, 0xC0, 0x4F, 0xA3, 0x21, 0xA1],
+        [0x86, 0x59, 0x00, 0xc0, 0x4f, 0xa3, 0x21, 0xa1],
     );
     pub const SPLIT_IO_GUID: GUID = GUID::from_values(
         0xd837ca92,
@@ -336,12 +336,14 @@ mod test {
 
     #[test]
     fn test_kernel_provider_struct() {
-        let kernel_provider =
-            KernelProvider::new("D396B546-287D-4712-A7F5-8BE226A8C643".into(), 0x10000);
+        let kernel_provider = KernelProvider::new(
+            GUID::from_u128(0xd396b546_287d_4712_a7f5_8be226a8c643),
+            0x10000,
+        );
 
         assert_eq!(0x10000, kernel_provider.flags);
         assert_eq!(
-            GUID::from("D396B546-287D-4712-A7F5-8BE226A8C643"),
+            GUID::from_u128(0xd396b546_287d_4712_a7f5_8be226a8c643),
             kernel_provider.guid
         );
     }
@@ -358,95 +360,95 @@ mod test {
     fn test_kernel_provider_guids_correct() {
         assert_eq!(
             ALPC_GUID,
-            GUID::from("45d8cccd-539f-4b72-a8b7-5c683142609a")
+            GUID::from_u128(0x45d8cccd_539f_4b72_a8b7_5c683142609a)
         );
         assert_eq!(
             POWER_GUID,
-            GUID::from("e43445e0-0903-48c3-b878-ff0fccebdd04")
+            GUID::from_u128(0xe43445e0_0903_48c3_b878_ff0fccebdd04)
         );
         assert_eq!(
             DEBUG_GUID,
-            GUID::from("13976d09-a327-438c-950b-7f03192815c7")
+            GUID::from_u128(0x13976d09_a327_438c_950b_7f03192815c7)
         );
         assert_eq!(
             TCP_IP_GUID,
-            GUID::from("9a280ac0-c8e0-11d1-84e2-00c04fb998a2")
+            GUID::from_u128(0x9a280ac0_c8e0_11d1_84e2_00c04fb998a2)
         );
         assert_eq!(
             UDP_IP_GUID,
-            GUID::from("bf3a50c5-a9c9-4988-a005-2df0b7c80f80")
+            GUID::from_u128(0xbf3a50c5_a9c9_4988_a005_2df0b7c80f80)
         );
         assert_eq!(
             THREAD_GUID,
-            GUID::from("3d6fa8d1-fe05-11d0-9dda-00c04fd7ba7c")
+            GUID::from_u128(0x3d6fa8d1_fe05_11d0_9dda_00c04fd7ba7c)
         );
         assert_eq!(
             DISK_IO_GUID,
-            GUID::from("3d6fa8d4-fe05-11d0-9dda-00c04fd7ba7c")
+            GUID::from_u128(0x3d6fa8d4_fe05_11d0_9dda_00c04fd7ba7c)
         );
         assert_eq!(
             FILE_IO_GUID,
-            GUID::from("90cbdc39-4a3e-11d1-84f4-0000f80464e3")
+            GUID::from_u128(0x90cbdc39_4a3e_11d1_84f4_0000f80464e3)
         );
         assert_eq!(
             PROCESS_GUID,
-            GUID::from("3d6fa8d0-fe05-11d0-9dda-00c04fd7ba7c")
+            GUID::from_u128(0x3d6fa8d0_fe05_11d0_9dda_00c04fd7ba7c)
         );
         assert_eq!(
             REGISTRY_GUID,
-            GUID::from("AE53722E-C863-11d2-8659-00C04FA321A1")
+            GUID::from_u128(0xae53722e_c863_11d2_8659_00c04fa321a1)
         );
         assert_eq!(
             SPLIT_IO_GUID,
-            GUID::from("d837ca92-12b9-44a5-ad6a-3a65b3578aa8")
+            GUID::from_u128(0xd837ca92_12b9_44a5_ad6a_3a65b3578aa8)
         );
         assert_eq!(
             OB_TRACE_GUID,
-            GUID::from("89497f50-effe-4440-8cf2-ce6b1cdcaca7")
+            GUID::from_u128(0x89497f50_effe_4440_8cf2_ce6b1cdcaca7)
         );
         assert_eq!(
             UMS_EVENT_GUID,
-            GUID::from("9aec974b-5b8e-4118-9b92-3186d8002ce5")
+            GUID::from_u128(0x9aec974b_5b8e_4118_9b92_3186d8002ce5)
         );
         assert_eq!(
             PERF_INFO_GUID,
-            GUID::from("ce1dbfb4-137e-4da6-87b0-3f59aa102cbc")
+            GUID::from_u128(0xce1dbfb4_137e_4da6_87b0_3f59aa102cbc)
         );
         assert_eq!(
             PAGE_FAULT_GUID,
-            GUID::from("3d6fa8d3-fe05-11d0-9dda-00c04fd7ba7c")
+            GUID::from_u128(0x3d6fa8d3_fe05_11d0_9dda_00c04fd7ba7c)
         );
         assert_eq!(
             IMAGE_LOAD_GUID,
-            GUID::from("2cb15d1d-5fc1-11d2-abe1-00a0c911f518")
+            GUID::from_u128(0x2cb15d1d_5fc1_11d2_abe1_00a0c911f518)
         );
         assert_eq!(
             POOL_TRACE_GUID,
-            GUID::from("0268a8b6-74fd-4302-9dd0-6e8f1795c0cf")
+            GUID::from_u128(0x0268a8b6_74fd_4302_9dd0_6e8f1795c0cf)
         );
         assert_eq!(
             LOST_EVENT_GUID,
-            GUID::from("6a399ae0-4bc6-4de9-870b-3657f8947e7e")
+            GUID::from_u128(0x6a399ae0_4bc6_4de9_870b_3657f8947e7e)
         );
         assert_eq!(
             STACK_WALK_GUID,
-            GUID::from("def2fe46-7bd6-4b80-bd94-f57fe20d0ce3")
+            GUID::from_u128(0xdef2fe46_7bd6_4b80_bd94_f57fe20d0ce3)
         );
         assert_eq!(
             EVENT_TRACE_GUID,
-            GUID::from("68fdd900-4a3e-11d1-84f4-0000f80464e3")
+            GUID::from_u128(0x68fdd900_4a3e_11d1_84f4_0000f80464e3)
         );
         assert_eq!(
             MMCSS_TRACE_GUID,
-            GUID::from("f8f10121-b617-4a56-868b-9df1b27fe32c")
+            GUID::from_u128(0xf8f10121_b617_4a56_868b_9df1b27fe32c)
         );
         assert_eq!(
             SYSTEM_TRACE_GUID,
-            GUID::from("9e814aad-3204-11d2-9a82-006008a86939")
+            GUID::from_u128(0x9e814aad_3204_11d2_9a82_006008a86939)
         );
         assert_eq!(
             EVENT_TRACE_CONFIG_GUID,
-            GUID::from("01853a65-418f-4f36-aefc-dc0f1d2fd235")
+            GUID::from_u128(0x01853a65_418f_4f36_aefc_dc0f1d2fd235)
         );
     }
 }

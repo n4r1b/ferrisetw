@@ -30,7 +30,7 @@ fn main() {
             Err(err) => println!("Error {:?}", err),
         };
 
-    let process_provider = Provider::by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716") // Microsoft-Windows-Kernel-Process
+    let process_provider = Provider::by_guid(0x22fb2cd6_0e7b_422b_a0c7_2fad1fd0e716) // Microsoft-Windows-Kernel-Process
         .add_callback(process_callback)
         .build();
 

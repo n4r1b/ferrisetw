@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use widestring::U16CString;
 use windows::core::GUID;
+use windows::Win32::Foundation::ERROR_WMI_INSTANCE_NOT_FOUND;
 use windows::Win32::System::Diagnostics::Etw;
 
 use self::private::{PrivateRealTimeTraceTrait, PrivateTraceTrait};
@@ -18,7 +19,7 @@ use crate::native::evntrace::{
     close_trace, control_trace, control_trace_by_name, enable_provider, open_trace, process_trace,
     start_trace, ControlHandle, TraceHandle,
 };
-use crate::native::version_helper;
+use crate::native::{version_helper, EvntraceNativeError};
 use crate::provider::Provider;
 use crate::utils;
 use crate::EventRecord;
@@ -33,7 +34,7 @@ use callback_data::CallbackDataFromFile;
 use callback_data::RealTimeCallbackData;
 
 const KERNEL_LOGGER_NAME: &str = "NT Kernel Logger";
-const SYSTEM_TRACE_CONTROL_GUID: &str = "9e814aad-3204-11d2-9a82-006008a86939";
+const SYSTEM_TRACE_CONTROL_GUID: GUID = GUID::from_u128(0x9e814aad_3204_11d2_9a82_006008a86939);
 const EVENT_TRACE_SYSTEM_LOGGER_MODE: u32 = 0x02000000;
 
 /// Trace module errors
@@ -176,7 +177,7 @@ impl RealTimeTraceTrait for KernelTrace {
         if version_helper::is_win8_or_greater() {
             GUID::new().unwrap_or(GUID::zeroed())
         } else {
-            GUID::from(SYSTEM_TRACE_CONTROL_GUID)
+            SYSTEM_TRACE_CONTROL_GUID
         }
     }
 
@@ -260,6 +261,7 @@ pub struct TraceBuilder<T: RealTimeTraceTrait> {
     etl_dump_file: Option<DumpFileParams>,
     properties: TraceProperties,
     rt_callback_data: RealTimeCallbackData,
+    stop_if_exist: bool,
     trace_kind: PhantomData<T>,
 }
 
@@ -277,6 +279,7 @@ impl UserTrace {
             etl_dump_file: None,
             rt_callback_data: RealTimeCallbackData::new(),
             properties: TraceProperties::default(),
+            stop_if_exist: true,
             trace_kind: PhantomData,
         }
     }
@@ -298,6 +301,7 @@ impl KernelTrace {
             etl_dump_file: None,
             rt_callback_data: RealTimeCallbackData::new(),
             properties: TraceProperties::default(),
+            stop_if_exist: true,
             trace_kind: PhantomData,
         };
         // Not all names are valid. Let's use the setter to check them for us
@@ -482,6 +486,11 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
         self
     }
 
+    pub fn stop_if_exist(mut self, b: bool) -> Self {
+        self.stop_if_exist = b;
+        self
+    }
+
     /// Build the `UserTrace` and start the trace session
     ///
     /// Internally, this calls the `StartTraceW`, `EnableTraceEx2` and `OpenTraceW`.
@@ -496,6 +505,9 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
     ///   This convenience function spawns a thread for you, call [`TraceBuilder::start`] on the trace, and returns immediately.<br/>
     ///   This option returns a `T`, so you can explicitly stop the trace, but there is no way to get the status code of the ProcessTrace API.
     pub fn start(self) -> TraceResult<(T, TraceHandle)> {
+        if self.stop_if_exist {
+            stop_trace_by_name(&self.name)?;
+        }
         // Prepare a wide version of the trace name
         let trace_wide_name = U16CString::from_str_truncate(self.name);
         let mut trace_wide_vec = trace_wide_name.into_vec();
@@ -722,7 +734,16 @@ pub fn stop_trace_by_name(trace_name: &str) -> TraceResult<()> {
         flags,
     );
 
-    control_trace_by_name(&mut properties, &wide_name, Etw::EVENT_TRACE_CONTROL_STOP)?;
+    let result = control_trace_by_name(&mut properties, &wide_name, Etw::EVENT_TRACE_CONTROL_STOP);
+    if let Err(e) = result {
+        if e.code() == ERROR_WMI_INSTANCE_NOT_FOUND.to_hresult() {
+            // This is not an error, it just means the trace was not running
+            return Ok(());
+        }
+        return Err(TraceError::EtwNativeError(EvntraceNativeError::IoError(
+            std::io::Error::from_raw_os_error(e.code().0),
+        )));
+    }
 
     Ok(())
 }
@@ -733,8 +754,8 @@ mod test {
 
     #[test]
     fn test_enable_multiple_providers() {
-        let prov = Provider::by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716").build();
-        let prov1 = Provider::by_guid("A0C1853B-5C40-4B15-8766-3CF1C58F985A").build();
+        let prov = Provider::by_guid(0x22fb2cd6_0e7b_422b_a0c7_2fad1fd0e716).build();
+        let prov1 = Provider::by_guid(0xa0c1853b_5c40_4b15_8766_3cf1c58f985a).build();
 
         let trace_builder = UserTrace::new().enable(prov).enable(prov1);
 

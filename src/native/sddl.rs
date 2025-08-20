@@ -1,8 +1,9 @@
 use core::ffi::c_void;
 use std::str::Utf8Error;
 use windows::core::PSTR;
-use windows::Win32::Foundation::{LocalFree, HLOCAL, PSID};
+use windows::Win32::Foundation::{LocalFree, HLOCAL};
 use windows::Win32::Security::Authorization::ConvertSidToStringSidA;
+use windows::Win32::Security::PSID;
 
 /// SDDL native error
 #[derive(Debug)]
@@ -40,7 +41,7 @@ pub fn convert_sid_to_string(sid: *const c_void) -> SddlResult<String> {
 
         let sid_string = std::ffi::CStr::from_ptr(tmp.0.cast()).to_str()?.to_owned();
 
-        if LocalFree(HLOCAL(tmp.0.cast())) != HLOCAL(std::ptr::null_mut()) {
+        if LocalFree(Some(HLOCAL(tmp.0.cast()))) != HLOCAL(std::ptr::null_mut()) {
             return Err(SddlNativeError::IoError(std::io::Error::last_os_error()));
         }
 

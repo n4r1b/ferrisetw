@@ -35,6 +35,7 @@ fn main() {
     let kernel_trace = KernelTrace::new()
         .named(String::from("MyKernelProvider"))
         .enable(provider)
+        .stop_if_exist(true)
         .start_and_process()
         .unwrap();
 

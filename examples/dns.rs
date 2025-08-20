@@ -59,7 +59,7 @@ fn parse_etw_event(schema: &Schema, record: &EventRecord) {
 fn main() {
     env_logger::init(); // this is optional. This makes the (rare) error logs of ferrisetw to be printed to stderr
 
-    let dns_provider = Provider::by_guid("1c95126e-7eea-49a9-a3fe-a378b03ddb4d") // Microsoft-Windows-DNS-Client
+    let dns_provider = Provider::by_guid(0x1c95126e_7eea_49a9_a3fe_a378b03ddb4d) // Microsoft-Windows-DNS-Client
         .add_callback(dns_etw_callback)
         .trace_flags(TraceFlags::EVENT_ENABLE_PROPERTY_PROCESS_START_KEY)
         .build();

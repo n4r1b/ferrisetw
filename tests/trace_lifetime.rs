@@ -75,7 +75,7 @@ fn test_wordpad_trace(
     );
 
     // Create a provider
-    let mut provider_builder = Provider::by_guid("54FFD262-99FE-4576-96E7-1ADB500370DC"); // Microsoft-Windows-Wordpad
+    let mut provider_builder = Provider::by_guid(0x54ffd262_99fe_4576_96e7_1adb500370dc); // Microsoft-Windows-Wordpad
     for _i in 0..provider_count {
         provider_builder =
             provider_builder.add_callback(|_record: &EventRecord, _locator: &SchemaLocator| {})
