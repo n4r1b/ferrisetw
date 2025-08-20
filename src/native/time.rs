@@ -34,7 +34,7 @@ impl FileTime {
     fn as_quad(&self) -> i64 {
         let mut quad = self.0.dwHighDateTime as i64;
         quad <<= 32;
-        quad |= self.0.dwHighDateTime as i64;
+        quad |= self.0.dwLowDateTime as i64;
         quad
     }
 
