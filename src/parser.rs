@@ -543,9 +543,9 @@ impl private::TryParse<GUID> for Parser<'_, '_> {
                 }
 
                 Ok(GUID {
-                    data1: u32::from_ne_bytes(prop_slice.buffer[0..4].try_into()?),
-                    data2: u16::from_ne_bytes(prop_slice.buffer[4..6].try_into()?),
-                    data3: u16::from_be_bytes(prop_slice.buffer[6..8].try_into()?),
+                    data1: u32::from_le_bytes(prop_slice.buffer[0..4].try_into()?),
+                    data2: u16::from_le_bytes(prop_slice.buffer[4..6].try_into()?),
+                    data3: u16::from_le_bytes(prop_slice.buffer[6..8].try_into()?),
                     data4: prop_slice.buffer[8..].try_into()?,
                 })
             }
