@@ -534,7 +534,7 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
         };
 
         let flags = self.rt_callback_data.provider_flags::<T>();
-        let (full_properties, control_handle) = start_trace::<T>(
+        let (mut full_properties, control_handle) = start_trace::<T>(
             &trace_wide_name,
             wide_etl_dump_file
                 .as_ref()
@@ -547,7 +547,13 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
 
         if T::TRACE_KIND == private::TraceKind::User {
             for prov in self.rt_callback_data.providers() {
-                enable_provider(control_handle, prov)?;
+                enable_provider(control_handle, prov).inspect_err(|_| {
+                    let _ = control_trace(
+                        &mut full_properties,
+                        control_handle,
+                        Etw::EVENT_TRACE_CONTROL_STOP,
+                    );
+                })?;
             }
         }
 
@@ -555,7 +561,14 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
         let trace_handle = open_trace(
             SubscriptionSource::RealTimeSession(trace_wide_name),
             &callback_data,
-        )?;
+        )
+        .inspect_err(|_| {
+            let _ = control_trace(
+                &mut full_properties,
+                control_handle,
+                Etw::EVENT_TRACE_CONTROL_STOP,
+            );
+        })?;
 
         Ok((
             T::build(full_properties, control_handle, trace_handle, callback_data),
