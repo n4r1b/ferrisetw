@@ -16,6 +16,7 @@ use std::convert::TryInto;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::Mutex;
 use windows::core::GUID;
+use windows::Win32::Security::TOKEN_USER;
 
 /// Parser module errors
 #[derive(Debug)]
@@ -520,6 +521,16 @@ impl private::TryParse<String> for Parser<'_, '_> {
                             [std::mem::size_of::<u16>()..std::mem::size_of::<u16>() + str_length],
                     )?;
                     Ok(string.to_string())
+                }
+                TdhInType::InTypeWbemSid => {
+                    // Ensure buffer is large enough for TOKEN_USER
+                    if prop_slice.buffer.len() < size_of::<TOKEN_USER>() {
+                        return Err(ParserError::LengthMismatch);
+                    }
+                    let string = sddl::convert_sid_to_string(unsafe {
+                        prop_slice.buffer.as_ptr().add(size_of::<TOKEN_USER>()) as *const _
+                    })?;
+                    Ok(string)
                 }
                 _ => Err(ParserError::InvalidType),
             },
