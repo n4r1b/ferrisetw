@@ -14,10 +14,10 @@ use windows::Win32::System::Diagnostics::Etw;
 
 use self::private::{PrivateRealTimeTraceTrait, PrivateTraceTrait};
 
-use crate::native::etw_types::{EventTraceProperties, SubscriptionSource};
+use crate::native::etw_types::{EventTraceProperties, SubscriptionSource, PERFINFO_GROUPMASK};
 use crate::native::evntrace::{
-    close_trace, control_trace, control_trace_by_name, enable_provider, open_trace, process_trace,
-    start_trace, ControlHandle, TraceHandle,
+    close_trace, control_trace, control_trace_by_name, enable_kernel_providers,
+    enable_user_provider, open_trace, process_trace, start_trace, ControlHandle, TraceHandle,
 };
 use crate::native::{version_helper, EvntraceNativeError};
 use crate::provider::Provider;
@@ -157,7 +157,6 @@ impl RealTimeTraceTrait for UserTrace {
     }
 }
 
-// TODO: Implement enable_provider function for providers that require call to TraceSetInformation with extended PERFINFO_GROUPMASK
 impl TraceTrait for KernelTrace {
     fn trace_handle(&self) -> TraceHandle {
         self.trace_handle
@@ -543,11 +542,22 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
             flags,
         )?;
 
-        // TODO: For kernel traces, implement enable_provider function for providers that require call to TraceSetInformation with extended PERFINFO_GROUPMASK
+        match T::TRACE_KIND {
+            private::TraceKind::User => {
+                for prov in self.rt_callback_data.providers() {
+                    enable_user_provider(control_handle, prov)?;
+                }
+            }
+            private::TraceKind::Kernel => {
+                let mut gm = PERFINFO_GROUPMASK::new();
+                for provider in self.rt_callback_data.providers() {
+                    gm.or_assign_with_groupmask(provider.kernel_flags());
+                    for flag in provider.extended_kernel_flags() {
+                        gm.or_assign_with_groupmask(*flag);
+                    }
+                }
 
-        if T::TRACE_KIND == private::TraceKind::User {
-            for prov in self.rt_callback_data.providers() {
-                enable_provider(control_handle, prov)?;
+                enable_kernel_providers(control_handle, gm)?;
             }
         }
 
