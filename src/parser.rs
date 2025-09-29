@@ -509,11 +509,11 @@ impl private::TryParse<String> for Parser<'_, '_> {
                         .ok_or(ParserError::LengthMismatch)?;
                     parse_sid(sid)
                 }
-                TdhInType::InTypeCountedString => unimplemented!(),
+                TdhInType::InTypeCountedString => parse_counted_utf16(prop_slice.buffer),
                 TdhInType::InTypeCountedAnsiString => {
                     if prop_slice.buffer.len() < 2 {
                         return Err(ParserError::PropertyError(
-                            "counted string does not have length".into(),
+                            "counted ANSI string does not have length".into(),
                         ));
                     }
                     let str_length = u16::from_le_bytes(
@@ -523,7 +523,7 @@ impl private::TryParse<String> for Parser<'_, '_> {
                     ) as usize;
                     if prop_slice.buffer[std::mem::size_of::<u16>()..].len() < str_length {
                         return Err(ParserError::PropertyError(
-                            "invalid counted string length".into(),
+                            "invalid counted ANSI string length".into(),
                         ));
                     }
                     let string = std::str::from_utf8(
@@ -537,6 +537,33 @@ impl private::TryParse<String> for Parser<'_, '_> {
             _ => Err(ParserError::InvalidType),
         }
     }
+}
+
+/// Decodes a TDH counted UTF-16 string: a little-endian `u16` byte count followed by that many
+/// bytes of UTF-16LE. Anything after the counted bytes is ignored.
+fn parse_counted_utf16(data: &[u8]) -> ParserResult<String> {
+    if data.len() < 2 {
+        return Err(ParserError::PropertyError(
+            "counted string does not have length".into(),
+        ));
+    }
+    let (prefix, rest) = data.split_at(2);
+    let byte_len = usize::from(u16::from_le_bytes([prefix[0], prefix[1]]));
+    if byte_len % 2 != 0 {
+        return Err(ParserError::PropertyError(
+            "UTF-16 counted string length is not even".into(),
+        ));
+    }
+    let bytes = rest
+        .get(..byte_len)
+        .ok_or_else(|| ParserError::PropertyError("invalid counted string length".into()))?;
+
+    // The event buffer can be unaligned, so code units are assembled from bytes rather than
+    // reinterpreting the buffer as `[u16]`.
+    let units = (0..byte_len)
+        .step_by(2)
+        .map(|i| u16::from_le_bytes([bytes[i], bytes[i + 1]]));
+    Ok(widestring::decode_utf16_lossy(units).collect())
 }
 
 fn parse_sid(data: &[u8]) -> ParserResult<String> {
