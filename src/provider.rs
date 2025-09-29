@@ -44,6 +44,8 @@ pub struct Provider {
     trace_flags: TraceFlags,
     /// Provider kernel flags, only apply to KernelProvider
     kernel_flags: u32,
+    /// Provider extended kernel flags, only apply to KernelProvider
+    extended_kernel_flags: Vec<u32>,
     /// Provider filters
     filters: Vec<EventFilter>,
     /// Callbacks that will receive events from this Provider
@@ -60,6 +62,7 @@ pub struct ProviderBuilder {
     level: u8,
     trace_flags: TraceFlags,
     kernel_flags: u32,
+    extended_kernel_flags: Vec<u32>,
     filters: Vec<EventFilter>,
     callbacks: Arc<RwLock<Vec<crate::EtwCallback>>>,
 }
@@ -73,6 +76,7 @@ impl std::fmt::Debug for ProviderBuilder {
             .field("level", &self.level)
             .field("trace_flags", &self.trace_flags)
             .field("kernel_flags", &self.kernel_flags)
+            .field("extended_kernel_flags", &self.extended_kernel_flags)
             .field("filters", &self.filters)
             .field("n_callbacks", &self.callbacks.read().unwrap().len())
             .finish()
@@ -93,6 +97,7 @@ impl Provider {
             level: 5,
             trace_flags: TraceFlags::empty(),
             kernel_flags: 0,
+            extended_kernel_flags: Vec::new(),
             filters: Vec::new(),
             callbacks: Arc::new(RwLock::new(Vec::new())),
         }
@@ -104,6 +109,7 @@ impl Provider {
     pub fn kernel(kernel_provider: &kernel_providers::KernelProvider) -> ProviderBuilder {
         let mut builder = Self::by_guid(kernel_provider.guid);
         builder.kernel_flags = kernel_provider.flags;
+        builder.extended_kernel_flags = kernel_provider.extended_flags.clone();
         builder
     }
 
@@ -145,6 +151,9 @@ impl Provider {
     }
     pub fn kernel_flags(&self) -> u32 {
         self.kernel_flags
+    }
+    pub fn extended_kernel_flags(&self) -> &[u32] {
+        &self.extended_kernel_flags
     }
     pub fn filters(&self) -> &[EventFilter] {
         &self.filters
@@ -301,6 +310,7 @@ impl ProviderBuilder {
             level: self.level,
             trace_flags: self.trace_flags,
             kernel_flags: self.kernel_flags,
+            extended_kernel_flags: self.extended_kernel_flags,
             filters: self.filters,
             callbacks: self.callbacks,
         }

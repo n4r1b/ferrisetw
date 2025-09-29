@@ -193,12 +193,18 @@ pub struct KernelProvider {
     pub guid: GUID,
     /// Kernel Provider Flags
     pub flags: u32,
+    /// Kernel Provider Extended Flags
+    pub extended_flags: Vec<u32>,
 }
 
 impl KernelProvider {
     /// Use the `new` function to create a Kernel Provider which can be then tied into a Provider
     pub const fn new(guid: GUID, flags: u32) -> KernelProvider {
-        KernelProvider { guid, flags }
+        KernelProvider {
+            guid,
+            flags,
+            extended_flags: Vec::new(),
+        }
     }
 }
 
