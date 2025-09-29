@@ -69,9 +69,9 @@ mod startup_tests {
 
     #[test]
     fn failed_open_trace_removes_callback_context() {
-        let callback = Box::new(Arc::new(
-            CallbackData::RealTime(RealTimeCallbackData::new()),
-        ));
+        let callback = Box::new(Arc::new(CallbackData::RealTime(RealTimeCallbackData::new(
+            crate::trace::TraceKind::User,
+        ))));
         let context = callback.as_ref() as *const Arc<CallbackData> as *const c_void;
         let missing = U16CString::from_str(format!(
             "ferrisetw-missing-{}-{}.etl",
@@ -93,9 +93,9 @@ mod startup_tests {
 
     #[test]
     fn duplicate_open_does_not_remove_existing_context() {
-        let callback = Box::new(Arc::new(
-            CallbackData::RealTime(RealTimeCallbackData::new()),
-        ));
+        let callback = Box::new(Arc::new(CallbackData::RealTime(RealTimeCallbackData::new(
+            crate::trace::TraceKind::User,
+        ))));
         let context = callback.as_ref() as *const Arc<CallbackData> as *const c_void;
         assert!(UNIQUE_VALID_CONTEXTS.insert(context).is_ok());
         let missing = U16CString::from_str("ferrisetw-nonexistent.etl").unwrap();
