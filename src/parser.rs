@@ -498,11 +498,46 @@ impl private::TryParse<String> for Parser<'_, '_> {
                         sddl::convert_sid_to_string(prop_slice.buffer.as_ptr() as *const _)?;
                     Ok(string)
                 }
-                TdhInType::InTypeCountedString => unimplemented!(),
-                TdhInType::InTypeCountedAnsiString => {
+                TdhInType::InTypeCountedString => {
                     if prop_slice.buffer.len() < 2 {
                         return Err(ParserError::PropertyError(
                             "counted string does not have length".into(),
+                        ));
+                    }
+
+                    let len_bytes = std::mem::size_of::<u16>();
+                    let byte_len =
+                        u16::from_le_bytes(prop_slice.buffer[..len_bytes].try_into().unwrap())
+                            as usize;
+
+                    let slice = &prop_slice.buffer[len_bytes..];
+                    if slice.len() < byte_len {
+                        return Err(ParserError::PropertyError(
+                            "invalid counted string length".into(),
+                        ));
+                    }
+
+                    if !byte_len.is_multiple_of(2) {
+                        return Err(ParserError::PropertyError(
+                            "UTF-16 counted string length is not even".into(),
+                        ));
+                    }
+
+                    let mut aligned_buffer = Vec::with_capacity(prop_slice.buffer.len() / 2);
+                    for chunk in slice[..byte_len].chunks_exact(2) {
+                        let part = u16::from_ne_bytes([chunk[0], chunk[1]]);
+                        aligned_buffer.push(part);
+                    }
+
+                    let wide = aligned_buffer.as_slice();
+
+                    // Decode UTF-16 to String
+                    Ok(widestring::decode_utf16_lossy(wide.iter().copied()).collect::<String>())
+                }
+                TdhInType::InTypeCountedAnsiString => {
+                    if prop_slice.buffer.len() < 2 {
+                        return Err(ParserError::PropertyError(
+                            "counted ANSI string does not have length".into(),
                         ));
                     }
                     let str_length = u16::from_le_bytes(
@@ -512,7 +547,7 @@ impl private::TryParse<String> for Parser<'_, '_> {
                     ) as usize;
                     if prop_slice.buffer[std::mem::size_of::<u16>()..].len() < str_length {
                         return Err(ParserError::PropertyError(
-                            "invalid counted string length".into(),
+                            "invalid counted ANSI string length".into(),
                         ));
                     }
                     let string = std::str::from_utf8(
