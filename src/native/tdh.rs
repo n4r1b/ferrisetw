@@ -53,24 +53,34 @@ unsafe impl Send for TraceEventInfo {}
 // Safety: see above
 unsafe impl Sync for TraceEventInfo {}
 
-macro_rules! extract_utf16_string {
-    ($self: ident, $member_name: ident) => {
-        let provider_name_offset = $self.as_raw().$member_name;
-        let provider_name_ptr = unsafe {
-            // Safety: we trust Microsoft for providing correctly aligned data
-            $self.data.offset(provider_name_offset as isize)
-        };
-        if provider_name_offset == 0 || provider_name_ptr.is_null() {
-            return String::new();
-        }
-        let provider_name = unsafe {
-            // Safety:
-            //  * we trust Microsoft for providing correctly aligned data
-            //  * we will copy into a String before the buffer gets invalid
-            U16CStr::from_ptr_str(provider_name_ptr as *const u16)
-        };
-        return provider_name.to_string_lossy();
+/// Extract a null-terminated wide-string at a given offset within a buffer.
+///
+/// The wide-string is converted with loss to a String. If buffer
+/// is null or offset is zero, None is returned.
+///
+/// Safety:
+///  * the buffer must entirely contain a null-terminated wide string
+///    located at the given offset
+unsafe fn extract_utf16_string(buffer: *const u8, offset: usize) -> Option<String> {
+    if offset == 0 || buffer.is_null() {
+        return None;
+    }
+    let ptr_str = unsafe {
+        // Safety: we trust that offset points to inside the buffer
+        buffer.add(offset)
     };
+    // This is really a safety net, there is no reason the offset nullifies the base pointer
+    if ptr_str.is_null() {
+        return None;
+    }
+    let wide_str = unsafe {
+        // Safety:
+        //  * we trust the string is null-terminated
+        //  * we trust the string entirely fits within the given buffer
+        //  * we will not mutate the string
+        U16CStr::from_ptr_str(ptr_str as *const u16)
+    };
+    return Some(wide_str.to_string_lossy());
 }
 
 impl TraceEventInfo {
@@ -156,15 +166,33 @@ impl TraceEventInfo {
     }
 
     pub fn provider_name(&self) -> String {
-        extract_utf16_string!(self, ProviderNameOffset);
+        unsafe {
+            // Safety:
+            //  * if self.data is null, we'll get None
+            //  * otherwise we trust Microsoft for providing consistent and correctly aligned data
+            extract_utf16_string(self.data, self.as_raw().ProviderNameOffset as usize)
+                .unwrap_or_default()
+        }
     }
 
     pub fn task_name(&self) -> String {
-        extract_utf16_string!(self, TaskNameOffset);
+        unsafe {
+            // Safety:
+            //  * if self.data is null, we'll get None
+            //  * otherwise we trust Microsoft for providing consistent and correctly aligned data
+            extract_utf16_string(self.data, self.as_raw().TaskNameOffset as usize)
+                .unwrap_or_default()
+        }
     }
 
     pub fn opcode_name(&self) -> String {
-        extract_utf16_string!(self, OpcodeNameOffset);
+        unsafe {
+            // Safety:
+            //  * if self.data is null, we'll get None
+            //  * otherwise we trust Microsoft for providing consistent and correctly aligned data
+            extract_utf16_string(self.data, self.as_raw().OpcodeNameOffset as usize)
+                .unwrap_or_default()
+        }
     }
 
     pub fn properties(&self) -> PropertyIterator {
@@ -229,24 +257,11 @@ impl<'info> Iterator for PropertyIterator<'info> {
         };
 
         let te_info_data = self.te_info.as_raw() as *const TRACE_EVENT_INFO as *const u8;
-        let property_name_offset = curr_prop.NameOffset;
-        let property_name_ptr = unsafe {
-            // Safety: offset comes from a Microsoft API
-            te_info_data.offset(property_name_offset as isize)
-        };
-        if property_name_ptr.is_null() {
-            // This is really a safety net, there is no reason the offset nullifies the base pointer
-            // This is not supposed to happen, so a simple `None` (instead of a proper `Err`) will do
-            return None;
-        }
-
-        let property_name = unsafe {
-            // Safety:
-            //  * we trust Microsoft for providing correctly aligned data
-            //  * we will copy into a String before the buffer gets invalid
-            U16CStr::from_ptr_str(property_name_ptr as *const u16)
-        };
-        let property_name = property_name.to_string_lossy();
+        // Safety:
+        //  * if te_info_data is null, we'll get None
+        //  * otherwise we trust Microsoft for providing consistent and correctly aligned data
+        let property_name =
+            unsafe { extract_utf16_string(te_info_data, curr_prop.NameOffset as usize)? };
 
         self.next_index += 1;
         Some(Property::new(property_name, curr_prop))
