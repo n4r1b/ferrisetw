@@ -127,7 +127,14 @@ impl TraceEventInfo {
             )
         };
 
-        if status != 0 {
+        if status != ERROR_SUCCESS.0 {
+            unsafe {
+                // Safety:
+                // * ptr is a block of memory currently allocated via alloc::alloc
+                // * layout is the one that was used to allocate that block of memory
+                std::alloc::dealloc(data, layout);
+            }
+
             return Err(TdhNativeError::IoError(std::io::Error::from_raw_os_error(
                 status as i32,
             )));
@@ -205,7 +212,7 @@ impl Drop for TraceEventInfo {
         unsafe {
             // Safety:
             // * ptr is a block of memory currently allocated via alloc::alloc
-            // * layout is th one that was used to allocate that block of memory
+            // * layout is the one that was used to allocate that block of memory
             std::alloc::dealloc(self.mut_data_for_dealloc, self.layout);
         }
     }
