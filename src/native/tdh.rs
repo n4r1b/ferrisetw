@@ -13,8 +13,11 @@ use crate::native::tdh_types::Property;
 use crate::traits::*;
 use widestring::U16CStr;
 use windows::core::GUID;
-use windows::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
-use windows::Win32::System::Diagnostics::Etw::{self, EVENT_PROPERTY_INFO, TRACE_EVENT_INFO};
+use windows::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, ERROR_SUCCESS};
+use windows::Win32::System::Diagnostics::Etw::{
+    self, TdhEnumerateProviders, EVENT_PROPERTY_INFO, PROVIDER_ENUMERATION_INFO, TRACE_EVENT_INFO,
+    TRACE_PROVIDER_INFO,
+};
 
 /// Tdh native module errors
 #[derive(Debug)]
@@ -23,6 +26,8 @@ pub enum TdhNativeError {
     AllocationError,
     /// Represents an standard IO Error
     IoError(std::io::Error),
+    /// Represents a not found Error
+    NotFound,
 }
 
 pub type TdhNativeResult<T> = Result<T, TdhNativeError>;
@@ -32,6 +37,7 @@ impl std::fmt::Display for TdhNativeError {
         match self {
             Self::AllocationError => write!(f, "allocation error"),
             Self::IoError(e) => write!(f, "i/o error {}", e),
+            Self::NotFound => write!(f, "not found error"),
         }
     }
 }
@@ -289,4 +295,156 @@ pub fn property_size(event: &EventRecord, name: &str) -> TdhNativeResult<u32> {
     }
 
     Ok(property_size)
+}
+
+/// Read-only wrapper over an [PROVIDER_ENUMERATION_INFO]
+///
+/// [PROVIDER_ENUMERATION_INFO]: https://learn.microsoft.com/en-us/windows/win32/api/tdh/ns-tdh-provider_enumeration_info
+struct ProviderEnumerationInfo {
+    /// Pointer to an owned PROVIDER_ENUMERATION_INFO buffer (only mutable for deallocating the data)
+    data: *mut u8,
+    /// Layout used to allocate the PROVIDER_ENUMERATION_INFO buffer
+    layout: Layout,
+}
+
+impl ProviderEnumerationInfo {
+    /// Create a instance of `Self` suitable for the given event
+    pub fn build_full_enumeration() -> TdhNativeResult<Self> {
+        let mut buffer_size = 0;
+        let status = unsafe {
+            // Safety: buffer_size is valid, and zero on input, so no data
+            // will be written in the buffer, that can therefore be null
+            TdhEnumerateProviders(None, &mut buffer_size)
+        };
+        if status != ERROR_INSUFFICIENT_BUFFER.0 {
+            return Err(TdhNativeError::IoError(std::io::Error::from_raw_os_error(
+                status as i32,
+            )));
+        }
+
+        if buffer_size == 0 {
+            return Err(TdhNativeError::AllocationError);
+        }
+
+        let layout = Layout::from_size_align(
+            buffer_size as usize,
+            std::mem::align_of::<PROVIDER_ENUMERATION_INFO>(),
+        )
+        .map_err(|_| TdhNativeError::AllocationError)?;
+        let data = unsafe {
+            // Safety: size is not zero
+            std::alloc::alloc(layout)
+        };
+        if data.is_null() {
+            return Err(TdhNativeError::AllocationError);
+        }
+
+        let status = unsafe {
+            // Safety:
+            //  * `data` has been successfully allocated, with the required size and the correct alignment
+            TdhEnumerateProviders(
+                Some(data.cast::<PROVIDER_ENUMERATION_INFO>()),
+                &mut buffer_size,
+            )
+        };
+
+        if status != ERROR_SUCCESS.0 {
+            unsafe {
+                // Safety:
+                // * ptr is a block of memory currently allocated via alloc::alloc
+                // * layout is the one that was used to allocate that block of memory
+                std::alloc::dealloc(data, layout);
+            }
+
+            return Err(TdhNativeError::IoError(std::io::Error::from_raw_os_error(
+                status as i32,
+            )));
+        }
+
+        Ok(Self { data, layout })
+    }
+
+    fn as_raw(&self) -> &PROVIDER_ENUMERATION_INFO {
+        let p = self.data.cast::<PROVIDER_ENUMERATION_INFO>();
+        unsafe {
+            // Safety: the API enforces self.data to point to a valid, allocated PROVIDER_ENUMERATION_INFO
+            p.as_ref().unwrap()
+        }
+    }
+
+    pub fn raw_providers(&self) -> &[TRACE_PROVIDER_INFO] {
+        let raw = self.as_raw();
+        if raw.NumberOfProviders == 0 {
+            return &[];
+        }
+
+        // Safety:
+        //  * we trust Microsoft for providing consistent data
+        //  * the underlying buffer will not be mutated
+        unsafe {
+            core::slice::from_raw_parts(
+                raw.TraceProviderInfoArray.as_ptr(),
+                raw.NumberOfProviders as usize,
+            )
+        }
+    }
+
+    pub fn provider_name(&self, provider: &TRACE_PROVIDER_INFO) -> String {
+        unsafe {
+            // Safety:
+            //  * if self.data is null, we'll get None
+            //  * otherwise we trust Microsoft for providing consistent and correctly aligned data
+            extract_utf16_string(self.data, provider.ProviderNameOffset as usize)
+                .unwrap_or_default()
+        }
+    }
+}
+
+impl Drop for ProviderEnumerationInfo {
+    fn drop(&mut self) {
+        unsafe {
+            // Safety:
+            // * ptr is a block of memory currently allocated via alloc::alloc
+            // * layout is the one that was used to allocate that block of memory
+            std::alloc::dealloc(self.data, self.layout);
+        }
+    }
+}
+
+// https://github.com/microsoft/krabsetw/blob/f18605233f75e6ab207244a4b58f7d834835a25a/krabs/krabs/provider.hpp#L575
+pub(crate) fn get_provider_guid(name: &str) -> TdhNativeResult<GUID> {
+    let providers_info = ProviderEnumerationInfo::build_full_enumeration()?;
+
+    let raw_providers = providers_info.raw_providers();
+
+    for raw_provider in raw_providers {
+        let provider_name = providers_info.provider_name(raw_provider);
+        if provider_name == name {
+            return Ok(raw_provider.ProviderGuid);
+        }
+    }
+
+    Err(TdhNativeError::NotFound)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    pub fn test_get_provider() {
+        let guid =
+            get_provider_guid("Microsoft-Windows-Kernel-Process").expect("Error Getting GUID");
+
+        assert_eq!(
+            GUID::from_u128(0x22FB2CD6_0E7B_422B_A0C7_2FAD1FD0E716),
+            guid
+        );
+    }
+
+    #[test]
+    pub fn test_provider_not_found() {
+        let err = get_provider_guid("Not-A-Real-Provider");
+
+        assert!(matches!(err, Err(TdhNativeError::NotFound)));
+    }
 }
