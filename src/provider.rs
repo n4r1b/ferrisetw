@@ -2,7 +2,7 @@
 //!
 //! Provides an abstraction over an [ETW Provider](https://docs.microsoft.com/en-us/windows/win32/etw/about-event-tracing#providers)
 use crate::native::etw_types::event_record::EventRecord;
-use crate::native::pla;
+use crate::native::tdh;
 use crate::schema_locator::SchemaLocator;
 
 use std::sync::{Arc, RwLock};
@@ -18,13 +18,13 @@ pub use trace_flags::TraceFlags;
 /// Provider module errors
 #[derive(Debug)]
 pub enum ProviderError {
-    /// Wrapper over an internal [PlaError](crate::native::PlaError)
-    ComProvider(crate::native::PlaError),
+    /// Wrapper over an internal [TdhNativeError](crate::native::TdhNativeError)
+    TdhNative(crate::native::TdhNativeError),
 }
 
-impl From<crate::native::PlaError> for ProviderError {
-    fn from(err: crate::native::PlaError) -> Self {
-        ProviderError::ComProvider(err)
+impl From<crate::native::TdhNativeError> for ProviderError {
+    fn from(err: crate::native::TdhNativeError) -> Self {
+        ProviderError::TdhNative(err)
     }
 }
 
@@ -109,19 +109,16 @@ impl Provider {
 
     /// Create a Provider defined by its name.
     ///
-    /// This function will look for the Provider GUID by means of the [ITraceDataProviderCollection](https://docs.microsoft.com/en-us/windows/win32/api/pla/nn-pla-itracedataprovidercollection)
-    /// interface.
-    ///
-    /// # Remark
-    /// This function is considerably slow, prefer using the `by_guid` function when possible
+    /// This function will look for the Provider GUID using the event tracing
+    /// [trace data helper (TDH) header](https://learn.microsoft.com/en-us/windows/win32/api/tdh/nf-tdh-tdhenumerateproviders).
     ///
     /// # Example
     /// ```
     /// # use ferrisetw::provider::Provider;
     /// let my_provider = Provider::by_name("Microsoft-Windows-WinINet").unwrap().build();
     /// ```
-    pub fn by_name(name: &str) -> Result<ProviderBuilder, crate::native::PlaError> {
-        let guid = unsafe { pla::get_provider_guid(name) }?;
+    pub fn by_name(name: &str) -> Result<ProviderBuilder, crate::native::TdhNativeError> {
+        let guid = tdh::get_provider_guid(name)?;
         Ok(Self::by_guid(guid))
     }
 }
