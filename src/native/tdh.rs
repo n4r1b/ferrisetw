@@ -40,10 +40,8 @@ impl std::fmt::Display for TdhNativeError {
 ///
 /// [TRACE_EVENT_INFO]: https://docs.microsoft.com/en-us/windows/win32/api/tdh/ns-tdh-trace_event_info
 pub struct TraceEventInfo {
-    /// Pointer to a valid TRACE_EVENT_INFO buffer
-    data: *const u8,
-    /// Pointer to the same buffer, but mutable (used only when deallocating the data)
-    mut_data_for_dealloc: *mut u8,
+    /// Pointer to an owned TRACE_EVENT_INFO buffer (only mutable for deallocating the data)
+    data: *mut u8,
     /// Layout used to allocate the TRACE_EVENT_INFO buffer
     layout: Layout,
 }
@@ -140,11 +138,7 @@ impl TraceEventInfo {
             )));
         }
 
-        Ok(Self {
-            data,
-            mut_data_for_dealloc: data,
-            layout,
-        })
+        Ok(Self { data, layout })
     }
 
     fn as_raw(&self) -> &TRACE_EVENT_INFO {
@@ -213,7 +207,7 @@ impl Drop for TraceEventInfo {
             // Safety:
             // * ptr is a block of memory currently allocated via alloc::alloc
             // * layout is the one that was used to allocate that block of memory
-            std::alloc::dealloc(self.mut_data_for_dealloc, self.layout);
+            std::alloc::dealloc(self.data, self.layout);
         }
     }
 }
