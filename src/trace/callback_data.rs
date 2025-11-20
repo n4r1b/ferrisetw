@@ -4,8 +4,10 @@ use std::sync::RwLock;
 use windows::Win32::System::Diagnostics::Etw;
 
 use crate::native::etw_types::event_record::EventRecord;
+use crate::native::DecodingSource;
 use crate::provider::Provider;
 use crate::schema_locator::SchemaLocator;
+use crate::trace::private::TraceKind;
 use crate::trace::RealTimeTraceTrait;
 use crate::EtwCallback;
 
@@ -25,6 +27,8 @@ pub struct RealTimeCallbackData {
     schema_locator: SchemaLocator,
     /// List of Providers associated with the Trace. This also owns the callback closures and their state
     providers: Vec<Provider>,
+    /// Type of the trace
+    trace_kind: TraceKind,
 }
 
 pub struct CallbackDataFromFile {
@@ -51,19 +55,14 @@ impl CallbackData {
     }
 }
 
-impl std::default::Default for RealTimeCallbackData {
-    fn default() -> Self {
+impl RealTimeCallbackData {
+    pub fn new(kind: TraceKind) -> Self {
         Self {
             events_handled: AtomicUsize::new(0),
             schema_locator: SchemaLocator::new(),
             providers: Vec::new(),
+            trace_kind: kind,
         }
-    }
-}
-
-impl RealTimeCallbackData {
-    pub fn new() -> Self {
-        Default::default()
     }
 
     pub fn add_provider(&mut self, provider: Provider) {
@@ -86,9 +85,40 @@ impl RealTimeCallbackData {
     pub fn on_event(&self, record: &EventRecord) {
         self.events_handled.fetch_add(1, Ordering::Relaxed);
 
-        for prov in &self.providers {
-            if prov.guid() == record.provider_id() {
-                prov.on_event(record, &self.schema_locator);
+        // Get event type
+        match self.trace_kind {
+            TraceKind::Kernel => {
+                for prov in &self.providers {
+                    if prov.guid() == record.provider_id() {
+                        prov.on_event(record, &self.schema_locator);
+                    }
+                }
+            }
+            TraceKind::User => {
+                let schema = self.schema_locator.event_schema(record).unwrap();
+                let decoding_source = schema.decoding_source();
+                match decoding_source {
+                    DecodingSource::DecodingSourceXMLFile
+                    | DecodingSource::DecodingSourceTlg
+                    | DecodingSource::DecodingSourceMax => {
+                        // for manifest/TraceLogging providers, EventHeader.ProviderId is the Provider GUID
+                        for prov in &self.providers {
+                            if prov.guid() == record.provider_id() {
+                                prov.on_event(record, &self.schema_locator);
+                            }
+                        }
+                    }
+                    DecodingSource::DecodingSourceWbem | DecodingSource::DecodingSourceWPP => {
+                        // for MOF/WPP providers, EventHeader.Provider is the *Message* GUID
+                        // we need to ask TDH for event information in order to determine the
+                        // correct provider to pass this event to
+                        for prov in &self.providers {
+                            if prov.guid() == schema.provider_guid() {
+                                prov.on_event(record, &self.schema_locator);
+                            }
+                        }
+                    }
+                }
             }
         }
     }

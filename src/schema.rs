@@ -5,6 +5,7 @@ use crate::native::etw_types::DecodingSource;
 use crate::native::tdh::TraceEventInfo;
 use crate::native::tdh_types::{Property, PropertyError};
 use once_cell::sync::OnceCell;
+use windows::core::GUID;
 
 /// A schema suitable for parsing a given kind of event.
 ///
@@ -58,6 +59,22 @@ impl Schema {
     /// [TraceEventInfo]: crate::native::tdh::TraceEventInfo
     pub fn provider_name(&self) -> String {
         self.te_info.provider_name()
+    }
+
+    /// Use the `provider_guid` function to obtain the Provider GUID from the `TRACE_EVENT_INFO`
+    ///
+    /// # Example
+    /// ```
+    /// # use ferrisetw::EventRecord;
+    /// # use ferrisetw::schema_locator::SchemaLocator;
+    /// let my_callback = |record: &EventRecord, schema_locator: &SchemaLocator| {
+    ///     let schema = schema_locator.event_schema(record).unwrap();
+    ///     let provider_guid = schema.provider_guid();
+    /// };
+    /// ```
+    /// [TraceEventInfo]: crate::native::tdh::TraceEventInfo
+    pub fn provider_guid(&self) -> GUID {
+        self.te_info.provider_guid()
     }
 
     /// Use the `task_name` function to obtain the Task name from the `TRACE_EVENT_INFO`
