@@ -95,30 +95,41 @@ impl RealTimeCallbackData {
                 }
             }
             TraceKind::User => {
-                let schema = self.schema_locator.event_schema(record).unwrap();
-                let decoding_source = schema.decoding_source();
-                match decoding_source {
-                    DecodingSource::DecodingSourceXMLFile
-                    | DecodingSource::DecodingSourceTlg
-                    | DecodingSource::DecodingSourceMax => {
-                        // for manifest/TraceLogging providers, EventHeader.ProviderId is the Provider GUID
+                match self.schema_locator.event_schema(record) {
+                    Ok(schema) => {
+                        match schema.decoding_source() {
+                            DecodingSource::DecodingSourceXMLFile
+                            | DecodingSource::DecodingSourceTlg
+                            | DecodingSource::DecodingSourceMax => {
+                                // for manifest/TraceLogging providers, EventHeader.ProviderId is the Provider GUID
+                                for prov in &self.providers {
+                                    if prov.guid() == record.provider_id() {
+                                        prov.on_event(record, &self.schema_locator);
+                                    }
+                                }
+                            }
+                            DecodingSource::DecodingSourceWbem
+                            | DecodingSource::DecodingSourceWPP => {
+                                // for MOF/WPP providers, EventHeader.Provider is the *Message* GUID
+                                // we need to ask TDH for event information in order to determine the
+                                // correct provider to pass this event to
+                                for prov in &self.providers {
+                                    if prov.guid() == schema.provider_guid() {
+                                        prov.on_event(record, &self.schema_locator);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // If we failed to get the schema and cannot get the decoding source, use the default dispatch method.
                         for prov in &self.providers {
                             if prov.guid() == record.provider_id() {
                                 prov.on_event(record, &self.schema_locator);
                             }
                         }
                     }
-                    DecodingSource::DecodingSourceWbem | DecodingSource::DecodingSourceWPP => {
-                        // for MOF/WPP providers, EventHeader.Provider is the *Message* GUID
-                        // we need to ask TDH for event information in order to determine the
-                        // correct provider to pass this event to
-                        for prov in &self.providers {
-                            if prov.guid() == schema.provider_guid() {
-                                prov.on_event(record, &self.schema_locator);
-                            }
-                        }
-                    }
-                }
+                };
             }
         }
     }
