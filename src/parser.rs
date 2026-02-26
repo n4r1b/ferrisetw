@@ -86,7 +86,8 @@ type ParserResult<T> = Result<T, ParserError>;
 ///
 /// This is useful because computing their offset can be costly
 struct CachedSlices<'schema, 'record> {
-    slices: HashMap<String, PropertySlice<'schema, 'record>>,
+    /// Keyed by borrowed property names from the schema; avoids a heap allocation per insertion.
+    slices: HashMap<&'schema str, PropertySlice<'schema, 'record>>,
     /// The user buffer index we've cached up to
     last_cached_offset: usize,
 }
@@ -295,9 +296,9 @@ impl<'schema, 'record> Parser<'schema, 'record> {
                 property,
                 buffer: property_buffer,
             };
-            cache
-                .slices
-                .insert(String::clone(&property.name), prop_slice);
+            // Borrow the name from the schema slice (lifetime `'schema`) to avoid a heap
+            // allocation per property per event.
+            cache.slices.insert(property.name.as_str(), prop_slice);
             cache.last_cached_offset += prop_size;
 
             if property.name == name {
