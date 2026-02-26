@@ -11,10 +11,10 @@ use crate::native::tdh_types::{
 use crate::native::time::{FileTime, SystemTime};
 use crate::property::PropertySlice;
 use crate::schema::Schema;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::sync::Mutex;
 use windows::core::GUID;
 
 /// Parser module errors
@@ -117,11 +117,14 @@ struct CachedSlices<'schema, 'record> {
 ///     }
 /// };
 /// ```
+// `Parser` is intentionally `!Sync` via `RefCell`. ETW's `ProcessTrace` delivers events
+// sequentially on a single thread, so a `Parser` is always created and consumed within a single
+// callback invocation and is never shared across threads.
 #[allow(dead_code)]
 pub struct Parser<'schema, 'record> {
     properties: &'schema [Property],
     record: &'record EventRecord,
-    cache: Mutex<CachedSlices<'schema, 'record>>,
+    cache: RefCell<CachedSlices<'schema, 'record>>,
 }
 
 impl<'schema, 'record> Parser<'schema, 'record> {
@@ -144,7 +147,7 @@ impl<'schema, 'record> Parser<'schema, 'record> {
         Parser {
             record: event_record,
             properties: schema.properties(),
-            cache: Mutex::new(CachedSlices::default()),
+            cache: RefCell::new(CachedSlices::default()),
         }
     }
 
@@ -172,9 +175,9 @@ impl<'schema, 'record> Parser<'schema, 'record> {
                 let prop_len = match length {
                     PropertyLength::Length(l) => l,
                     PropertyLength::Index(_) => {
-                        // TODO optimize to cache the lookup, the problem is here this is called under an
-                        // exclusive mutex, so attempting to extract and cache a related property will
-                        // deadlock.
+                        // TODO: optimize to cache the lookup; the problem is that this is called
+                        // whilst the `RefCell` borrow on `CachedSlices` is already active, so
+                        // re-entering `find_property` to cache the related property would panic.
                         return Ok(tdh::property_size(self.record, &property.name)? as usize);
                     }
                 };
@@ -240,9 +243,9 @@ impl<'schema, 'record> Parser<'schema, 'record> {
                 let prop_count = match count {
                     PropertyCount::Count(c) => c as usize,
                     PropertyCount::Index(_) => {
-                        // TODO optimize to cache the lookup, the problem is here this is called under an
-                        // exclusive mutex, so attempting to extract and cache a related property will
-                        // deadlock.
+                        // TODO: optimize to cache the lookup; the problem is that this is called
+                        // whilst the `RefCell` borrow on `CachedSlices` is already active, so
+                        // re-entering `find_property` to cache the related property would panic.
                         return Ok(tdh::property_size(self.record, &property.name)? as usize);
                     }
                 };
@@ -257,7 +260,7 @@ impl<'schema, 'record> Parser<'schema, 'record> {
     }
 
     fn find_property(&self, name: &str) -> ParserResult<PropertySlice<'schema, 'record>> {
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self.cache.borrow_mut();
 
         // We may have extracted this property already
         if let Some(p) = cache.slices.get(name) {
