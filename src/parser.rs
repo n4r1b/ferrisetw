@@ -12,7 +12,7 @@ use crate::native::time::{FileTime, SystemTime};
 use crate::property::PropertySlice;
 use crate::schema::Schema;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::convert::TryInto;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use windows::core::GUID;
@@ -87,7 +87,7 @@ type ParserResult<T> = Result<T, ParserError>;
 /// This is useful because computing their offset can be costly
 struct CachedSlices<'schema, 'record> {
     /// Keyed by borrowed property names from the schema; avoids a heap allocation per insertion.
-    slices: HashMap<&'schema str, PropertySlice<'schema, 'record>>,
+    slices: FxHashMap<&'schema str, PropertySlice<'schema, 'record>>,
     /// The user buffer index we've cached up to
     last_cached_offset: usize,
 }

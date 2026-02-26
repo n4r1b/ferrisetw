@@ -1,8 +1,8 @@
 //! A way to cache and retrieve Schemas
 
 use std::cell::UnsafeCell;
-use std::collections::HashMap;
 use std::sync::Arc;
+use rustc_hash::FxHashMap;
 
 use windows::core::GUID;
 
@@ -98,7 +98,7 @@ impl SchemaKey {
 /// unnecessary.
 #[derive(Default)]
 pub struct SchemaLocator {
-    schemas: UnsafeCell<HashMap<SchemaKey, Arc<Schema>>>,
+    schemas: UnsafeCell<FxHashMap<SchemaKey, Arc<Schema>>>,
 }
 
 // SAFETY: See the doc comment on `SchemaLocator` above.
@@ -115,7 +115,7 @@ impl std::fmt::Debug for SchemaLocator {
 impl SchemaLocator {
     pub(crate) fn new() -> Self {
         SchemaLocator {
-            schemas: UnsafeCell::new(HashMap::new()),
+            schemas: UnsafeCell::new(FxHashMap::default()),
         }
     }
 
