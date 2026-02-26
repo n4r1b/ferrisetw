@@ -1,7 +1,8 @@
 //! A way to cache and retrieve Schemas
 
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use windows::core::GUID;
 
@@ -84,23 +85,37 @@ impl SchemaKey {
 ///
 /// Credits: [KrabsETW::schema_locator](https://github.com/microsoft/krabsetw/blob/master/krabs/krabs/schema_locator.hpp).
 /// See also the code of `SchemaKey` for more info
+///
+/// # Thread Safety
+///
+/// `SchemaLocator` is `Sync` by assertion: the schema cache is only ever accessed from
+/// `trace_callback_thunk` (see `src/native/evntrace.rs`), which ETW's `ProcessTrace` guarantees
+/// is called sequentially on a single thread. A `SchemaLocator` is never shared between two
+/// trace sessions, so no two threads can race on the same instance.
+///
+/// `UnsafeCell` is used in place of `Mutex` because the lock was never contended — paying
+/// atomic CAS overhead on every event for a guarantee that ETW already provides externally is
+/// unnecessary.
 #[derive(Default)]
 pub struct SchemaLocator {
-    schemas: Mutex<HashMap<SchemaKey, Arc<Schema>>>,
+    schemas: UnsafeCell<HashMap<SchemaKey, Arc<Schema>>>,
 }
+
+// SAFETY: See the doc comment on `SchemaLocator` above.
+unsafe impl Sync for SchemaLocator {}
 
 impl std::fmt::Debug for SchemaLocator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SchemaLocator")
-            .field("len", &self.schemas.try_lock().map(|guard| guard.len()))
-            .finish()
+        // The schema cache is only safely accessible from the ETW callback thread,
+        // so we do not attempt to read it here.
+        f.debug_struct("SchemaLocator").finish_non_exhaustive()
     }
 }
 
 impl SchemaLocator {
     pub(crate) fn new() -> Self {
         SchemaLocator {
-            schemas: Mutex::new(HashMap::new()),
+            schemas: UnsafeCell::new(HashMap::new()),
         }
     }
 
@@ -120,7 +135,11 @@ impl SchemaLocator {
     pub fn event_schema(&self, event: &EventRecord) -> SchemaResult<Arc<Schema>> {
         let key = SchemaKey::new(event);
 
-        let mut schemas = self.schemas.lock().unwrap();
+        // SAFETY: `event_schema` is only called from `trace_callback_thunk` (see
+        // `src/native/evntrace.rs`). ETW's `ProcessTrace` guarantees all callbacks for a given
+        // session are delivered sequentially on a single thread, so no concurrent access to
+        // this HashMap can occur. See also the `unsafe impl Sync` on `SchemaLocator`.
+        let schemas = unsafe { &mut *self.schemas.get() };
         match schemas.get(&key) {
             Some(s) => Ok(Arc::clone(s)),
             None => {
