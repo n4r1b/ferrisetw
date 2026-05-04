@@ -37,6 +37,28 @@ const KERNEL_LOGGER_NAME: &str = "NT Kernel Logger";
 const SYSTEM_TRACE_CONTROL_GUID: GUID = GUID::from_u128(0x9e814aad_3204_11d2_9a82_006008a86939);
 const EVENT_TRACE_SYSTEM_LOGGER_MODE: u32 = 0x02000000;
 
+/// Process-wide flag selecting the classic singleton "NT Kernel
+/// Logger" session model on Win8+ instead of the default
+/// SystemTraceProvider (private logger) model. Set via
+/// [`KernelTrace::new_classic`]; affects subsequent `KernelTrace`
+/// construction.
+///
+/// Why this exists: certain kernel ETW event families — most notably
+/// the registry KCB rundown events (`KCBRundownEnd`, opcode 25 of
+/// `Registry_TypeGroup1`) — are only emitted by the kernel for
+/// classic NT Kernel Logger sessions. Modern multiplexed
+/// SystemTraceProvider sessions never receive them, even with
+/// `EVENT_TRACE_FLAG_REGISTRY` enabled. See Microsoft's PerfView
+/// issue #928 for the upstream confirmation:
+/// <https://github.com/microsoft/perfview/issues/928>.
+///
+/// Tradeoff: the classic NT Kernel Logger is a system-wide singleton
+/// (one per machine). If procmon, xperf, WPR, or another consumer
+/// already holds it, [`TraceBuilder::start`] will return an error
+/// (`ERROR_ALREADY_EXISTS`).
+pub static USE_CLASSIC_NT_KERNEL_LOGGER: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 /// Trace module errors
 #[derive(Debug)]
 pub enum TraceError {
@@ -174,6 +196,11 @@ impl TraceTrait for KernelTrace {
 
 impl RealTimeTraceTrait for KernelTrace {
     fn trace_guid() -> GUID {
+        if USE_CLASSIC_NT_KERNEL_LOGGER.load(std::sync::atomic::Ordering::Relaxed) {
+            // Classic NT Kernel Logger session: identifies itself by
+            // the well-known SystemTraceControlGuid.
+            return SYSTEM_TRACE_CONTROL_GUID;
+        }
         if version_helper::is_win8_or_greater() {
             GUID::new().unwrap_or(GUID::zeroed())
         } else {
@@ -308,6 +335,59 @@ impl KernelTrace {
         builder.named(format!("n4r1b-trace-{}", utils::rand_string()))
     }
 
+    /// Create a KernelTrace builder bound to the **classic singleton
+    /// "NT Kernel Logger" session** (instead of the default Win8+
+    /// SystemTraceProvider / private logger model).
+    ///
+    /// The classic model is required when consuming kernel ETW event
+    /// families that the kernel only emits to the singleton session
+    /// — most notably the registry KCB rundown events
+    /// (`KCBRundownEnd`, opcode 25 of `Registry_TypeGroup1`), which
+    /// the modern multiplexed model never delivers. See Microsoft's
+    /// PerfView issue #928 for the upstream confirmation:
+    /// <https://github.com/microsoft/perfview/issues/928>.
+    ///
+    /// **Singleton constraint**: only one classic NT Kernel Logger
+    /// session can exist per machine. If procmon, xperf, WPR, or
+    /// another consumer already holds it, [`TraceBuilder::start`]
+    /// will fail with `ERROR_ALREADY_EXISTS`. The caller should
+    /// detect this and either stop the conflicting session or fall
+    /// back to a different data source.
+    ///
+    /// Sets a process-wide flag ([`USE_CLASSIC_NT_KERNEL_LOGGER`])
+    /// that affects subsequent KernelTrace construction. Once set,
+    /// do not mix with [`KernelTrace::new`] in the same process.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use ferrisetw::provider::Provider;
+    /// use ferrisetw::provider::kernel_providers::REGISTRY_PROVIDER;
+    /// use ferrisetw::trace::KernelTrace;
+    ///
+    /// let provider = Provider::kernel(&REGISTRY_PROVIDER)
+    ///     .add_callback(|_record, _schema_locator| {
+    ///         // handle event
+    ///     })
+    ///     .build();
+    /// let trace = KernelTrace::new_classic()
+    ///     .enable(provider)
+    ///     .start_and_process()
+    ///     .expect("classic NT Kernel Logger session start");
+    /// // ... trace runs until dropped
+    /// ```
+    pub fn new_classic() -> TraceBuilder<KernelTrace> {
+        USE_CLASSIC_NT_KERNEL_LOGGER.store(true, std::sync::atomic::Ordering::Relaxed);
+        let builder = TraceBuilder {
+            name: String::new(),
+            etl_dump_file: None,
+            rt_callback_data: RealTimeCallbackData::new(),
+            properties: TraceProperties::default(),
+            stop_if_exist: true,
+            trace_kind: PhantomData,
+        };
+        builder.named(KERNEL_LOGGER_NAME.to_string())
+    }
+
     /// Stops the trace
     ///
     /// This consumes the trace, that can no longer be used afterwards.
@@ -404,6 +484,12 @@ impl private::PrivateRealTimeTraceTrait for KernelTrace {
     }
 
     fn augmented_file_mode() -> u32 {
+        if USE_CLASSIC_NT_KERNEL_LOGGER.load(std::sync::atomic::Ordering::Relaxed) {
+            // Classic NT Kernel Logger MUST NOT have
+            // EVENT_TRACE_SYSTEM_LOGGER_MODE — that bit selects the
+            // modern multiplexed SystemTraceProvider path.
+            return 0;
+        }
         if version_helper::is_win8_or_greater() {
             EVENT_TRACE_SYSTEM_LOGGER_MODE
         } else {
