@@ -55,7 +55,6 @@ impl Schema {
     ///     let provider_name = schema.provider_name();
     /// };
     /// ```
-    /// [TraceEventInfo]: crate::native::tdh::TraceEventInfo
     pub fn provider_name(&self) -> String {
         self.te_info.provider_name()
     }
@@ -72,7 +71,6 @@ impl Schema {
     ///     let task_name = schema.task_name();
     /// };
     /// ```
-    /// [TraceEventInfo]: crate::native::tdh::TraceEventInfo
     pub fn task_name(&self) -> String {
         self.te_info.task_name()
     }
@@ -89,7 +87,6 @@ impl Schema {
     ///     let opcode_name = schema.opcode_name();
     /// };
     /// ```
-    /// [TraceEventInfo]: crate::native::tdh::TraceEventInfo
     pub fn opcode_name(&self) -> String {
         self.te_info.opcode_name()
     }
