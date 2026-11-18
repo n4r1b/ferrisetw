@@ -37,3 +37,7 @@ This crate is documented at [docs.rs](https://docs.rs/crate/ferrisetw/latest).
 - [Shaddy](https://github.com/Shaddy) for, pretty much, teaching me all the Rust I know 😃
 - [n4r1b](https://github.com/n4r1b) for creating this great crate
 - [daladim](https://github.com/daladim) for adding even more features
+
+## License
+
+FerrisETW is available under either the [MIT License](LICENSE-MIT) or the [Apache License, Version 2.0](LICENSE-APACHE), at your option.
