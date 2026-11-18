@@ -41,7 +41,7 @@ const EVENT_TRACE_SYSTEM_LOGGER_MODE: u32 = 0x02000000;
 #[derive(Debug)]
 pub enum TraceError {
     InvalidTraceName,
-    /// Wrapper over an internal [EvntraceNativeError](crate::native::EvntraceNativeError)
+    /// Wrapper over an internal [EvntraceNativeError]
     EtwNativeError(crate::native::EvntraceNativeError),
 }
 
