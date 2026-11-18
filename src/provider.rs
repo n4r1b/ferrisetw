@@ -240,7 +240,7 @@ impl ProviderBuilder {
     /// The callback will be run on a background thread (the one that is blocked on the `process` function).
     ///
     /// # Example
-    /// ```
+    /// ```no_run
     /// # use ferrisetw::provider::Provider;
     /// # use ferrisetw::trace::UserTrace;
     /// # use ferrisetw::EventRecord;

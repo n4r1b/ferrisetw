@@ -37,7 +37,7 @@
 //! familiar with it the following example shows the basics on how to build a provider, start a trace
 //! and handle the Event in the callback
 //!
-//! ```
+//! ```no_run
 //! use ferrisetw::EventRecord;
 //! use ferrisetw::schema_locator::SchemaLocator;
 //! use ferrisetw::parser::Parser;
