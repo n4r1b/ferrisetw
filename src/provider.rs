@@ -83,8 +83,7 @@ impl std::fmt::Debug for ProviderBuilder {
 impl Provider {
     /// Create a Provider defined by its GUID
     ///
-    /// Many types [implement `Into<GUID>`](https://microsoft.github.io/windows-docs-rs/doc/windows/core/struct.GUID.html#trait-implementations)
-    /// and are acceptable as argument: `GUID` themselves, but also `&str`, etc.
+    /// Pass either a `GUID` or a `u128` value.
     pub fn by_guid<G: Into<GUID>>(guid: G) -> ProviderBuilder {
         ProviderBuilder {
             guid: guid.into(),
@@ -179,7 +178,8 @@ impl ProviderBuilder {
     /// # Example
     /// ```
     /// # use ferrisetw::provider::Provider;
-    /// let my_provider = Provider::by_guid("1EDEEE53-0AFE-4609-B846-D8C0B2075B1F").any(0xf0010000000003ff).build();
+    /// # use windows::core::GUID;
+    /// let my_provider = Provider::by_guid(GUID::from_u128(0x1edeee530afe4609b846d8c0b2075b1f)).any(0xf0010000000003ff).build();
     /// ```
     pub fn any(mut self, any: u64) -> Self {
         self.any = any;
@@ -192,7 +192,8 @@ impl ProviderBuilder {
     /// # Example
     /// ```
     /// # use ferrisetw::provider::Provider;
-    /// let my_provider = Provider::by_guid("1EDEEE53-0AFE-4609-B846-D8C0B2075B1F").all(0x4000000000000000).build();
+    /// # use windows::core::GUID;
+    /// let my_provider = Provider::by_guid(GUID::from_u128(0x1edeee530afe4609b846d8c0b2075b1f)).all(0x4000000000000000).build();
     /// ```
     pub fn all(mut self, all: u64) -> Self {
         self.all = all;
@@ -204,13 +205,14 @@ impl ProviderBuilder {
     /// # Example
     /// ```
     /// # use ferrisetw::provider::{Provider};
+    /// # use windows::core::GUID;
     /// // LogAlways (0x0)
     /// // Critical (0x1)
     /// // Error (0x2)
     /// // Warning (0x3)
     /// // Information (0x4)
     /// // Verbose (0x5)
-    /// let my_provider = Provider::by_guid("1EDEEE53-0AFE-4609-B846-D8C0B2075B1F").level(0x5).build();
+    /// let my_provider = Provider::by_guid(GUID::from_u128(0x1edeee530afe4609b846d8c0b2075b1f)).level(0x5).build();
     /// ```
     pub fn level(mut self, level: u8) -> Self {
         self.level = level;
@@ -223,7 +225,8 @@ impl ProviderBuilder {
     /// # Example
     /// ```
     /// # use ferrisetw::provider::{Provider, TraceFlags};
-    /// let my_provider = Provider::by_guid("1EDEEE53-0AFE-4609-B846-D8C0B2075B1F").trace_flags(TraceFlags::EVENT_ENABLE_PROPERTY_SID).build();
+    /// # use windows::core::GUID;
+    /// let my_provider = Provider::by_guid(GUID::from_u128(0x1edeee530afe4609b846d8c0b2075b1f)).trace_flags(TraceFlags::EVENT_ENABLE_PROPERTY_SID).build();
     /// ```
     pub fn trace_flags(mut self, trace_flags: TraceFlags) -> Self {
         self.trace_flags = trace_flags;
@@ -242,7 +245,8 @@ impl ProviderBuilder {
     /// # use ferrisetw::trace::UserTrace;
     /// # use ferrisetw::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
-    /// let provider = Provider::by_guid("1EDEEE53-0AFE-4609-B846-D8C0B2075B1F").add_callback(|record: &EventRecord, schema_locator: &SchemaLocator| {
+    /// # use windows::core::GUID;
+    /// let provider = Provider::by_guid(GUID::from_u128(0x1edeee530afe4609b846d8c0b2075b1f)).add_callback(|record: &EventRecord, schema_locator: &SchemaLocator| {
     ///     // Handle Event
     /// }).build();
     /// UserTrace::new().enable(provider).start().unwrap();
@@ -267,10 +271,11 @@ impl ProviderBuilder {
     /// # Example
     /// ```
     /// # use ferrisetw::provider::{EventFilter, Provider};
+    /// # use windows::core::GUID;
     /// let only_events_18_or_42 = EventFilter::ByEventIds(vec![18, 42]);
     /// let only_pid_1234 = EventFilter::ByPids(vec![1234]);
     ///
-    /// Provider::by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716")
+    /// Provider::by_guid(GUID::from_u128(0x22fb2cd60e7b422ba0c72fad1fd0e716))
     ///     .add_filter(only_events_18_or_42)
     ///     .add_filter(only_pid_1234)
     ///     .build();
@@ -288,7 +293,8 @@ impl ProviderBuilder {
     /// # use ferrisetw::EventRecord;
     /// # use ferrisetw::schema_locator::SchemaLocator;
     /// # let process_callback = |_event: &EventRecord, _locator: &SchemaLocator| {};
-    /// Provider::by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716") // Microsoft-Windows-Kernel-Process
+    /// # use windows::core::GUID;
+    /// Provider::by_guid(GUID::from_u128(0x22fb2cd60e7b422ba0c72fad1fd0e716)) // Microsoft-Windows-Kernel-Process
     ///   .add_callback(process_callback)
     ///   .build();
     /// ```

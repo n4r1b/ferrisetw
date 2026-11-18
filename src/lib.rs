@@ -43,6 +43,7 @@
 //! use ferrisetw::parser::Parser;
 //! use ferrisetw::provider::Provider;
 //! use ferrisetw::trace::{UserTrace, TraceTrait};
+//! use windows::core::GUID;
 //!
 //! fn process_callback(record: &EventRecord, schema_locator: &SchemaLocator) {
 //!     // Basic event scrutinizing can be done directly from the `EventRecord`
@@ -70,7 +71,7 @@
 //! fn main() {
 //!     // First we build a Provider
 //!     let process_provider = Provider
-//!         ::by_guid("22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716") // Microsoft-Windows-Kernel-Process
+//!         ::by_guid(GUID::from_u128(0x22fb2cd60e7b422ba0c72fad1fd0e716)) // Microsoft-Windows-Kernel-Process
 //!         .add_callback(process_callback)
 //!         // .add_callback(process_callback) // it is possible to add multiple callbacks for a given provider
 //!         // .add_filter(event_filters)      // it is possible to filter by event ID, process ID, etc.
