@@ -89,6 +89,17 @@ impl RealTimeCallbackData {
         for prov in &self.providers {
             if prov.guid() == record.provider_id() {
                 prov.on_event(record, &self.schema_locator);
+                return;
+            }
+        }
+
+        // for MOF providers, the provider_id GUID in the event record is the message GUID, not the provider GUID
+        if let Ok(schema) = self.schema_locator.event_schema(record) {
+            for prov in &self.providers {
+                if prov.guid() == schema.provider_guid() {
+                    prov.on_event(record, &self.schema_locator);
+                    return;
+                }
             }
         }
     }
