@@ -3,8 +3,11 @@
 //! This module makes sure the calls are safe memory-wise, but does not attempt to ensure they are called in the right order.<br/>
 //! Thus, you should prefer using `UserTrace`s, `KernelTrace`s and `TraceBuilder`s, that will ensure these API are correctly used.
 use std::collections::HashSet;
+use std::ffi;
 use std::ffi::c_void;
+use std::mem;
 use std::panic::AssertUnwindSafe;
+use std::ptr;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -18,6 +21,8 @@ use windows::Win32::Foundation::ERROR_SUCCESS;
 use windows::Win32::Foundation::FILETIME;
 use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, ERROR_WMI_INSTANCE_NOT_FOUND};
 use windows::Win32::System::Diagnostics::Etw;
+use windows::Win32::System::Diagnostics::Etw::TraceSetInformation;
+use windows::Win32::System::Diagnostics::Etw::TraceSystemTraceEnableFlagsInfo;
 use windows::Win32::System::Diagnostics::Etw::{
     EVENT_CONTROL_CODE_ENABLE_PROVIDER, EVENT_TRACE_CONTROL_QUERY,
 };
@@ -231,7 +236,7 @@ pub(crate) fn open_trace(
 }
 
 /// Attach a provider to a trace
-pub(crate) fn enable_provider(
+pub(crate) fn enable_user_provider(
     control_handle: ControlHandle,
     provider: &Provider,
 ) -> EvntraceNativeResult<()> {
@@ -260,6 +265,30 @@ pub(crate) fn enable_provider(
                     provider.all(),
                     0,
                     Some(parameters.as_ptr()),
+                )
+            }
+            .ok();
+
+            res.map_err(|err| {
+                EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(err.code().0))
+            })
+        }
+    }
+}
+
+pub(crate) fn enable_kernel_providers(
+    control_handle: ControlHandle,
+    gm: PERFINFO_GROUPMASK,
+) -> EvntraceNativeResult<()> {
+    match filter_invalid_control_handle(control_handle) {
+        None => Err(EvntraceNativeError::InvalidHandle),
+        Some(handle) => {
+            let res = unsafe {
+                TraceSetInformation(
+                    handle,
+                    TraceSystemTraceEnableFlagsInfo,
+                    ptr::addr_of!(gm) as *const ffi::c_void,
+                    mem::size_of_val(&gm) as u32,
                 )
             }
             .ok();

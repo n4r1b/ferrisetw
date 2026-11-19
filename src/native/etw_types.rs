@@ -464,3 +464,35 @@ impl From<Etw::DECODING_SOURCE> for DecodingSource {
 // Safe cast (EVENT_HEADER_FLAG_32_BIT_HEADER = 32)
 #[doc(hidden)]
 pub const EVENT_HEADER_FLAG_32_BIT_HEADER: u16 = Etw::EVENT_HEADER_FLAG_32_BIT_HEADER as u16;
+
+pub const PERF_MASK_INDEX: u32 = 0xe0000000;
+pub const PERF_MASK_INDEX_SHIFT: u32 = 29;
+pub const PERF_MASK_GROUP: u32 = !PERF_MASK_INDEX;
+pub const PERF_NUM_MASKS: u32 = 8;
+
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct PERFINFO_GROUPMASK {
+    pub masks: [u32; PERF_NUM_MASKS as usize],
+}
+
+impl PERFINFO_GROUPMASK {
+    pub fn new() -> Self {
+        Self {
+            masks: [0u32; PERF_NUM_MASKS as usize],
+        }
+    }
+    pub fn get_mask_index(gm: u32) -> u32 {
+        (gm & PERF_MASK_INDEX) >> PERF_MASK_INDEX_SHIFT
+    }
+
+    pub fn get_mask_group(gm: u32) -> u32 {
+        gm & PERF_MASK_GROUP
+    }
+
+    pub fn or_assign_with_groupmask(&mut self, gm: u32) {
+        self.masks[PERFINFO_GROUPMASK::get_mask_index(gm) as usize] |=
+            PERFINFO_GROUPMASK::get_mask_group(gm);
+    }
+}
