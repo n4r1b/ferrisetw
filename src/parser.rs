@@ -543,9 +543,9 @@ impl private::TryParse<GUID> for Parser<'_, '_> {
                 }
 
                 Ok(GUID {
-                    data1: u32::from_ne_bytes(prop_slice.buffer[0..4].try_into()?),
-                    data2: u16::from_ne_bytes(prop_slice.buffer[4..6].try_into()?),
-                    data3: u16::from_be_bytes(prop_slice.buffer[6..8].try_into()?),
+                    data1: u32::from_le_bytes(prop_slice.buffer[0..4].try_into()?),
+                    data2: u16::from_le_bytes(prop_slice.buffer[4..6].try_into()?),
+                    data3: u16::from_le_bytes(prop_slice.buffer[6..8].try_into()?),
                     data4: prop_slice.buffer[8..].try_into()?,
                 })
             }
@@ -705,3 +705,72 @@ impl private::TryParse<Vec<u8>> for Parser<'_, '_> {
 
 // TODO: Implement SocketAddress
 // TODO: Study if we can use primitive types for HexInt64, HexInt32 and Pointer
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::Win32::System::Diagnostics::Etw::EVENT_RECORD;
+
+    fn with_guid_parser(data: &[u8], in_type: TdhInType, check: impl FnOnce(&Parser<'_, '_>)) {
+        let mut raw_record = EVENT_RECORD::default();
+        raw_record.UserData = data.as_ptr() as *const _ as *mut _;
+        raw_record.UserDataLength = data.len() as u16;
+
+        let record = EventRecord(raw_record);
+        let property = Property {
+            name: "Guid".to_owned(),
+            flags: Default::default(),
+            info: PropertyInfo::Value {
+                in_type,
+                out_type: TdhOutType::OutTypeGuid,
+                length: PropertyLength::Length(data.len() as u16),
+            },
+        };
+        let parser = Parser {
+            properties: std::slice::from_ref(&property),
+            record: &record,
+            cache: Mutex::new(CachedSlices::default()),
+        };
+
+        check(&parser);
+    }
+
+    #[test]
+    fn guid_property_uses_windows_little_endian_layout() {
+        let data = [
+            0x40, 0xfc, 0x29, 0x6b, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1d, 0x00, 0xdd, 0x01, 0x06,
+            0x62, 0xda,
+        ];
+
+        with_guid_parser(&data, TdhInType::InTypeGuid, |parser| {
+            assert_eq!(
+                parser.try_parse::<GUID>("Guid").unwrap(),
+                GUID::from_u128(0x6b29_fc40_ca47_1067_b31d_00dd010662da),
+            );
+        });
+    }
+
+    #[test]
+    fn guid_property_rejects_non_guid_type() {
+        let data = [0; 16];
+
+        with_guid_parser(&data, TdhInType::InTypeUInt32, |parser| {
+            assert!(matches!(
+                parser.try_parse::<GUID>("Guid"),
+                Err(ParserError::InvalidType)
+            ));
+        });
+    }
+
+    #[test]
+    fn guid_property_rejects_non_sixteen_byte_payload() {
+        for data in [&[0; 15][..], &[0; 17][..]] {
+            with_guid_parser(data, TdhInType::InTypeGuid, |parser| {
+                assert!(matches!(
+                    parser.try_parse::<GUID>("Guid"),
+                    Err(ParserError::LengthMismatch)
+                ));
+            });
+        }
+    }
+}
