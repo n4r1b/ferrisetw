@@ -11,10 +11,10 @@ use crate::native::tdh_types::{
 use crate::native::time::{FileTime, SystemTime};
 use crate::property::PropertySlice;
 use crate::schema::Schema;
-use std::collections::HashMap;
+use std::cell::RefCell;
+use rustc_hash::FxHashMap;
 use std::convert::TryInto;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::sync::Mutex;
 use windows::core::GUID;
 
 /// Parser module errors
@@ -86,7 +86,8 @@ type ParserResult<T> = Result<T, ParserError>;
 ///
 /// This is useful because computing their offset can be costly
 struct CachedSlices<'schema, 'record> {
-    slices: HashMap<String, PropertySlice<'schema, 'record>>,
+    /// Keyed by borrowed property names from the schema; avoids a heap allocation per insertion.
+    slices: FxHashMap<&'schema str, PropertySlice<'schema, 'record>>,
     /// The user buffer index we've cached up to
     last_cached_offset: usize,
 }
@@ -116,11 +117,14 @@ struct CachedSlices<'schema, 'record> {
 ///     }
 /// };
 /// ```
+// `Parser` is intentionally `!Sync` via `RefCell`. ETW's `ProcessTrace` delivers events
+// sequentially on a single thread, so a `Parser` is always created and consumed within a single
+// callback invocation and is never shared across threads.
 #[allow(dead_code)]
 pub struct Parser<'schema, 'record> {
     properties: &'schema [Property],
     record: &'record EventRecord,
-    cache: Mutex<CachedSlices<'schema, 'record>>,
+    cache: RefCell<CachedSlices<'schema, 'record>>,
 }
 
 impl<'schema, 'record> Parser<'schema, 'record> {
@@ -143,7 +147,7 @@ impl<'schema, 'record> Parser<'schema, 'record> {
         Parser {
             record: event_record,
             properties: schema.properties(),
-            cache: Mutex::new(CachedSlices::default()),
+            cache: RefCell::new(CachedSlices::default()),
         }
     }
 
@@ -171,9 +175,9 @@ impl<'schema, 'record> Parser<'schema, 'record> {
                 let prop_len = match length {
                     PropertyLength::Length(l) => l,
                     PropertyLength::Index(_) => {
-                        // TODO optimize to cache the lookup, the problem is here this is called under an
-                        // exclusive mutex, so attempting to extract and cache a related property will
-                        // deadlock.
+                        // TODO: optimize to cache the lookup; the problem is that this is called
+                        // whilst the `RefCell` borrow on `CachedSlices` is already active, so
+                        // re-entering `find_property` to cache the related property would panic.
                         return Ok(tdh::property_size(self.record, &property.name)? as usize);
                     }
                 };
@@ -239,9 +243,9 @@ impl<'schema, 'record> Parser<'schema, 'record> {
                 let prop_count = match count {
                     PropertyCount::Count(c) => c as usize,
                     PropertyCount::Index(_) => {
-                        // TODO optimize to cache the lookup, the problem is here this is called under an
-                        // exclusive mutex, so attempting to extract and cache a related property will
-                        // deadlock.
+                        // TODO: optimize to cache the lookup; the problem is that this is called
+                        // whilst the `RefCell` borrow on `CachedSlices` is already active, so
+                        // re-entering `find_property` to cache the related property would panic.
                         return Ok(tdh::property_size(self.record, &property.name)? as usize);
                     }
                 };
@@ -256,7 +260,7 @@ impl<'schema, 'record> Parser<'schema, 'record> {
     }
 
     fn find_property(&self, name: &str) -> ParserResult<PropertySlice<'schema, 'record>> {
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self.cache.borrow_mut();
 
         // We may have extracted this property already
         if let Some(p) = cache.slices.get(name) {
@@ -295,9 +299,9 @@ impl<'schema, 'record> Parser<'schema, 'record> {
                 property,
                 buffer: property_buffer,
             };
-            cache
-                .slices
-                .insert(String::clone(&property.name), prop_slice);
+            // Borrow the name from the schema slice (lifetime `'schema`) to avoid a heap
+            // allocation per property per event.
+            cache.slices.insert(property.name.as_str(), prop_slice);
             cache.last_cached_offset += prop_size;
 
             if property.name == name {
