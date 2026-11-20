@@ -10,7 +10,6 @@ use ferrisetw::trace::KernelTrace;
 use ferrisetw::EventRecord;
 
 use windows::core::HSTRING;
-use windows::Win32::Foundation::HANDLE;
 use windows::Win32::System::LibraryLoader::{LoadLibraryExW, LOAD_LIBRARY_FLAGS};
 
 mod utils;

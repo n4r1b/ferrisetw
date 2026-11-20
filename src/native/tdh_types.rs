@@ -69,6 +69,7 @@ pub enum PropertyInfo {
         /// TDH In type of the property
         in_type: TdhInType,
         /// TDH Out type of the property
+        #[allow(dead_code)] // Used by the optional `serde` serialization implementation.
         out_type: TdhOutType,
         /// The length of the property
         length: PropertyLength,
@@ -93,6 +94,7 @@ pub struct Property {
     /// Name of the Property
     pub name: String,
     /// Represent the [PropertyFlags]
+    #[allow(dead_code)] // Retained from TDH metadata for schema consumers.
     pub flags: PropertyFlags,
     /// Information about the property.
     pub info: PropertyInfo,
