@@ -20,6 +20,18 @@ pub enum VersionHelperError {
     IoError(std::io::Error),
 }
 
+impl std::fmt::Display for VersionHelperError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::IoError(error) => {
+                write!(f, "I/O error while checking the Windows version: {}", error)
+            }
+        }
+    }
+}
+
+impl std::error::Error for VersionHelperError {}
+
 pub(crate) type VersionHelperResult<T> = Result<T, VersionHelperError>;
 
 type OsVersionInfo = OSVERSIONINFOEXA;
@@ -71,7 +83,7 @@ pub fn is_win8_or_greater() -> bool {
     match verify_system_version(6, 2, 0) {
         Ok(res) => res,
         Err(err) => {
-            log::warn!("Unable ro verify system version: {:?}", err);
+            log::warn!("Unable to verify system version: {}", err);
             true
         }
     }
@@ -86,7 +98,7 @@ mod test {
     fn test_verify_system_version() {
         match verify_system_version(5, 1, 0) {
             Ok(res) => assert!(res),
-            Err(err) => panic!("VersionHelper error: {:?}", err),
+            Err(err) => panic!("VersionHelper error: {}", err),
         };
     }
 }

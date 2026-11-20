@@ -12,8 +12,15 @@ use utils::{Status, TestKind};
 
 const EVENT1_COUNT: u32 = 1;
 const EVENT2_COUNT: u32 = 5;
+const EVENT3_COUNT: u32 = 1;
 const TEST_STRING_VALUE: &'static str = "TestString";
 const PROVIDER_NAME: &'static str = "ferrisETW.TraceLoggingTest";
+const TEST_GUID: tlg::Guid = tlg::Guid::from_fields(
+    0x6b29_fc40,
+    0xca47,
+    0x1067,
+    [0xb3, 0x1d, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda],
+);
 
 tlg::define_provider!(FERRIS_PROVIDER, "ferrisETW.TraceLoggingTest");
 
@@ -53,6 +60,16 @@ fn generate_tlg_events() {
             u32("Integer", &i),
         );
     }
+
+    for _i in 0..EVENT3_COUNT {
+        tlg::write_event!(
+            FERRIS_PROVIDER,
+            "Event3",
+            level(Informational),
+            keyword(0x6),
+            guid("Guid", &TEST_GUID),
+        );
+    }
 }
 
 fn tlg_multiple_events(provider_guid: GUID) {
@@ -61,6 +78,7 @@ fn tlg_multiple_events(provider_guid: GUID) {
 
     let mut event1_count = 0;
     let mut event2_count = 0;
+    let mut event3_count = 0;
 
     let tlg_provider = Provider::by_guid(provider_guid)
         .add_callback(
@@ -101,9 +119,22 @@ fn tlg_multiple_events(provider_guid: GUID) {
                     assert_eq!(data.unwrap(), event2_count);
 
                     event2_count = event2_count + 1;
+                } else if record.event_name() == "Event3" {
+                    let data = parser.try_parse::<GUID>("Guid");
+
+                    assert!(data.is_ok());
+                    assert_eq!(
+                        data.unwrap(),
+                        GUID::from_u128(0x6b29_fc40_ca47_1067_b31d_00dd010662da),
+                    );
+
+                    event3_count = event3_count + 1;
                 }
 
-                if event1_count == EVENT1_COUNT && event2_count == EVENT2_COUNT {
+                if event1_count == EVENT1_COUNT
+                    && event2_count == EVENT2_COUNT
+                    && event3_count == EVENT3_COUNT
+                {
                     notifier.notify_success();
                 }
             },
