@@ -433,6 +433,8 @@ impl PropSerable for PropertyInfo {
                         TdhInType::InTypeFileTime => Some(PropSer(PropHandler::FileTime)),
                         TdhInType::InTypeSystemTime => Some(PropSer(PropHandler::SystemTime)),
                         TdhInType::InTypeSid => Some(PropSer(PropHandler::String)),
+                        TdhInType::InTypeWbemSid => Some(PropSer(PropHandler::String)),
+                        TdhInType::InTypeCountedAnsiString => Some(PropSer(PropHandler::String)),
                         TdhInType::InTypeHexInt32 => Some(PropSer(PropHandler::Int32)),
                         TdhInType::InTypeHexInt64 => Some(PropSer(PropHandler::Int64)),
                         TdhInType::InTypeCountedString => None, // TODO
