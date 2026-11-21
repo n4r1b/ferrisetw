@@ -60,6 +60,55 @@ pub(crate) type EvntraceNativeResult<T> = Result<T, EvntraceNativeError>;
 ///       Maybe also setting the BufferCallback in EVENT_TRACE_LOGFILEW may help us.
 ///       That's <https://github.com/n4r1b/ferrisetw/issues/62>
 static UNIQUE_VALID_CONTEXTS: UniqueValidContexts = UniqueValidContexts::new();
+
+#[cfg(test)]
+mod startup_tests {
+    use super::*;
+    use crate::trace::callback_data::RealTimeCallbackData;
+    use widestring::U16CString;
+
+    #[test]
+    fn failed_open_trace_removes_callback_context() {
+        let callback = Box::new(Arc::new(
+            CallbackData::RealTime(RealTimeCallbackData::new()),
+        ));
+        let context = callback.as_ref() as *const Arc<CallbackData> as *const c_void;
+        let missing = U16CString::from_str(format!(
+            "ferrisetw-missing-{}-{}.etl",
+            std::process::id(),
+            crate::utils::rand_string()
+        ))
+        .unwrap();
+        let result = open_trace(SubscriptionSource::FromFile(missing), &callback);
+        let still_registered = UNIQUE_VALID_CONTEXTS.is_valid(context);
+        if still_registered {
+            UNIQUE_VALID_CONTEXTS.remove(context);
+        }
+        assert!(matches!(result, Err(EvntraceNativeError::IoError(_))));
+        assert!(
+            !still_registered,
+            "failed OpenTraceW left its context registered"
+        );
+    }
+
+    #[test]
+    fn duplicate_open_does_not_remove_existing_context() {
+        let callback = Box::new(Arc::new(
+            CallbackData::RealTime(RealTimeCallbackData::new()),
+        ));
+        let context = callback.as_ref() as *const Arc<CallbackData> as *const c_void;
+        assert!(UNIQUE_VALID_CONTEXTS.insert(context).is_ok());
+        let missing = U16CString::from_str("ferrisetw-nonexistent.etl").unwrap();
+        let result = open_trace(SubscriptionSource::FromFile(missing), &callback);
+        let still_registered = UNIQUE_VALID_CONTEXTS.is_valid(context);
+        UNIQUE_VALID_CONTEXTS.remove(context);
+        assert!(matches!(result, Err(EvntraceNativeError::AlreadyExist)));
+        assert!(
+            still_registered,
+            "duplicate open removed the existing context"
+        );
+    }
+}
 struct UniqueValidContexts(Lazy<Mutex<HashSet<u64>>>);
 enum ContextError {
     AlreadyExist,
@@ -206,7 +255,8 @@ pub(crate) fn open_trace(
     let mut log_file =
         EventTraceLogfile::create(callback_data, subscription_source, trace_callback_thunk);
 
-    if let Err(ContextError::AlreadyExist) = UNIQUE_VALID_CONTEXTS.insert(log_file.context_ptr()) {
+    let context = log_file.context_ptr();
+    if let Err(ContextError::AlreadyExist) = UNIQUE_VALID_CONTEXTS.insert(context) {
         // That's probably possible to get multiple handles to the same trace, by opening them multiple times.
         // But that's left as a future TODO. Making things right and safe is difficult enough with a single opening of the trace already.
         return Err(EvntraceNativeError::AlreadyExist);
@@ -222,7 +272,9 @@ pub(crate) fn open_trace(
     };
 
     if filter_invalid_trace_handles(trace_handle).is_none() {
-        Err(EvntraceNativeError::IoError(std::io::Error::last_os_error()))
+        let error = std::io::Error::last_os_error();
+        UNIQUE_VALID_CONTEXTS.remove(context);
+        Err(EvntraceNativeError::IoError(error))
     } else {
         Ok(trace_handle)
     }
