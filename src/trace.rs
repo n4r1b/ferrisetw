@@ -277,7 +277,7 @@ impl UserTrace {
         TraceBuilder {
             name,
             etl_dump_file: None,
-            rt_callback_data: RealTimeCallbackData::new(),
+            rt_callback_data: RealTimeCallbackData::new(private::TraceKind::User),
             properties: TraceProperties::default(),
             stop_if_exist: true,
             trace_kind: PhantomData,
@@ -299,7 +299,7 @@ impl KernelTrace {
         let builder = TraceBuilder {
             name: String::new(),
             etl_dump_file: None,
-            rt_callback_data: RealTimeCallbackData::new(),
+            rt_callback_data: RealTimeCallbackData::new(private::TraceKind::Kernel),
             properties: TraceProperties::default(),
             stop_if_exist: true,
             trace_kind: PhantomData,

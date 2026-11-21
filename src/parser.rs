@@ -521,6 +521,38 @@ impl private::TryParse<String> for Parser<'_, '_> {
                     )?;
                     Ok(string.to_string())
                 }
+                TdhInType::InTypeReversedCountedAnsiString => unimplemented!(),
+                TdhInType::InTypeReversedCountedString => {
+                    if prop_slice.buffer.len() < 2 {
+                        return Err(ParserError::PropertyError(
+                            "counted string does not have length".into(),
+                        ));
+                    }
+                    let str_length = u16::from_be_bytes(
+                        prop_slice.buffer[..std::mem::size_of::<u16>()]
+                            .try_into()
+                            .unwrap(),
+                    ) as usize;
+                    if prop_slice.buffer[std::mem::size_of::<u16>()..].len() < str_length {
+                        return Err(ParserError::PropertyError(
+                            "invalid counted string length".into(),
+                        ));
+                    }
+
+                    let mut aligned_buffer = Vec::with_capacity(prop_slice.buffer.len() / 2 - 2);
+                    for chunk in prop_slice.buffer.chunks_exact(2).skip(1) {
+                        let part = u16::from_ne_bytes([chunk[0], chunk[1]]);
+                        aligned_buffer.push(part);
+                    }
+                    let mut wide = aligned_buffer.as_slice();
+
+                    match wide.last() {
+                        // remove the null terminator from the slice
+                        Some(c) if c == &0 => wide = &wide[..wide.len() - 1],
+                        _ => (),
+                    }
+                    Ok(widestring::decode_utf16_lossy(wide.iter().copied()).collect::<String>())
+                }
                 _ => Err(ParserError::InvalidType),
             },
             _ => Err(ParserError::InvalidType),
