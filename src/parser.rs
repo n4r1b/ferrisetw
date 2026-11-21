@@ -493,10 +493,21 @@ impl private::TryParse<String> for Parser<'_, '_> {
                     let string = std::str::from_utf8(prop_slice.buffer)?;
                     Ok(string.trim_matches(char::default()).to_string())
                 }
-                TdhInType::InTypeSid => {
-                    let string =
-                        sddl::convert_sid_to_string(prop_slice.buffer.as_ptr() as *const _)?;
-                    Ok(string)
+                TdhInType::InTypeSid => parse_sid(prop_slice.buffer),
+                TdhInType::InTypeWbemSid => {
+                    let flags = self.record.event_flags();
+                    let pointer_size = if flags & 0x20 != 0 {
+                        4
+                    } else if flags & 0x40 != 0 {
+                        8
+                    } else {
+                        std::mem::size_of::<usize>()
+                    };
+                    let sid = prop_slice
+                        .buffer
+                        .get(pointer_size * 2..)
+                        .ok_or(ParserError::LengthMismatch)?;
+                    parse_sid(sid)
                 }
                 TdhInType::InTypeCountedString => unimplemented!(),
                 TdhInType::InTypeCountedAnsiString => {
@@ -526,6 +537,20 @@ impl private::TryParse<String> for Parser<'_, '_> {
             _ => Err(ParserError::InvalidType),
         }
     }
+}
+
+fn parse_sid(data: &[u8]) -> ParserResult<String> {
+    let header = data.get(..8).ok_or(ParserError::LengthMismatch)?;
+    let length = 8 + usize::from(header[1]) * 4;
+    let sid = data.get(..length).ok_or(ParserError::LengthMismatch)?;
+    // The event buffer can be unaligned; SID sub-authorities require u32 alignment.
+    let mut aligned = vec![0u32; (length + 3) / 4];
+    for (index, chunk) in sid.chunks(4).enumerate() {
+        let mut bytes = [0u8; 4];
+        bytes[..chunk.len()].copy_from_slice(chunk);
+        aligned[index] = u32::from_ne_bytes(bytes);
+    }
+    Ok(sddl::convert_sid_to_string(aligned.as_ptr() as *const _)?)
 }
 
 impl private::TryParse<GUID> for Parser<'_, '_> {
@@ -710,6 +735,79 @@ impl private::TryParse<Vec<u8>> for Parser<'_, '_> {
 mod tests {
     use super::*;
     use windows::Win32::System::Diagnostics::Etw::EVENT_RECORD;
+
+    fn parse_sid_property(data: &[u8], in_type: TdhInType, flags: u16) -> ParserResult<String> {
+        let mut raw_record = EVENT_RECORD::default();
+        raw_record.UserData = data.as_ptr() as *const _ as *mut _;
+        raw_record.UserDataLength = data.len() as u16;
+        raw_record.EventHeader.Flags = flags;
+        let record = EventRecord(raw_record);
+        let property = Property {
+            name: "Sid".to_owned(),
+            flags: Default::default(),
+            info: PropertyInfo::Value {
+                in_type,
+                out_type: TdhOutType::default(),
+                length: PropertyLength::Length(data.len() as u16),
+            },
+        };
+        let parser = Parser {
+            properties: std::slice::from_ref(&property),
+            record: &record,
+            cache: Mutex::new(CachedSlices::default()),
+        };
+        parser.try_parse::<String>("Sid")
+    }
+
+    #[test]
+    fn wbem_sid_uses_event_pointer_width() {
+        let sid = [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0];
+        for (flags, prefix) in [(0x20, 8), (0x40, 16)] {
+            let mut data = vec![0; prefix];
+            data.extend_from_slice(&sid);
+            assert_eq!(
+                parse_sid_property(&data, TdhInType::InTypeWbemSid, flags).unwrap(),
+                "S-1-5-32-544"
+            );
+        }
+    }
+
+    #[test]
+    fn wbem_sid_rejects_truncated_sid() {
+        let sid = [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0];
+        for (flags, prefix) in [(0x20, 8), (0x40, 16)] {
+            for len in 0..sid.len() {
+                let mut data = vec![0; prefix];
+                data.extend_from_slice(&sid[..len]);
+                assert!(parse_sid_property(&data, TdhInType::InTypeWbemSid, flags).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn wbem_sid_rejects_truncated_prefix() {
+        for (flags, prefix) in [(0x20, 8), (0x40, 16)] {
+            for len in 1..prefix {
+                let data = vec![0; len];
+                assert!(matches!(
+                    parse_sid_property(&data, TdhInType::InTypeWbemSid, flags),
+                    Err(ParserError::LengthMismatch)
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn sid_rejects_truncated_subauthorities() {
+        let sid = [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0];
+        for len in 1..sid.len() {
+            assert!(parse_sid_property(&sid[..len], TdhInType::InTypeSid, 0).is_err());
+        }
+        assert_eq!(
+            parse_sid_property(&sid, TdhInType::InTypeSid, 0).unwrap(),
+            "S-1-5-32-544"
+        );
+    }
 
     fn with_guid_parser(data: &[u8], in_type: TdhInType, check: impl FnOnce(&Parser<'_, '_>)) {
         let mut raw_record = EVENT_RECORD::default();
