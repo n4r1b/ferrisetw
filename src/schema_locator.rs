@@ -1,7 +1,7 @@
 //! A way to cache and retrieve Schemas
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use windows::core::GUID;
 
@@ -120,7 +120,7 @@ impl SchemaLocator {
     pub fn event_schema(&self, event: &EventRecord) -> SchemaResult<Arc<Schema>> {
         let key = SchemaKey::new(event);
 
-        let mut schemas = self.schemas.lock().unwrap();
+        let mut schemas = self.schemas.lock().unwrap_or_else(PoisonError::into_inner);
         match schemas.get(&key) {
             Some(s) => Ok(Arc::clone(s)),
             None => {
@@ -130,5 +130,58 @@ impl SchemaLocator {
                 Ok(new_schema)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::panic::AssertUnwindSafe;
+    use windows::Win32::System::Diagnostics::Etw::{EVENT_DESCRIPTOR, EVENT_HEADER, EVENT_RECORD};
+
+    #[test]
+    fn event_schema_recovers_poisoned_cache_lock() {
+        let locator = SchemaLocator::new();
+        let _ = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            let _guard = locator.schemas.lock().unwrap();
+            panic!("poison the schema cache lock");
+        }));
+        assert!(locator.schemas.is_poisoned());
+
+        // TDH has no schema for an empty record, so the lookup fails, but it must not panic.
+        let record = EventRecord(EVENT_RECORD::default());
+        assert!(locator.event_schema(&record).is_err());
+    }
+
+    #[test]
+    fn cached_schema_survives_poisoned_cache_lock() {
+        // ProcessStart (event 1, version 0) from the Microsoft-Windows-Kernel-Process manifest,
+        // which TDH resolves from the installed manifest without an ETW session.
+        let record = EventRecord(EVENT_RECORD {
+            EventHeader: EVENT_HEADER {
+                ProviderId: GUID::from_u128(0x22fb2cd6_0e7b_422b_a0c7_2fad1fd0e716),
+                EventDescriptor: EVENT_DESCRIPTOR {
+                    Id: 1,
+                    Version: 0,
+                    Opcode: 1,
+                    Level: 4,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let locator = SchemaLocator::new();
+        let cached = locator.event_schema(&record).unwrap();
+
+        let _ = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            let _guard = locator.schemas.lock().unwrap();
+            panic!("poison the schema cache lock");
+        }));
+        assert!(locator.schemas.is_poisoned());
+
+        let after = locator.event_schema(&record).unwrap();
+        assert!(Arc::ptr_eq(&cached, &after));
     }
 }

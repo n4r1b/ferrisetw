@@ -14,7 +14,7 @@ use crate::schema::Schema;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 use windows::core::GUID;
 
 /// Parser module errors
@@ -256,7 +256,11 @@ impl<'schema, 'record> Parser<'schema, 'record> {
     }
 
     fn find_property(&self, name: &str) -> ParserResult<PropertySlice<'schema, 'record>> {
-        let mut cache = self.cache.lock().unwrap();
+        // A poisoned cache is safe to reuse: `slices` and `last_cached_offset` only change
+        // together below, after every fallible step for that property, and nothing between the
+        // two updates can panic. A panic while the lock is held therefore leaves both fields
+        // describing the same prefix of the user buffer.
+        let mut cache = self.cache.lock().unwrap_or_else(PoisonError::into_inner);
 
         // We may have extracted this property already
         if let Some(p) = cache.slices.get(name) {
@@ -976,5 +980,80 @@ mod tests {
         let mut data = counted_utf16("ab");
         data.extend("cd".encode_utf16().flat_map(|u| u.to_le_bytes()));
         assert_eq!(parse_counted_string_property(&data).unwrap(), "ab");
+    }
+
+    #[test]
+    fn property_cache_recovers_poisoned_lock() {
+        let data = 7u32.to_le_bytes();
+        let record = EventRecord(EVENT_RECORD {
+            UserData: data.as_ptr() as *mut _,
+            UserDataLength: data.len() as u16,
+            ..Default::default()
+        });
+        let property = Property {
+            name: "Value".to_owned(),
+            flags: Default::default(),
+            info: PropertyInfo::Value {
+                in_type: TdhInType::InTypeUInt32,
+                out_type: TdhOutType::default(),
+                length: PropertyLength::Length(data.len() as u16),
+            },
+        };
+        let parser = Parser {
+            properties: std::slice::from_ref(&property),
+            record: &record,
+            cache: Mutex::new(CachedSlices::default()),
+        };
+
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = parser.cache.lock().unwrap();
+            panic!("poison the property cache lock");
+        }));
+        assert!(parser.cache.is_poisoned());
+
+        assert_eq!(parser.try_parse::<u32>("Value").unwrap(), 7);
+    }
+
+    #[test]
+    fn populated_property_cache_recovers_poisoned_lock() {
+        let data: Vec<u8> = [11u32, 22, 33]
+            .iter()
+            .flat_map(|v| v.to_le_bytes())
+            .collect();
+        let record = EventRecord(EVENT_RECORD {
+            UserData: data.as_ptr() as *mut _,
+            UserDataLength: data.len() as u16,
+            ..Default::default()
+        });
+        let properties: Vec<Property> = ["First", "Second", "Third"]
+            .iter()
+            .map(|name| Property {
+                name: (*name).to_owned(),
+                flags: Default::default(),
+                info: PropertyInfo::Value {
+                    in_type: TdhInType::InTypeUInt32,
+                    out_type: TdhOutType::default(),
+                    length: PropertyLength::Length(4),
+                },
+            })
+            .collect();
+        let parser = Parser {
+            properties: &properties,
+            record: &record,
+            cache: Mutex::new(CachedSlices::default()),
+        };
+
+        assert_eq!(parser.try_parse::<u32>("First").unwrap(), 11);
+
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = parser.cache.lock().unwrap();
+            panic!("poison the property cache lock");
+        }));
+        assert!(parser.cache.is_poisoned());
+
+        // "Third" is parsed from the recovered offset, past the uncached "Second".
+        assert_eq!(parser.try_parse::<u32>("Third").unwrap(), 33);
+        assert_eq!(parser.try_parse::<u32>("Second").unwrap(), 22);
+        assert_eq!(parser.try_parse::<u32>("First").unwrap(), 11);
     }
 }

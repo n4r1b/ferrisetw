@@ -5,7 +5,7 @@ use crate::native::etw_types::event_record::EventRecord;
 use crate::native::pla;
 use crate::schema_locator::SchemaLocator;
 
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, PoisonError, RwLock};
 use windows::core::GUID;
 
 pub(crate) mod event_filter;
@@ -74,7 +74,14 @@ impl std::fmt::Debug for ProviderBuilder {
             .field("trace_flags", &self.trace_flags)
             .field("kernel_flags", &self.kernel_flags)
             .field("filters", &self.filters)
-            .field("n_callbacks", &self.callbacks.read().unwrap().len())
+            .field(
+                "n_callbacks",
+                &self
+                    .callbacks
+                    .read()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .len(),
+            )
             .finish()
     }
 }
@@ -166,7 +173,14 @@ impl std::fmt::Debug for Provider {
             .field("trace_flags", &self.trace_flags)
             .field("kernel_flags", &self.kernel_flags)
             .field("filters", &self.filters)
-            .field("callbacks", &self.callbacks.read().unwrap().len())
+            .field(
+                "callbacks",
+                &self
+                    .callbacks
+                    .read()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .len(),
+            )
             .finish()
     }
 }
@@ -310,5 +324,32 @@ impl ProviderBuilder {
             filters: self.filters,
             callbacks: self.callbacks,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::panic::AssertUnwindSafe;
+
+    fn poison(callbacks: &RwLock<Vec<crate::EtwCallback>>) {
+        let _ = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            let _guard = callbacks.write().unwrap();
+            panic!("poison the callbacks lock");
+        }));
+        assert!(callbacks.is_poisoned());
+    }
+
+    #[test]
+    fn debug_reports_callbacks_of_poisoned_lock() {
+        let builder = Provider::by_guid(GUID::zeroed())
+            .add_callback(|_, _| {})
+            .add_callback(|_, _| {});
+        poison(&builder.callbacks);
+        assert!(format!("{:?}", builder).contains("n_callbacks: 2"));
+
+        let provider = builder.build();
+        assert!(provider.callbacks.is_poisoned());
+        assert!(format!("{:?}", provider).contains("callbacks: 2"));
     }
 }
