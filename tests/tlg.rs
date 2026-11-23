@@ -6,6 +6,7 @@ use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::TraceTrait;
 use ferrisetw::trace::UserTrace;
 use ferrisetw::{EventRecord, GUID};
+use std::time::{Duration, Instant};
 
 mod utils;
 use utils::{Status, TestKind};
@@ -146,6 +147,11 @@ fn tlg_multiple_events(provider_guid: GUID) {
         .start_and_process()
         .unwrap();
 
+    // Enabling the provider completes asynchronously; events written before then are dropped.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !FERRIS_PROVIDER.enabled(tlg::Level::LogAlways, 0) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
     generate_tlg_events();
 
     passed.assert_passed();
