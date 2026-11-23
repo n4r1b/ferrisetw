@@ -898,4 +898,83 @@ mod tests {
             });
         }
     }
+
+    fn parse_counted_string_property(data: &[u8]) -> ParserResult<String> {
+        let record = EventRecord(EVENT_RECORD {
+            UserData: data.as_ptr() as *mut _,
+            UserDataLength: data.len() as u16,
+            ..Default::default()
+        });
+        let property = Property {
+            name: "Str".to_owned(),
+            flags: Default::default(),
+            info: PropertyInfo::Value {
+                in_type: TdhInType::InTypeCountedString,
+                out_type: TdhOutType::OutTypeString,
+                length: PropertyLength::Length(data.len() as u16),
+            },
+        };
+        let parser = Parser {
+            properties: std::slice::from_ref(&property),
+            record: &record,
+            cache: Mutex::new(CachedSlices::default()),
+        };
+        parser.try_parse::<String>("Str")
+    }
+
+    fn counted_utf16(s: &str) -> Vec<u8> {
+        let units: Vec<u16> = s.encode_utf16().collect();
+        let mut data = ((units.len() * 2) as u16).to_le_bytes().to_vec();
+        data.extend(units.iter().flat_map(|u| u.to_le_bytes()));
+        data
+    }
+
+    #[test]
+    fn counted_string_decodes_non_bmp_text() {
+        let text = "caf\u{e9} \u{1f980}";
+        assert_eq!(
+            parse_counted_string_property(&counted_utf16(text)).unwrap(),
+            text
+        );
+    }
+
+    #[test]
+    fn counted_string_decodes_empty_string() {
+        assert_eq!(parse_counted_string_property(&[0, 0]).unwrap(), "");
+    }
+
+    #[test]
+    fn counted_string_rejects_truncated_length_prefix() {
+        assert!(matches!(
+            parse_counted_string_property(&[4]),
+            Err(ParserError::PropertyError(_))
+        ));
+    }
+
+    #[test]
+    fn counted_string_rejects_length_beyond_data() {
+        let mut data = counted_utf16("abc");
+        data[0] += 2;
+        assert!(matches!(
+            parse_counted_string_property(&data),
+            Err(ParserError::PropertyError(_))
+        ));
+    }
+
+    #[test]
+    fn counted_string_rejects_odd_byte_length() {
+        let mut data = counted_utf16("abc");
+        data[0] -= 1;
+        assert!(matches!(
+            parse_counted_string_property(&data),
+            Err(ParserError::PropertyError(_))
+        ));
+    }
+
+    #[test]
+    fn counted_string_ignores_bytes_after_declared_length() {
+        let mut data = counted_utf16("ab");
+        data.extend("cd".encode_utf16().flat_map(|u| u.to_le_bytes()));
+        assert_eq!(parse_counted_string_property(&data).unwrap(), "ab");
+    }
 }
