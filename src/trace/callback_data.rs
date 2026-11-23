@@ -157,3 +157,144 @@ impl std::fmt::Debug for CallbackDataFromFile {
             .finish()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+    use std::sync::Arc;
+    use windows::Win32::System::Diagnostics::Etw::{EVENT_HEADER, EVENT_RECORD};
+
+    const PROVIDER_A: GUID = GUID::from_u128(0x0a0a0a0a_0000_0000_0000_00000000000a);
+    const PROVIDER_B: GUID = GUID::from_u128(0x0b0b0b0b_0000_0000_0000_00000000000b);
+    const MOF_EVENT_CLASS: GUID = GUID::from_u128(0x0c0c0c0c_0000_0000_0000_00000000000c);
+
+    const CLASSIC_HEADER: u16 = Etw::EVENT_HEADER_FLAG_CLASSIC_HEADER as u16;
+    const TRACE_MESSAGE: u16 = Etw::EVENT_HEADER_FLAG_TRACE_MESSAGE as u16;
+    const HEADER_64_BIT: u16 = Etw::EVENT_HEADER_FLAG_64_BIT_HEADER as u16;
+
+    fn record(provider_id: GUID, flags: u16) -> EventRecord {
+        EventRecord(EVENT_RECORD {
+            EventHeader: EVENT_HEADER {
+                ProviderId: provider_id,
+                Flags: flags,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+    }
+
+    /// Builds callback data with one provider per GUID, returning how many times each one was invoked
+    fn callback_data(
+        trace_kind: TraceKind,
+        guids: &[GUID],
+    ) -> (RealTimeCallbackData, Vec<Arc<AtomicUsize>>) {
+        let mut data = RealTimeCallbackData::new(trace_kind);
+        let mut counters = Vec::new();
+        for guid in guids {
+            let counter = Arc::new(AtomicUsize::new(0));
+            let c = Arc::clone(&counter);
+            data.add_provider(
+                Provider::by_guid(*guid)
+                    .add_callback(move |_, _| {
+                        c.fetch_add(1, Ordering::Relaxed);
+                    })
+                    .build(),
+            );
+            counters.push(counter);
+        }
+        (data, counters)
+    }
+
+    fn counts(counters: &[Arc<AtomicUsize>]) -> Vec<usize> {
+        counters.iter().map(|c| c.load(Ordering::Relaxed)).collect()
+    }
+
+    fn no_lookup(_: &EventRecord) -> Option<GUID> {
+        panic!("the schema must not be looked up for this event")
+    }
+
+    #[test]
+    fn mof_classification() {
+        assert!(is_mof(CLASSIC_HEADER));
+        assert!(is_mof(CLASSIC_HEADER | HEADER_64_BIT));
+        assert!(!is_mof(0));
+        assert!(!is_mof(HEADER_64_BIT));
+        assert!(!is_mof(CLASSIC_HEADER | TRACE_MESSAGE));
+    }
+
+    #[test]
+    fn all_registrations_of_a_guid_receive_manifest_events() {
+        let (data, counters) = callback_data(TraceKind::User, &[PROVIDER_A, PROVIDER_A]);
+        data.dispatch(&record(PROVIDER_A, HEADER_64_BIT), no_lookup);
+        assert_eq!(counts(&counters), [1, 1]);
+    }
+
+    #[test]
+    fn all_registrations_of_a_guid_receive_mof_events() {
+        let (data, counters) = callback_data(TraceKind::User, &[PROVIDER_A, PROVIDER_A]);
+        data.dispatch(&record(MOF_EVENT_CLASS, CLASSIC_HEADER), |_| {
+            Some(PROVIDER_A)
+        });
+        assert_eq!(counts(&counters), [1, 1]);
+    }
+
+    #[test]
+    fn mof_event_is_routed_by_schema_provider_guid() {
+        let (data, counters) = callback_data(TraceKind::User, &[PROVIDER_A, PROVIDER_B]);
+        data.dispatch(&record(MOF_EVENT_CLASS, CLASSIC_HEADER), |_| {
+            Some(PROVIDER_A)
+        });
+        assert_eq!(counts(&counters), [1, 0]);
+    }
+
+    #[test]
+    fn non_mof_events_are_routed_by_header_without_schema_lookup() {
+        let (data, counters) = callback_data(TraceKind::User, &[PROVIDER_A, PROVIDER_B]);
+        // Manifest-based and TraceLogging events alike have no classic header
+        data.dispatch(&record(PROVIDER_A, 0), no_lookup);
+        data.dispatch(&record(PROVIDER_A, HEADER_64_BIT), no_lookup);
+        // WPP events have a classic header, but are not MOF events
+        data.dispatch(
+            &record(PROVIDER_B, CLASSIC_HEADER | TRACE_MESSAGE),
+            no_lookup,
+        );
+        assert_eq!(counts(&counters), [2, 1]);
+    }
+
+    #[test]
+    fn mof_event_falls_back_to_header_when_schema_lookup_fails() {
+        let (data, counters) = callback_data(TraceKind::User, &[PROVIDER_A, PROVIDER_B]);
+        let lookups = Cell::new(0);
+        let failed_lookup = |_: &EventRecord| {
+            lookups.set(lookups.get() + 1);
+            None
+        };
+        data.dispatch(&record(PROVIDER_A, CLASSIC_HEADER), failed_lookup);
+        data.dispatch(&record(MOF_EVENT_CLASS, CLASSIC_HEADER), failed_lookup);
+        assert_eq!(lookups.get(), 2);
+        assert_eq!(counts(&counters), [1, 0]);
+    }
+
+    #[test]
+    fn mof_event_reaches_both_header_and_schema_providers() {
+        let (data, counters) = callback_data(TraceKind::User, &[PROVIDER_A, PROVIDER_B]);
+        data.dispatch(&record(PROVIDER_A, CLASSIC_HEADER), |_| Some(PROVIDER_B));
+        assert_eq!(counts(&counters), [1, 1]);
+    }
+
+    #[test]
+    fn mof_event_matching_header_and_schema_is_delivered_once() {
+        let (data, counters) = callback_data(TraceKind::User, &[PROVIDER_A, PROVIDER_B]);
+        data.dispatch(&record(PROVIDER_A, CLASSIC_HEADER), |_| Some(PROVIDER_A));
+        assert_eq!(counts(&counters), [1, 0]);
+    }
+
+    #[test]
+    fn kernel_events_are_routed_by_header_without_schema_lookup() {
+        let (data, counters) = callback_data(TraceKind::Kernel, &[PROVIDER_A, PROVIDER_B]);
+        data.dispatch(&record(PROVIDER_A, CLASSIC_HEADER), no_lookup);
+        data.dispatch(&record(MOF_EVENT_CLASS, CLASSIC_HEADER), no_lookup);
+        assert_eq!(counts(&counters), [1, 0]);
+    }
+}
