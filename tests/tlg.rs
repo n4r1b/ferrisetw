@@ -157,6 +157,18 @@ fn tlg_multiple_events(provider_guid: GUID) {
                         TEST_TRAILING_VALUE
                     );
 
+                    #[cfg(feature = "serde")]
+                    {
+                        let options = ferrisetw::EventSerializerOptions {
+                            fail_unimplemented: true,
+                            ..Default::default()
+                        };
+                        let event = ferrisetw::EventSerializer::new(record, &schema, options);
+                        let json = serde_json::to_value(event).unwrap();
+                        assert_eq!(json["Event"]["Utf16"], TEST_UTF16_VALUE);
+                        assert_eq!(json["Event"]["Trailing"], TEST_TRAILING_VALUE);
+                    }
+
                     event4_count = event4_count + 1;
                 }
 
