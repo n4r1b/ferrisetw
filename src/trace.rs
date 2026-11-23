@@ -37,12 +37,37 @@ const KERNEL_LOGGER_NAME: &str = "NT Kernel Logger";
 const SYSTEM_TRACE_CONTROL_GUID: GUID = GUID::from_u128(0x9e814aad_3204_11d2_9a82_006008a86939);
 const EVENT_TRACE_SYSTEM_LOGGER_MODE: u32 = 0x02000000;
 
+#[cfg(test)]
+thread_local! {
+    static STARTUP_FAILPOINT: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
+    static STARTUP_FAILPOINT_REACHED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+fn injected_startup_error(stage: u8) -> Result<(), EvntraceNativeError> {
+    if STARTUP_FAILPOINT.with(|point| point.get() == stage || (point.get() == 3 && stage == 1)) {
+        STARTUP_FAILPOINT_REACHED.with(|reached| reached.set(true));
+        Err(EvntraceNativeError::IoError(
+            std::io::Error::from_raw_os_error(12345),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 /// Trace module errors
 #[derive(Debug)]
 pub enum TraceError {
     InvalidTraceName,
     /// Wrapper over an internal [EvntraceNativeError]
     EtwNativeError(crate::native::EvntraceNativeError),
+    /// Startup failed and the newly created session could not be stopped.
+    StartupRollback {
+        /// The error that caused startup to fail.
+        startup: crate::native::EvntraceNativeError,
+        /// The error returned when stopping the session.
+        rollback: crate::native::EvntraceNativeError,
+    },
 }
 
 impl From<crate::native::EvntraceNativeError> for TraceError {
@@ -534,7 +559,7 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
         };
 
         let flags = self.rt_callback_data.provider_flags::<T>();
-        let (full_properties, control_handle) = start_trace::<T>(
+        let (mut full_properties, control_handle) = start_trace::<T>(
             &trace_wide_name,
             wide_etl_dump_file
                 .as_ref()
@@ -545,17 +570,61 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
 
         // TODO: For kernel traces, implement enable_provider function for providers that require call to TraceSetInformation with extended PERFINFO_GROUPMASK
 
-        if T::TRACE_KIND == private::TraceKind::User {
-            for prov in self.rt_callback_data.providers() {
-                enable_provider(control_handle, prov)?;
-            }
-        }
-
         let callback_data = Box::new(Arc::new(CallbackData::RealTime(self.rt_callback_data)));
-        let trace_handle = open_trace(
-            SubscriptionSource::RealTimeSession(trace_wide_name),
-            &callback_data,
-        )?;
+        let startup = (|| -> Result<TraceHandle, EvntraceNativeError> {
+            if T::TRACE_KIND == private::TraceKind::User {
+                if let CallbackData::RealTime(data) = callback_data.as_ref().as_ref() {
+                    for prov in data.providers() {
+                        enable_provider(control_handle, prov)?;
+                        #[cfg(test)]
+                        injected_startup_error(1)?;
+                    }
+                }
+            }
+
+            #[cfg(test)]
+            if STARTUP_FAILPOINT.with(|point| point.get() == 2) {
+                STARTUP_FAILPOINT_REACHED.with(|reached| reached.set(true));
+                let missing = U16CString::from_str(format!(
+                    "ferrisetw-missing-{}-{}.etl",
+                    std::process::id(),
+                    utils::rand_string()
+                ))
+                .unwrap();
+                return open_trace(SubscriptionSource::FromFile(missing), &callback_data);
+            }
+            open_trace(
+                SubscriptionSource::RealTimeSession(trace_wide_name),
+                &callback_data,
+            )
+        })();
+        let trace_handle = match startup {
+            Ok(handle) => handle,
+            Err(startup) => {
+                #[cfg(test)]
+                let stop = if STARTUP_FAILPOINT.with(|point| point.get() == 3) {
+                    Err(EvntraceNativeError::IoError(
+                        std::io::Error::from_raw_os_error(12346),
+                    ))
+                } else {
+                    control_trace(
+                        &mut full_properties,
+                        control_handle,
+                        Etw::EVENT_TRACE_CONTROL_STOP,
+                    )
+                };
+                #[cfg(not(test))]
+                let stop = control_trace(
+                    &mut full_properties,
+                    control_handle,
+                    Etw::EVENT_TRACE_CONTROL_STOP,
+                );
+                return match stop {
+                    Ok(()) => Err(TraceError::EtwNativeError(startup)),
+                    Err(rollback) => Err(TraceError::StartupRollback { startup, rollback }),
+                };
+            }
+        };
 
         Ok((
             T::build(full_properties, control_handle, trace_handle, callback_data),
@@ -751,6 +820,92 @@ pub fn stop_trace_by_name(trace_name: &str) -> TraceResult<()> {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    #[ignore = "requires permission to create and query an ETW session"]
+    fn failed_start_rolls_back_session_and_allows_retry() {
+        for stage in [1, 2] {
+            let name = format!(
+                "ferrisetw-rollback-{}-{}",
+                std::process::id(),
+                utils::rand_string()
+            );
+            let first = Provider::by_guid(0x22fb2cd6_0e7b_422b_a0c7_2fad1fd0e716).build();
+            let second = Provider::by_guid(0xa0c1853b_5c40_4b15_8766_3cf1c58f985a).build();
+            STARTUP_FAILPOINT_REACHED.with(|reached| reached.set(false));
+            STARTUP_FAILPOINT.with(|point| point.set(stage));
+            let result = UserTrace::new()
+                .named(name.clone())
+                .stop_if_exist(false)
+                .enable(first)
+                .enable(second)
+                .start();
+            STARTUP_FAILPOINT.with(|point| point.set(0));
+            let reached = STARTUP_FAILPOINT_REACHED.with(|reached| reached.get());
+            let wide_name = U16CString::from_str(&name).unwrap();
+            let mut properties = EventTraceProperties::new::<UserTrace>(
+                &wide_name,
+                None,
+                &TraceProperties::default(),
+                Etw::EVENT_TRACE_FLAG::default(),
+            );
+            let query =
+                control_trace_by_name(&mut properties, &wide_name, Etw::EVENT_TRACE_CONTROL_QUERY);
+            if reached && query.is_ok() {
+                stop_trace_by_name(&name).expect("clean up test-owned session");
+            }
+            assert!(reached, "test did not reach the startup failure injection");
+            match result {
+                Err(TraceError::EtwNativeError(EvntraceNativeError::IoError(error))) => {
+                    if stage == 1 {
+                        assert_eq!(error.raw_os_error(), Some(12345));
+                    } else {
+                        assert_ne!(error.raw_os_error(), Some(12345));
+                    }
+                }
+                other => panic!("unexpected startup result: {:?}", other),
+            }
+            assert!(
+                matches!(query, Err(ref error) if error.code() == ERROR_WMI_INSTANCE_NOT_FOUND.to_hresult()),
+                "startup failure left its ETW session running"
+            );
+            let (trace, _) = UserTrace::new()
+                .named(name)
+                .stop_if_exist(false)
+                .start()
+                .unwrap();
+            trace.stop().unwrap();
+        }
+    }
+
+    #[test]
+    #[ignore = "requires permission to create and query an ETW session"]
+    fn failed_rollback_reports_both_errors() {
+        let name = format!(
+            "ferrisetw-rollback-{}-{}",
+            std::process::id(),
+            utils::rand_string()
+        );
+        let provider = Provider::by_guid(0x22fb2cd6_0e7b_422b_a0c7_2fad1fd0e716).build();
+        STARTUP_FAILPOINT_REACHED.with(|reached| reached.set(false));
+        STARTUP_FAILPOINT.with(|point| point.set(3));
+        let result = UserTrace::new()
+            .named(name.clone())
+            .stop_if_exist(false)
+            .enable(provider)
+            .start();
+        STARTUP_FAILPOINT.with(|point| point.set(0));
+        let reached = STARTUP_FAILPOINT_REACHED.with(|reached| reached.get());
+        if reached {
+            stop_trace_by_name(&name)
+                .expect("clean up test-owned session after injected stop failure");
+        }
+        assert!(reached, "test did not reach the startup failure injection");
+        assert!(matches!(result, Err(TraceError::StartupRollback {
+            startup: EvntraceNativeError::IoError(ref startup),
+            rollback: EvntraceNativeError::IoError(ref rollback),
+        }) if startup.raw_os_error() == Some(12345) && rollback.raw_os_error() == Some(12346)));
+    }
 
     #[test]
     fn test_enable_multiple_providers() {
