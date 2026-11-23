@@ -464,3 +464,71 @@ impl From<Etw::DECODING_SOURCE> for DecodingSource {
 // Safe cast (EVENT_HEADER_FLAG_32_BIT_HEADER = 32)
 #[doc(hidden)]
 pub const EVENT_HEADER_FLAG_32_BIT_HEADER: u16 = Etw::EVENT_HEADER_FLAG_32_BIT_HEADER as u16;
+
+const PERF_MASK_INDEX: u32 = 0xe000_0000;
+const PERF_MASK_INDEX_SHIFT: u32 = 29;
+const PERF_MASK_GROUP: u32 = !PERF_MASK_INDEX;
+const PERF_NUM_MASKS: usize = 8;
+
+/// Kernel group mask, as passed to `TraceSetInformation(TraceSystemTraceEnableFlagsInfo)`
+///
+/// `masks[0]` holds the classic `EVENT_TRACE_PROPERTIES::EnableFlags`. A `PERFINFO_MASK` value
+/// encodes the index of the mask it belongs to in its top 3 bits, and the bits to set in that mask
+/// in the remaining ones.
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PERFINFO_GROUPMASK {
+    pub masks: [u32; PERF_NUM_MASKS],
+}
+
+impl PERFINFO_GROUPMASK {
+    /// Build a group mask whose first mask holds the given `EnableFlags`
+    pub fn with_enable_flags(enable_flags: u32) -> Self {
+        let mut gm = Self::default();
+        gm.masks[0] = enable_flags;
+        gm
+    }
+
+    /// Equivalent of the `PERFINFO_OR_GROUP_WITH_GROUPMASK` macro
+    pub fn or_assign_with_groupmask(&mut self, group: u32) {
+        let index = ((group & PERF_MASK_INDEX) >> PERF_MASK_INDEX_SHIFT) as usize;
+        self.masks[index] |= group & PERF_MASK_GROUP;
+    }
+}
+
+#[cfg(test)]
+mod groupmask_test {
+    use super::PERFINFO_GROUPMASK;
+
+    #[test]
+    fn enable_flags_go_to_first_mask() {
+        let gm = PERFINFO_GROUPMASK::with_enable_flags(0xffff_ffff);
+        assert_eq!(gm.masks, [0xffff_ffff, 0, 0, 0, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn group_is_split_into_index_and_bits() {
+        let mut gm = PERFINFO_GROUPMASK::default();
+        // PERF_OB_HANDLE
+        gm.or_assign_with_groupmask(0x8000_0040);
+        assert_eq!(gm.masks, [0, 0, 0, 0, 0x40, 0, 0, 0]);
+
+        gm.or_assign_with_groupmask(0xe000_0001);
+        assert_eq!(gm.masks, [0, 0, 0, 0, 0x40, 0, 0, 1]);
+    }
+
+    #[test]
+    fn groups_with_same_index_are_combined() {
+        let mut gm = PERFINFO_GROUPMASK::with_enable_flags(0x4);
+        gm.or_assign_with_groupmask(0x2000_0001);
+        gm.or_assign_with_groupmask(0x2000_0100);
+        gm.or_assign_with_groupmask(0x0000_0010);
+        assert_eq!(gm.masks, [0x14, 0x101, 0, 0, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn has_native_layout() {
+        assert_eq!(std::mem::size_of::<PERFINFO_GROUPMASK>(), 32);
+    }
+}

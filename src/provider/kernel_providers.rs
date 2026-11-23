@@ -184,6 +184,13 @@ mod kernel_flags {
     pub const EVENT_TRACE_FLAG_FILE_IO_INIT: u32 = 0x04000000;
 }
 
+/// List of Kernel Providers group masks (`PERFINFO_MASK`)
+///
+/// Credits: [KrabsETW::perfinfo_groupmask](https://github.com/microsoft/krabsetw/blob/master/krabs/krabs/perfinfo_groupmask.hpp)
+mod kernel_group_masks {
+    pub const PERF_OB_HANDLE: u32 = 0x8000_0040;
+}
+
 /// Contains kernel provider identifiers.
 ///
 /// You'll need to use it with [`crate::provider::Provider::kernel`]
@@ -326,6 +333,31 @@ pub static CONTEXT_SWITCH_PROVIDER: KernelProvider = KernelProvider::new(
 pub static ALPC_PROVIDER: KernelProvider =
     KernelProvider::new(kernel_guids::ALPC_GUID, kernel_flags::EVENT_TRACE_FLAG_ALPC);
 
+/// Contains identifiers of a kernel provider that is enabled by a group mask rather than by `EnableFlags`
+///
+/// You'll need to use it with [`crate::provider::Provider::kernel_with_group_mask`].
+/// Group masks require Windows 8 or later.
+#[derive(Debug)]
+pub struct KernelGroupMaskProvider {
+    /// Kernel Provider GUID
+    pub guid: GUID,
+    /// Kernel Provider group mask (see [`crate::provider::ProviderBuilder::kernel_group_mask`])
+    pub group_mask: u32,
+}
+
+impl KernelGroupMaskProvider {
+    /// Create a Kernel Provider which can be then tied into a Provider
+    pub const fn new(guid: GUID, group_mask: u32) -> KernelGroupMaskProvider {
+        KernelGroupMaskProvider { guid, group_mask }
+    }
+}
+
+/// Represents the Object Manager Kernel Provider (handle creation, duplication and closing)
+pub static OBJECT_MANAGER_PROVIDER: KernelGroupMaskProvider = KernelGroupMaskProvider::new(
+    kernel_guids::OB_TRACE_GUID,
+    kernel_group_masks::PERF_OB_HANDLE,
+);
+
 #[cfg(test)]
 mod test {
     use super::kernel_flags::*;
@@ -353,7 +385,30 @@ mod test {
         let kernel_provider = Provider::kernel(&IMAGE_LOAD_PROVIDER).build();
 
         assert_eq!(EVENT_TRACE_FLAG_IMAGE_LOAD, kernel_provider.kernel_flags());
+        assert_eq!(0, kernel_provider.kernel_group_mask());
         assert_eq!(IMAGE_LOAD_GUID, kernel_provider.guid());
+    }
+
+    #[test]
+    fn test_group_mask_provider_is_binded_to_provider() {
+        let kernel_provider = Provider::kernel_with_group_mask(&OBJECT_MANAGER_PROVIDER).build();
+
+        assert_eq!(0, kernel_provider.kernel_flags());
+        assert_eq!(
+            super::kernel_group_masks::PERF_OB_HANDLE,
+            kernel_provider.kernel_group_mask()
+        );
+        assert_eq!(OB_TRACE_GUID, kernel_provider.guid());
+    }
+
+    #[test]
+    fn test_group_mask_is_combined_with_flags_on_provider() {
+        let kernel_provider = Provider::kernel(&IMAGE_LOAD_PROVIDER)
+            .kernel_group_mask(0x2000_0001)
+            .build();
+
+        assert_eq!(EVENT_TRACE_FLAG_IMAGE_LOAD, kernel_provider.kernel_flags());
+        assert_eq!(0x2000_0001, kernel_provider.kernel_group_mask());
     }
 
     #[test]
