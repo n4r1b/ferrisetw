@@ -203,13 +203,19 @@ pub(crate) fn start_trace<T>(
     trace_name: &U16CStr,
     etl_dump_file: Option<(&U16CStr, DumpFileLoggingMode, Option<u32>)>,
     trace_properties: &TraceProperties,
+    clock_type: ClockType,
     enable_flags: Etw::EVENT_TRACE_FLAG,
 ) -> EvntraceNativeResult<(EventTraceProperties, ControlHandle)>
 where
     T: RealTimeTraceTrait,
 {
-    let mut properties =
-        EventTraceProperties::new::<T>(trace_name, etl_dump_file, trace_properties, enable_flags);
+    let mut properties = EventTraceProperties::new::<T>(
+        trace_name,
+        etl_dump_file,
+        trace_properties,
+        clock_type,
+        enable_flags,
+    );
 
     let mut control_handle = ControlHandle::default();
     let status = unsafe {
