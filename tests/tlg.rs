@@ -6,6 +6,7 @@ use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::TraceTrait;
 use ferrisetw::trace::UserTrace;
 use ferrisetw::{EventRecord, GUID};
+use std::time::{Duration, Instant};
 
 mod utils;
 use utils::{Status, TestKind};
@@ -13,7 +14,10 @@ use utils::{Status, TestKind};
 const EVENT1_COUNT: u32 = 1;
 const EVENT2_COUNT: u32 = 5;
 const EVENT3_COUNT: u32 = 1;
+const EVENT4_COUNT: u32 = 1;
 const TEST_STRING_VALUE: &'static str = "TestString";
+const TEST_UTF16_VALUE: &'static str = "Ferris \u{1f980} TDH";
+const TEST_TRAILING_VALUE: u32 = 0xdead_beef;
 const PROVIDER_NAME: &'static str = "ferrisETW.TraceLoggingTest";
 const TEST_GUID: tlg::Guid = tlg::Guid::from_fields(
     0x6b29_fc40,
@@ -70,6 +74,18 @@ fn generate_tlg_events() {
             guid("Guid", &TEST_GUID),
         );
     }
+
+    let utf16: Vec<u16> = TEST_UTF16_VALUE.encode_utf16().collect();
+    for _i in 0..EVENT4_COUNT {
+        tlg::write_event!(
+            FERRIS_PROVIDER,
+            "Event4",
+            level(Informational),
+            keyword(0x6),
+            str16("Utf16", &utf16),
+            u32("Trailing", &TEST_TRAILING_VALUE),
+        );
+    }
 }
 
 fn tlg_multiple_events(provider_guid: GUID) {
@@ -79,6 +95,7 @@ fn tlg_multiple_events(provider_guid: GUID) {
     let mut event1_count = 0;
     let mut event2_count = 0;
     let mut event3_count = 0;
+    let mut event4_count = 0;
 
     let tlg_provider = Provider::by_guid(provider_guid)
         .add_callback(
@@ -129,11 +146,36 @@ fn tlg_multiple_events(provider_guid: GUID) {
                     );
 
                     event3_count = event3_count + 1;
+                } else if record.event_name() == "Event4" {
+                    // The trailing field is only found if the counted string's size was right.
+                    assert_eq!(
+                        parser.try_parse::<String>("Utf16").unwrap(),
+                        TEST_UTF16_VALUE
+                    );
+                    assert_eq!(
+                        parser.try_parse::<u32>("Trailing").unwrap(),
+                        TEST_TRAILING_VALUE
+                    );
+
+                    #[cfg(feature = "serde")]
+                    {
+                        let options = ferrisetw::EventSerializerOptions {
+                            fail_unimplemented: true,
+                            ..Default::default()
+                        };
+                        let event = ferrisetw::EventSerializer::new(record, &schema, options);
+                        let json = serde_json::to_value(event).unwrap();
+                        assert_eq!(json["Event"]["Utf16"], TEST_UTF16_VALUE);
+                        assert_eq!(json["Event"]["Trailing"], TEST_TRAILING_VALUE);
+                    }
+
+                    event4_count = event4_count + 1;
                 }
 
                 if event1_count == EVENT1_COUNT
                     && event2_count == EVENT2_COUNT
                     && event3_count == EVENT3_COUNT
+                    && event4_count == EVENT4_COUNT
                 {
                     notifier.notify_success();
                 }
@@ -146,6 +188,11 @@ fn tlg_multiple_events(provider_guid: GUID) {
         .start_and_process()
         .unwrap();
 
+    // Enabling the provider completes asynchronously; events written before then are dropped.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !FERRIS_PROVIDER.enabled(tlg::Level::LogAlways, 0) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
     generate_tlg_events();
 
     passed.assert_passed();

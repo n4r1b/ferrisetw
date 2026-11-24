@@ -408,39 +408,37 @@ impl PropSerable for PropertyInfo {
         match self {
             PropertyInfo::Value {
                 in_type, out_type, ..
-            } => {
-                match out_type {
-                    TdhOutType::OutTypeIpv4 => Some(PropSer(PropHandler::IpAddr)),
-                    TdhOutType::OutTypeIpv6 => Some(PropSer(PropHandler::IpAddr)),
-                    _ => match in_type {
-                        TdhInType::InTypeNull => Some(PropSer(PropHandler::Null)),
-                        TdhInType::InTypeUnicodeString => Some(PropSer(PropHandler::String)),
-                        TdhInType::InTypeAnsiString => Some(PropSer(PropHandler::String)),
-                        TdhInType::InTypeInt8 => Some(PropSer(PropHandler::Int8)),
-                        TdhInType::InTypeUInt8 => Some(PropSer(PropHandler::UInt8)),
-                        TdhInType::InTypeInt16 => Some(PropSer(PropHandler::Int16)),
-                        TdhInType::InTypeUInt16 => Some(PropSer(PropHandler::UInt16)),
-                        TdhInType::InTypeInt32 => Some(PropSer(PropHandler::Int32)),
-                        TdhInType::InTypeUInt32 => Some(PropSer(PropHandler::UInt32)),
-                        TdhInType::InTypeInt64 => Some(PropSer(PropHandler::Int64)),
-                        TdhInType::InTypeUInt64 => Some(PropSer(PropHandler::UInt64)),
-                        TdhInType::InTypeFloat => Some(PropSer(PropHandler::Float)),
-                        TdhInType::InTypeDouble => Some(PropSer(PropHandler::Double)),
-                        TdhInType::InTypeBoolean => Some(PropSer(PropHandler::Bool)),
-                        TdhInType::InTypeBinary => Some(PropSer(PropHandler::Binary)),
-                        TdhInType::InTypeGuid => Some(PropSer(PropHandler::Guid)),
-                        TdhInType::InTypePointer => Some(PropSer(PropHandler::Pointer)),
-                        TdhInType::InTypeFileTime => Some(PropSer(PropHandler::FileTime)),
-                        TdhInType::InTypeSystemTime => Some(PropSer(PropHandler::SystemTime)),
-                        TdhInType::InTypeSid => Some(PropSer(PropHandler::String)),
-                        TdhInType::InTypeWbemSid => Some(PropSer(PropHandler::String)),
-                        TdhInType::InTypeCountedAnsiString => Some(PropSer(PropHandler::String)),
-                        TdhInType::InTypeHexInt32 => Some(PropSer(PropHandler::Int32)),
-                        TdhInType::InTypeHexInt64 => Some(PropSer(PropHandler::Int64)),
-                        TdhInType::InTypeCountedString => None, // TODO
-                    },
-                }
-            }
+            } => match out_type {
+                TdhOutType::OutTypeIpv4 => Some(PropSer(PropHandler::IpAddr)),
+                TdhOutType::OutTypeIpv6 => Some(PropSer(PropHandler::IpAddr)),
+                _ => match in_type {
+                    TdhInType::InTypeNull => Some(PropSer(PropHandler::Null)),
+                    TdhInType::InTypeUnicodeString => Some(PropSer(PropHandler::String)),
+                    TdhInType::InTypeAnsiString => Some(PropSer(PropHandler::String)),
+                    TdhInType::InTypeInt8 => Some(PropSer(PropHandler::Int8)),
+                    TdhInType::InTypeUInt8 => Some(PropSer(PropHandler::UInt8)),
+                    TdhInType::InTypeInt16 => Some(PropSer(PropHandler::Int16)),
+                    TdhInType::InTypeUInt16 => Some(PropSer(PropHandler::UInt16)),
+                    TdhInType::InTypeInt32 => Some(PropSer(PropHandler::Int32)),
+                    TdhInType::InTypeUInt32 => Some(PropSer(PropHandler::UInt32)),
+                    TdhInType::InTypeInt64 => Some(PropSer(PropHandler::Int64)),
+                    TdhInType::InTypeUInt64 => Some(PropSer(PropHandler::UInt64)),
+                    TdhInType::InTypeFloat => Some(PropSer(PropHandler::Float)),
+                    TdhInType::InTypeDouble => Some(PropSer(PropHandler::Double)),
+                    TdhInType::InTypeBoolean => Some(PropSer(PropHandler::Bool)),
+                    TdhInType::InTypeBinary => Some(PropSer(PropHandler::Binary)),
+                    TdhInType::InTypeGuid => Some(PropSer(PropHandler::Guid)),
+                    TdhInType::InTypePointer => Some(PropSer(PropHandler::Pointer)),
+                    TdhInType::InTypeFileTime => Some(PropSer(PropHandler::FileTime)),
+                    TdhInType::InTypeSystemTime => Some(PropSer(PropHandler::SystemTime)),
+                    TdhInType::InTypeSid => Some(PropSer(PropHandler::String)),
+                    TdhInType::InTypeWbemSid => Some(PropSer(PropHandler::String)),
+                    TdhInType::InTypeCountedAnsiString => Some(PropSer(PropHandler::String)),
+                    TdhInType::InTypeHexInt32 => Some(PropSer(PropHandler::Int32)),
+                    TdhInType::InTypeHexInt64 => Some(PropSer(PropHandler::Int64)),
+                    TdhInType::InTypeCountedString => Some(PropSer(PropHandler::String)),
+                },
+            },
             PropertyInfo::Array { in_type, .. } => {
                 match in_type {
                     TdhInType::InTypeInt16 => Some(PropSer(PropHandler::ArrayInt16)),

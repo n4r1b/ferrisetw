@@ -509,11 +509,11 @@ impl private::TryParse<String> for Parser<'_, '_> {
                         .ok_or(ParserError::LengthMismatch)?;
                     parse_sid(sid)
                 }
-                TdhInType::InTypeCountedString => unimplemented!(),
+                TdhInType::InTypeCountedString => parse_counted_utf16(prop_slice.buffer),
                 TdhInType::InTypeCountedAnsiString => {
                     if prop_slice.buffer.len() < 2 {
                         return Err(ParserError::PropertyError(
-                            "counted string does not have length".into(),
+                            "counted ANSI string does not have length".into(),
                         ));
                     }
                     let str_length = u16::from_le_bytes(
@@ -523,7 +523,7 @@ impl private::TryParse<String> for Parser<'_, '_> {
                     ) as usize;
                     if prop_slice.buffer[std::mem::size_of::<u16>()..].len() < str_length {
                         return Err(ParserError::PropertyError(
-                            "invalid counted string length".into(),
+                            "invalid counted ANSI string length".into(),
                         ));
                     }
                     let string = std::str::from_utf8(
@@ -537,6 +537,33 @@ impl private::TryParse<String> for Parser<'_, '_> {
             _ => Err(ParserError::InvalidType),
         }
     }
+}
+
+/// Decodes a TDH counted UTF-16 string: a little-endian `u16` byte count followed by that many
+/// bytes of UTF-16LE. Anything after the counted bytes is ignored.
+fn parse_counted_utf16(data: &[u8]) -> ParserResult<String> {
+    if data.len() < 2 {
+        return Err(ParserError::PropertyError(
+            "counted string does not have length".into(),
+        ));
+    }
+    let (prefix, rest) = data.split_at(2);
+    let byte_len = usize::from(u16::from_le_bytes([prefix[0], prefix[1]]));
+    if byte_len % 2 != 0 {
+        return Err(ParserError::PropertyError(
+            "UTF-16 counted string length is not even".into(),
+        ));
+    }
+    let bytes = rest
+        .get(..byte_len)
+        .ok_or_else(|| ParserError::PropertyError("invalid counted string length".into()))?;
+
+    // The event buffer can be unaligned, so code units are assembled from bytes rather than
+    // reinterpreting the buffer as `[u16]`.
+    let units = (0..byte_len)
+        .step_by(2)
+        .map(|i| u16::from_le_bytes([bytes[i], bytes[i + 1]]));
+    Ok(widestring::decode_utf16_lossy(units).collect())
 }
 
 fn parse_sid(data: &[u8]) -> ParserResult<String> {
@@ -870,5 +897,84 @@ mod tests {
                 ));
             });
         }
+    }
+
+    fn parse_counted_string_property(data: &[u8]) -> ParserResult<String> {
+        let record = EventRecord(EVENT_RECORD {
+            UserData: data.as_ptr() as *mut _,
+            UserDataLength: data.len() as u16,
+            ..Default::default()
+        });
+        let property = Property {
+            name: "Str".to_owned(),
+            flags: Default::default(),
+            info: PropertyInfo::Value {
+                in_type: TdhInType::InTypeCountedString,
+                out_type: TdhOutType::OutTypeString,
+                length: PropertyLength::Length(data.len() as u16),
+            },
+        };
+        let parser = Parser {
+            properties: std::slice::from_ref(&property),
+            record: &record,
+            cache: Mutex::new(CachedSlices::default()),
+        };
+        parser.try_parse::<String>("Str")
+    }
+
+    fn counted_utf16(s: &str) -> Vec<u8> {
+        let units: Vec<u16> = s.encode_utf16().collect();
+        let mut data = ((units.len() * 2) as u16).to_le_bytes().to_vec();
+        data.extend(units.iter().flat_map(|u| u.to_le_bytes()));
+        data
+    }
+
+    #[test]
+    fn counted_string_decodes_non_bmp_text() {
+        let text = "caf\u{e9} \u{1f980}";
+        assert_eq!(
+            parse_counted_string_property(&counted_utf16(text)).unwrap(),
+            text
+        );
+    }
+
+    #[test]
+    fn counted_string_decodes_empty_string() {
+        assert_eq!(parse_counted_string_property(&[0, 0]).unwrap(), "");
+    }
+
+    #[test]
+    fn counted_string_rejects_truncated_length_prefix() {
+        assert!(matches!(
+            parse_counted_string_property(&[4]),
+            Err(ParserError::PropertyError(_))
+        ));
+    }
+
+    #[test]
+    fn counted_string_rejects_length_beyond_data() {
+        let mut data = counted_utf16("abc");
+        data[0] += 2;
+        assert!(matches!(
+            parse_counted_string_property(&data),
+            Err(ParserError::PropertyError(_))
+        ));
+    }
+
+    #[test]
+    fn counted_string_rejects_odd_byte_length() {
+        let mut data = counted_utf16("abc");
+        data[0] -= 1;
+        assert!(matches!(
+            parse_counted_string_property(&data),
+            Err(ParserError::PropertyError(_))
+        ));
+    }
+
+    #[test]
+    fn counted_string_ignores_bytes_after_declared_length() {
+        let mut data = counted_utf16("ab");
+        data.extend("cd".encode_utf16().flat_map(|u| u.to_le_bytes()));
+        assert_eq!(parse_counted_string_property(&data).unwrap(), "ab");
     }
 }
