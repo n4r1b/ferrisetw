@@ -32,6 +32,7 @@ pub(crate) mod callback_data;
 use callback_data::CallbackData;
 use callback_data::CallbackDataFromFile;
 use callback_data::RealTimeCallbackData;
+pub(crate) use private::TraceKind;
 
 const KERNEL_LOGGER_NAME: &str = "NT Kernel Logger";
 const SYSTEM_TRACE_CONTROL_GUID: GUID = GUID::from_u128(0x9e814aad_3204_11d2_9a82_006008a86939);
@@ -302,7 +303,7 @@ impl UserTrace {
         TraceBuilder {
             name,
             etl_dump_file: None,
-            rt_callback_data: RealTimeCallbackData::new(),
+            rt_callback_data: RealTimeCallbackData::new(TraceKind::User),
             properties: TraceProperties::default(),
             stop_if_exist: true,
             trace_kind: PhantomData,
@@ -324,7 +325,7 @@ impl KernelTrace {
         let builder = TraceBuilder {
             name: String::new(),
             etl_dump_file: None,
-            rt_callback_data: RealTimeCallbackData::new(),
+            rt_callback_data: RealTimeCallbackData::new(TraceKind::Kernel),
             properties: TraceProperties::default(),
             stop_if_exist: true,
             trace_kind: PhantomData,
@@ -348,7 +349,7 @@ mod private {
     //! See <https://github.com/rust-lang/rust/issues/34537>
     use super::*;
 
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum TraceKind {
         User,
         Kernel,
