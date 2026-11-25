@@ -3,8 +3,9 @@
 use ferrisetw::provider::Provider;
 use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::{stop_trace_by_name, TraceBuilder, TraceTrait, UserTrace};
-use ferrisetw::{EventRecord, EventSerializer, EventSerializerOptions};
+use ferrisetw::{EventRecord, EventSerializer, EventSerializerOptions, GUID};
 use serde::Serialize;
+use std::convert::TryFrom;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -202,7 +203,7 @@ fn ser_json_test(name: &'static str, options: EventSerializerOptions, seconds_to
         let s = stats.clone();
         let opts = options;
         trace_builder = trace_builder.enable(
-            Provider::by_guid(*guid)
+            Provider::by_guid(GUID::try_from(*guid).expect("invalid benchmark provider GUID"))
                 .add_callback(move |record, schema_locator| {
                     s.json_callback(record, schema_locator, opts)
                 })
@@ -225,7 +226,7 @@ fn ser_flexbuffer_test(name: &'static str, options: EventSerializerOptions, seco
         let s = stats.clone();
         let opts = options;
         trace_builder = trace_builder.enable(
-            Provider::by_guid(*guid)
+            Provider::by_guid(GUID::try_from(*guid).expect("invalid benchmark provider GUID"))
                 .add_callback(move |record, schema_locator| {
                     s.flexbuffer_callback(record, schema_locator, opts)
                 })
@@ -237,6 +238,13 @@ fn ser_flexbuffer_test(name: &'static str, options: EventSerializerOptions, seco
 }
 
 const SECONDS_TO_RUN: u64 = 5;
+
+#[test]
+fn benchmark_provider_guids_are_valid() {
+    for guid in BENCHMARK_PROVIDERS {
+        GUID::try_from(*guid).expect("invalid benchmark provider GUID");
+    }
+}
 
 #[test]
 fn serialize_json() {
