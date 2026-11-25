@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::ffi::c_void;
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use once_cell::sync::Lazy;
 
@@ -120,20 +120,26 @@ impl UniqueValidContexts {
     pub const fn new() -> Self {
         Self(Lazy::new(|| Mutex::new(HashSet::new())))
     }
+    /// The set stays consistent even if a thread panicked while holding the lock, so a poisoned
+    /// lock is recovered rather than propagated.
+    fn contexts(&self) -> MutexGuard<'_, HashSet<u64>> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     /// Insert if it did not exist previously
     fn insert(&self, ctx_ptr: *const c_void) -> Result<(), ContextError> {
-        match self.0.lock().unwrap().insert(ctx_ptr as u64) {
+        match self.contexts().insert(ctx_ptr as u64) {
             true => Ok(()),
             false => Err(ContextError::AlreadyExist),
         }
     }
 
     fn remove(&self, ctx_ptr: *const c_void) {
-        self.0.lock().unwrap().remove(&(ctx_ptr as u64));
+        self.contexts().remove(&(ctx_ptr as u64));
     }
 
     pub fn is_valid(&self, ctx_ptr: *const c_void) -> bool {
-        self.0.lock().unwrap().contains(&(ctx_ptr as u64))
+        self.contexts().contains(&(ctx_ptr as u64))
     }
 }
 
@@ -477,4 +483,31 @@ pub(crate) fn query_info(class: TraceInformation, buf: &mut [u8]) -> EvntraceNat
     result.map_err(|err| {
         EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(err.code().0))
     })
+}
+
+#[cfg(test)]
+mod context_tests {
+    use super::*;
+
+    #[test]
+    fn poisoned_contexts_lock_is_recovered() {
+        let contexts = UniqueValidContexts::new();
+        let ctx = 0x1000 as *const c_void;
+        assert!(contexts.insert(ctx).is_ok());
+
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = contexts.0.lock().unwrap();
+            panic!("poison the contexts lock");
+        });
+        assert!(contexts.0.is_poisoned());
+
+        assert!(contexts.is_valid(ctx));
+        assert!(matches!(
+            contexts.insert(ctx),
+            Err(ContextError::AlreadyExist)
+        ));
+        contexts.remove(ctx);
+        assert!(!contexts.is_valid(ctx));
+        assert!(contexts.insert(ctx).is_ok());
+    }
 }
