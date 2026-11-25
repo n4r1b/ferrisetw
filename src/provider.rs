@@ -44,6 +44,8 @@ pub struct Provider {
     trace_flags: TraceFlags,
     /// Provider kernel flags, only apply to KernelProvider
     kernel_flags: u32,
+    /// Provider kernel group mask, only apply to KernelProvider
+    kernel_group_mask: u32,
     /// Provider filters
     filters: Vec<EventFilter>,
     /// Callbacks that will receive events from this Provider
@@ -60,6 +62,7 @@ pub struct ProviderBuilder {
     level: u8,
     trace_flags: TraceFlags,
     kernel_flags: u32,
+    kernel_group_mask: u32,
     filters: Vec<EventFilter>,
     callbacks: Arc<RwLock<Vec<crate::EtwCallback>>>,
 }
@@ -73,6 +76,7 @@ impl std::fmt::Debug for ProviderBuilder {
             .field("level", &self.level)
             .field("trace_flags", &self.trace_flags)
             .field("kernel_flags", &self.kernel_flags)
+            .field("kernel_group_mask", &self.kernel_group_mask)
             .field("filters", &self.filters)
             .field("n_callbacks", &self.callbacks.read().unwrap().len())
             .finish()
@@ -92,6 +96,7 @@ impl Provider {
             level: 5,
             trace_flags: TraceFlags::empty(),
             kernel_flags: 0,
+            kernel_group_mask: 0,
             filters: Vec::new(),
             callbacks: Arc::new(RwLock::new(Vec::new())),
         }
@@ -104,6 +109,15 @@ impl Provider {
         let mut builder = Self::by_guid(kernel_provider.guid);
         builder.kernel_flags = kernel_provider.flags;
         builder
+    }
+
+    /// Create a Kernel Provider that is enabled by a group mask
+    ///
+    /// See [`crate::provider::kernel_providers::KernelGroupMaskProvider`] and [`ProviderBuilder::kernel_group_mask`].
+    pub fn kernel_with_group_mask(
+        kernel_provider: &kernel_providers::KernelGroupMaskProvider,
+    ) -> ProviderBuilder {
+        Self::by_guid(kernel_provider.guid).kernel_group_mask(kernel_provider.group_mask)
     }
 
     /// Create a Provider defined by its name.
@@ -145,6 +159,9 @@ impl Provider {
     pub fn kernel_flags(&self) -> u32 {
         self.kernel_flags
     }
+    pub fn kernel_group_mask(&self) -> u32 {
+        self.kernel_group_mask
+    }
     pub fn filters(&self) -> &[EventFilter] {
         &self.filters
     }
@@ -165,6 +182,7 @@ impl std::fmt::Debug for Provider {
             .field("level", &self.level)
             .field("trace_flags", &self.trace_flags)
             .field("kernel_flags", &self.kernel_flags)
+            .field("kernel_group_mask", &self.kernel_group_mask)
             .field("filters", &self.filters)
             .field("callbacks", &self.callbacks.read().unwrap().len())
             .finish()
@@ -230,6 +248,30 @@ impl ProviderBuilder {
     /// ```
     pub fn trace_flags(mut self, trace_flags: TraceFlags) -> Self {
         self.trace_flags = trace_flags;
+        self
+    }
+
+    /// Set the kernel group mask (a `PERFINFO_MASK`) of a kernel Provider
+    ///
+    /// Some kernel events cannot be enabled with [`kernel_providers::KernelProvider::flags`] (`EnableFlags`),
+    /// but need a bit in one of the extended group masks. The top 3 bits of `group_mask` are the index
+    /// of the mask, the other bits are the groups to enable in it.
+    /// To enable groups from several masks, enable several Providers.
+    ///
+    /// When a kernel trace has at least one Provider with a group mask, starting it calls
+    /// `TraceSetInformation(TraceSystemTraceEnableFlagsInfo)`, which requires Windows 8 or later.
+    /// This has no effect on user traces.
+    ///
+    /// # Example
+    /// ```
+    /// # use ferrisetw::provider::{kernel_providers, Provider};
+    /// // Same as `Provider::kernel_with_group_mask(&kernel_providers::OBJECT_MANAGER_PROVIDER)`
+    /// let handles = Provider::by_guid(kernel_providers::OBJECT_MANAGER_PROVIDER.guid)
+    ///     .kernel_group_mask(0x8000_0040)
+    ///     .build();
+    /// ```
+    pub fn kernel_group_mask(mut self, group_mask: u32) -> Self {
+        self.kernel_group_mask = group_mask;
         self
     }
 
@@ -307,6 +349,7 @@ impl ProviderBuilder {
             level: self.level,
             trace_flags: self.trace_flags,
             kernel_flags: self.kernel_flags,
+            kernel_group_mask: self.kernel_group_mask,
             filters: self.filters,
             callbacks: self.callbacks,
         }

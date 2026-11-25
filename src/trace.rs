@@ -14,10 +14,10 @@ use windows::Win32::System::Diagnostics::Etw;
 
 use self::private::{PrivateRealTimeTraceTrait, PrivateTraceTrait};
 
-use crate::native::etw_types::{EventTraceProperties, SubscriptionSource};
+use crate::native::etw_types::{EventTraceProperties, SubscriptionSource, PERFINFO_GROUPMASK};
 use crate::native::evntrace::{
     close_trace, control_trace, control_trace_by_name, enable_provider, open_trace, process_trace,
-    start_trace, ControlHandle, TraceHandle,
+    set_kernel_group_mask, start_trace, ControlHandle, TraceHandle,
 };
 use crate::native::{version_helper, EvntraceNativeError};
 use crate::provider::Provider;
@@ -183,7 +183,6 @@ impl RealTimeTraceTrait for UserTrace {
     }
 }
 
-// TODO: Implement enable_provider function for providers that require call to TraceSetInformation with extended PERFINFO_GROUPMASK
 impl TraceTrait for KernelTrace {
     fn trace_handle(&self) -> TraceHandle {
         self.trace_handle
@@ -520,6 +519,7 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
     /// Build the `UserTrace` and start the trace session
     ///
     /// Internally, this calls the `StartTraceW`, `EnableTraceEx2` and `OpenTraceW`.
+    /// For kernel traces with providers that have a group mask, it also calls `TraceSetInformation`.
     ///
     /// To start receiving events, you'll still have to call either:
     /// * Worst option: `process()` on the returned `T`. This will block the current thread until the trace is stopped.<br/>
@@ -569,14 +569,21 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
             flags,
         )?;
 
-        // TODO: For kernel traces, implement enable_provider function for providers that require call to TraceSetInformation with extended PERFINFO_GROUPMASK
-
         let callback_data = Box::new(Arc::new(CallbackData::RealTime(self.rt_callback_data)));
         let startup = (|| -> Result<TraceHandle, EvntraceNativeError> {
             if T::TRACE_KIND == private::TraceKind::User {
                 if let CallbackData::RealTime(data) = callback_data.as_ref().as_ref() {
                     for prov in data.providers() {
                         enable_provider(control_handle, prov)?;
+                        #[cfg(test)]
+                        injected_startup_error(1)?;
+                    }
+                }
+            }
+            if T::TRACE_KIND == private::TraceKind::Kernel {
+                if let CallbackData::RealTime(data) = callback_data.as_ref().as_ref() {
+                    if let Some(group_mask) = kernel_group_mask(data.providers()) {
+                        set_kernel_group_mask(control_handle, &group_mask)?;
                         #[cfg(test)]
                         injected_startup_error(1)?;
                     }
@@ -818,9 +825,27 @@ pub fn stop_trace_by_name(trace_name: &str) -> TraceResult<()> {
     Ok(())
 }
 
+/// The full group mask to set on a kernel trace, or `None` if `EnableFlags` alone are enough
+///
+/// `TraceSetInformation(TraceSystemTraceEnableFlagsInfo)` is not supported before Windows 8,
+/// so it is only used when a provider actually needs a group mask.
+fn kernel_group_mask(providers: &[Provider]) -> Option<PERFINFO_GROUPMASK> {
+    if providers.iter().all(|p| p.kernel_group_mask() == 0) {
+        return None;
+    }
+
+    let mut group_mask =
+        PERFINFO_GROUPMASK::with_enable_flags(KernelTrace::enable_flags(providers));
+    for provider in providers {
+        group_mask.or_assign_with_groupmask(provider.kernel_group_mask());
+    }
+    Some(group_mask)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::provider::kernel_providers;
 
     #[test]
     #[ignore = "requires permission to create and query an ETW session"]
@@ -906,6 +931,72 @@ mod test {
             startup: EvntraceNativeError::IoError(ref startup),
             rollback: EvntraceNativeError::IoError(ref rollback),
         }) if startup.raw_os_error() == Some(12345) && rollback.raw_os_error() == Some(12346)));
+    }
+
+    #[test]
+    #[ignore = "requires permission to create and query a kernel ETW session"]
+    fn failed_kernel_group_mask_rolls_back_session() {
+        let name = format!(
+            "ferrisetw-kernel-rollback-{}-{}",
+            std::process::id(),
+            utils::rand_string()
+        );
+        let provider =
+            Provider::kernel_with_group_mask(&kernel_providers::OBJECT_MANAGER_PROVIDER).build();
+        STARTUP_FAILPOINT_REACHED.with(|reached| reached.set(false));
+        STARTUP_FAILPOINT.with(|point| point.set(1));
+        let result = KernelTrace::new()
+            .named(name.clone())
+            .stop_if_exist(false)
+            .enable(provider)
+            .start();
+        STARTUP_FAILPOINT.with(|point| point.set(0));
+        let reached = STARTUP_FAILPOINT_REACHED.with(|reached| reached.get());
+        let wide_name = U16CString::from_str(&name).unwrap();
+        let mut properties = EventTraceProperties::new::<KernelTrace>(
+            &wide_name,
+            None,
+            &TraceProperties::default(),
+            Etw::EVENT_TRACE_FLAG::default(),
+        );
+        let query =
+            control_trace_by_name(&mut properties, &wide_name, Etw::EVENT_TRACE_CONTROL_QUERY);
+        if query.is_ok() {
+            stop_trace_by_name(&name).expect("clean up test-owned session");
+        }
+        assert!(reached, "test did not reach the startup failure injection");
+        assert!(
+            matches!(result, Err(TraceError::EtwNativeError(EvntraceNativeError::IoError(ref error))) if error.raw_os_error() == Some(12345)),
+            "unexpected startup result: {:?}",
+            result.map(|_| ())
+        );
+        assert!(
+            matches!(query, Err(ref error) if error.code() == ERROR_WMI_INSTANCE_NOT_FOUND.to_hresult()),
+            "startup failure left its ETW session running"
+        );
+    }
+
+    #[test]
+    fn kernel_group_mask_is_skipped_for_flags_only_providers() {
+        let providers = [
+            Provider::kernel(&kernel_providers::IMAGE_LOAD_PROVIDER).build(),
+            Provider::kernel(&kernel_providers::PROCESS_PROVIDER).build(),
+        ];
+        assert_eq!(kernel_group_mask(&providers), None);
+    }
+
+    #[test]
+    fn kernel_group_mask_combines_flags_and_groups() {
+        let image_load = Provider::kernel(&kernel_providers::IMAGE_LOAD_PROVIDER).build();
+        let image_load_flags = image_load.kernel_flags();
+        let object_manager =
+            Provider::kernel_with_group_mask(&kernel_providers::OBJECT_MANAGER_PROVIDER).build();
+        let custom = Provider::by_guid(GUID::zeroed())
+            .kernel_group_mask(0x8000_0001)
+            .build();
+
+        let group_mask = kernel_group_mask(&[image_load, object_manager, custom]).unwrap();
+        assert_eq!(group_mask.masks, [image_load_flags, 0, 0, 0, 0x41, 0, 0, 0]);
     }
 
     #[test]

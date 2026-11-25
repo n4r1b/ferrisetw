@@ -18,6 +18,8 @@ use windows::Win32::Foundation::ERROR_CTX_CLOSE_PENDING;
 use windows::Win32::Foundation::ERROR_SUCCESS;
 use windows::Win32::Foundation::FILETIME;
 use windows::Win32::System::Diagnostics::Etw;
+use windows::Win32::System::Diagnostics::Etw::TraceSetInformation;
+use windows::Win32::System::Diagnostics::Etw::TraceSystemTraceEnableFlagsInfo;
 use windows::Win32::System::Diagnostics::Etw::EVENT_CONTROL_CODE_ENABLE_PROVIDER;
 use windows::Win32::System::Diagnostics::Etw::TRACE_QUERY_INFO_CLASS;
 
@@ -317,6 +319,36 @@ pub(crate) fn enable_provider(
             res.map_err(|err| {
                 EvntraceNativeError::IoError(std::io::Error::from_raw_os_error(err.code().0))
             })
+        }
+    }
+}
+
+/// Set the full kernel group mask (including extended groups) of a kernel trace
+///
+/// This is not supported before Windows 8.
+pub(crate) fn set_kernel_group_mask(
+    control_handle: ControlHandle,
+    group_mask: &PERFINFO_GROUPMASK,
+) -> EvntraceNativeResult<()> {
+    match filter_invalid_control_handle(control_handle) {
+        None => Err(EvntraceNativeError::InvalidHandle),
+        Some(handle) => {
+            let res = unsafe {
+                TraceSetInformation(
+                    handle,
+                    TraceSystemTraceEnableFlagsInfo,
+                    group_mask as *const PERFINFO_GROUPMASK as *const c_void,
+                    std::mem::size_of::<PERFINFO_GROUPMASK>() as u32,
+                )
+            };
+
+            if res == ERROR_SUCCESS {
+                Ok(())
+            } else {
+                Err(EvntraceNativeError::IoError(
+                    std::io::Error::from_raw_os_error(res.0 as i32),
+                ))
+            }
         }
     }
 }
