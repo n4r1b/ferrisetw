@@ -246,7 +246,7 @@ bitflags! {
     /// Represents the Property flags
     ///
     /// See: [Property Flags enum](https://docs.microsoft.com/en-us/windows/win32/api/tdh/ne-tdh-property_flags)
-    #[derive(Default)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
     pub struct PropertyFlags: u32 {
         const PROPERTY_STRUCT = 0x1;
         const PROPERTY_PARAM_LENGTH = 0x2;
