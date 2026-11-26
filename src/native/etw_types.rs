@@ -82,6 +82,7 @@ bitflags! {
     /// Logging Mode constants that applies to a general trace
     ///
     /// This is a subset of <https://learn.microsoft.com/en-us/windows/win32/etw/logging-mode-constants>
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct LoggingMode: u32 {
         // Commented values only apply to DumpFileLoggingMod
 
@@ -113,12 +114,25 @@ bitflags! {
     }
 }
 
+impl LoggingMode {
+    /// Constructs flags from their raw bits, preserving every bit.
+    ///
+    /// # Safety
+    /// The caller must ensure that all bits correspond to defined flags or
+    /// that any extra bits are valid for this flag type.
+    #[inline]
+    pub const unsafe fn from_bits_unchecked(bits: u32) -> Self {
+        Self::from_bits_retain(bits)
+    }
+}
+
 bitflags! {
     /// Logging Mode constants that applies to a dump file.
     ///
     /// This is a subset of <https://learn.microsoft.com/en-us/windows/win32/etw/logging-mode-constants>
     ///
     /// See the documentation of [`crate::trace::TraceBuilder::set_etl_dump_file`] for more info.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct DumpFileLoggingMode: u32 {
         // Commented values only apply to LoggingMode
 
@@ -165,6 +179,18 @@ bitflags! {
         // EVENT_TRACE_INDEPENDENT_SESSION_MODE
         // EVENT_TRACE_NO_PER_PROCESSOR_BUFFERING
         // EVENT_TRACE_ADDTO_TRIAGE_DUMP
+    }
+}
+
+impl DumpFileLoggingMode {
+    /// Constructs flags from their raw bits, preserving every bit.
+    ///
+    /// # Safety
+    /// The caller must ensure that all bits correspond to defined flags or
+    /// that any extra bits are valid for this flag type.
+    #[inline]
+    pub const unsafe fn from_bits_unchecked(bits: u32) -> Self {
+        Self::from_bits_retain(bits)
     }
 }
 
