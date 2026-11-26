@@ -1,7 +1,7 @@
 //! ETW information classes wrapper
 
 use windows::Win32::System::Diagnostics::Etw::TRACE_PROFILE_INTERVAL;
-use zerocopy::AsBytes;
+use zerocopy::IntoBytes;
 
 use crate::{
     native::{etw_types::TraceInformation, evntrace},
@@ -43,7 +43,7 @@ impl SessionlessInfo {
 
         evntrace::query_info(
             TraceInformation::TraceMaxPmcCounterQuery,
-            max_pmc.as_bytes_mut(),
+            max_pmc.as_mut_bytes(),
         )?;
 
         Ok(max_pmc)
