@@ -437,6 +437,10 @@ impl PropSerable for PropertyInfo {
                     TdhInType::InTypeHexInt32 => Some(PropSer(PropHandler::Int32)),
                     TdhInType::InTypeHexInt64 => Some(PropSer(PropHandler::Int64)),
                     TdhInType::InTypeCountedString => Some(PropSer(PropHandler::String)),
+                    TdhInType::InTypeReversedCountedString => Some(PropSer(PropHandler::String)),
+                    TdhInType::InTypeReversedCountedAnsiString => {
+                        Some(PropSer(PropHandler::String))
+                    }
                 },
             },
             PropertyInfo::Array { in_type, .. } => {
@@ -458,5 +462,73 @@ impl PropSerable for PropertyInfo {
 impl PropSerable for Property {
     fn get_parser(&self) -> Option<PropSer> {
         self.info.get_parser()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PropSer, PropSerable};
+    use crate::native::tdh_types::{Property, TdhOutType};
+    use crate::parser::parser_for_test_property;
+    use crate::EventRecord;
+    use serde::ser::{SerializeMap, Serializer};
+    use std::convert::TryFrom;
+    use windows::Win32::System::Diagnostics::Etw::{
+        EVENT_PROPERTY_INFO, EVENT_PROPERTY_INFO_0, EVENT_PROPERTY_INFO_0_0, EVENT_PROPERTY_INFO_1,
+        EVENT_PROPERTY_INFO_2, EVENT_RECORD, TDH_INTYPE_REVERSEDCOUNTEDANSISTRING,
+        TDH_INTYPE_REVERSEDCOUNTEDSTRING,
+    };
+
+    fn reversed_counted_value(in_type: u16, data: &[u8]) -> serde_json::Value {
+        let length = u16::try_from(data.len()).unwrap();
+        let metadata = EVENT_PROPERTY_INFO {
+            Anonymous1: EVENT_PROPERTY_INFO_0 {
+                nonStructType: EVENT_PROPERTY_INFO_0_0 {
+                    InType: in_type,
+                    OutType: TdhOutType::OutTypeString as u16,
+                    MapNameOffset: 0,
+                },
+            },
+            Anonymous2: EVENT_PROPERTY_INFO_1 { count: 1 },
+            Anonymous3: EVENT_PROPERTY_INFO_2 { length },
+            ..Default::default()
+        };
+        let property = Property::new("Str".to_owned(), &metadata).unwrap();
+        let record = EventRecord(EVENT_RECORD {
+            UserData: data.as_ptr().cast_mut().cast(),
+            UserDataLength: length,
+            ..Default::default()
+        });
+        let parser = parser_for_test_property(&record, &property);
+        let PropSer(handler) = property.get_parser().unwrap();
+        let mut map = serde_json::value::Serializer
+            .serialize_map(Some(1))
+            .unwrap();
+        handler
+            .ser::<serde_json::value::Serializer>(&mut map, &property, &parser, &record)
+            .unwrap();
+        map.end().unwrap()
+    }
+
+    #[test]
+    fn reversed_counted_unicode_is_serialized_as_text() {
+        assert_eq!(
+            reversed_counted_value(
+                TDH_INTYPE_REVERSEDCOUNTEDSTRING.0 as u16,
+                &[0, 4, b'A', 0, b'B', 0],
+            ),
+            serde_json::json!({"Str": "AB"})
+        );
+    }
+
+    #[test]
+    fn reversed_counted_ansi_is_serialized_as_text() {
+        assert_eq!(
+            reversed_counted_value(
+                TDH_INTYPE_REVERSEDCOUNTEDANSISTRING.0 as u16,
+                &[0, 2, b'A', b'B']
+            ),
+            serde_json::json!({"Str": "AB"})
+        );
     }
 }
