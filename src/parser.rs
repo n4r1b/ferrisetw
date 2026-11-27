@@ -1141,3 +1141,7 @@ pub(crate) fn parser_for_test_property<'schema, 'record>(
         cache: Mutex::new(CachedSlices::default()),
     }
 }
+
+#[cfg(test)]
+#[path = "parser/afd_probe.rs"]
+mod afd_probe;
