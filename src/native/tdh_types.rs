@@ -199,6 +199,8 @@ pub enum TdhInType {
     InTypeHexInt64,
     InTypeCountedString = 300,
     InTypeCountedAnsiString,
+    InTypeReversedCountedString,
+    InTypeReversedCountedAnsiString,
     InTypeWbemSid = 310,
 }
 
@@ -232,6 +234,7 @@ pub enum TdhOutType {
     OutTypePort,
     OutTypeIpv4,
     OutTypeIpv6,
+    OutTypeXml = 28,
     OutTypeWin32Error = 30,
     OutTypeNtStatus = 31,
     OutTypeHResult = 32,

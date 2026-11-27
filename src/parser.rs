@@ -16,6 +16,11 @@ use std::convert::TryInto;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::{Mutex, PoisonError};
 use windows::core::GUID;
+use windows::Win32::Globalization::{MultiByteToWideChar, CP_ACP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS};
+
+#[cfg(test)]
+#[path = "parser/reversed_counted_tests.rs"]
+mod reversed_counted_tests;
 
 /// Parser module errors
 #[derive(Debug)]
@@ -463,7 +468,9 @@ impl private::TryParse<String> for Parser<'_, '_> {
         let prop_slice = self.find_property(name)?;
 
         match prop_slice.property.info {
-            PropertyInfo::Value { in_type, .. } => match in_type {
+            PropertyInfo::Value {
+                in_type, out_type, ..
+            } => match in_type {
                 TdhInType::InTypeUnicodeString => {
                     if prop_slice.buffer.len() % 2 != 0 {
                         return Err(ParserError::PropertyError(
@@ -513,7 +520,13 @@ impl private::TryParse<String> for Parser<'_, '_> {
                         .ok_or(ParserError::LengthMismatch)?;
                     parse_sid(sid)
                 }
-                TdhInType::InTypeCountedString => parse_counted_utf16(prop_slice.buffer),
+                TdhInType::InTypeCountedString => parse_counted_utf16(prop_slice.buffer, false),
+                TdhInType::InTypeReversedCountedString => {
+                    parse_counted_utf16(prop_slice.buffer, true)
+                }
+                TdhInType::InTypeReversedCountedAnsiString => {
+                    parse_reversed_counted_ansi(prop_slice.buffer, out_type)
+                }
                 TdhInType::InTypeCountedAnsiString => {
                     if prop_slice.buffer.len() < 2 {
                         return Err(ParserError::PropertyError(
@@ -543,16 +556,22 @@ impl private::TryParse<String> for Parser<'_, '_> {
     }
 }
 
-/// Decodes a TDH counted UTF-16 string: a little-endian `u16` byte count followed by that many
-/// bytes of UTF-16LE. Anything after the counted bytes is ignored.
-fn parse_counted_utf16(data: &[u8]) -> ParserResult<String> {
+/// Decodes a TDH counted UTF-16 string. The byte count is little-endian for ordinary
+/// types and big-endian for reversed types; the text is UTF-16LE in both cases.
+/// Anything after the counted bytes is ignored.
+fn parse_counted_utf16(data: &[u8], reversed: bool) -> ParserResult<String> {
     if data.len() < 2 {
         return Err(ParserError::PropertyError(
             "counted string does not have length".into(),
         ));
     }
     let (prefix, rest) = data.split_at(2);
-    let byte_len = usize::from(u16::from_le_bytes([prefix[0], prefix[1]]));
+    let count = [prefix[0], prefix[1]];
+    let byte_len = usize::from(if reversed {
+        u16::from_be_bytes(count)
+    } else {
+        u16::from_le_bytes(count)
+    });
     if byte_len % 2 != 0 {
         return Err(ParserError::PropertyError(
             "UTF-16 counted string length is not even".into(),
@@ -568,6 +587,55 @@ fn parse_counted_utf16(data: &[u8]) -> ParserResult<String> {
         .step_by(2)
         .map(|i| u16::from_le_bytes([bytes[i], bytes[i + 1]]));
     Ok(widestring::decode_utf16_lossy(units).collect())
+}
+
+/// WBEM reversed counted ANSI: big-endian byte count followed by that many bytes.
+/// XML, JSON and UTF-8 output types are UTF-8; other output types use the decoding
+/// machine's ANSI code page because the event does not identify its original code page.
+fn parse_reversed_counted_ansi(data: &[u8], out_type: TdhOutType) -> ParserResult<String> {
+    let prefix = data.get(..2).ok_or_else(|| {
+        ParserError::PropertyError("counted ANSI string does not have length".into())
+    })?;
+    let length = usize::from(u16::from_be_bytes([prefix[0], prefix[1]]));
+    let bytes = data
+        .get(2..2 + length)
+        .ok_or_else(|| ParserError::PropertyError("invalid counted ANSI string length".into()))?;
+    if matches!(
+        out_type,
+        TdhOutType::OutTypeUtf8 | TdhOutType::OutTypeJson | TdhOutType::OutTypeXml
+    ) {
+        return Ok(std::str::from_utf8(bytes)?.to_owned());
+    }
+    if bytes.is_empty() {
+        return Ok(String::new());
+    }
+    // SAFETY: input is a valid bounded slice and the first call only queries the required length.
+    let length =
+        unsafe { MultiByteToWideChar(CP_ACP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), bytes, None) };
+    if length == 0 {
+        return Err(ParserError::PropertyError(format!(
+            "ANSI conversion failed: {}",
+            std::io::Error::last_os_error()
+        )));
+    }
+    let mut wide = vec![0u16; length as usize];
+    // SAFETY: `wide` has the size returned by the preceding call and both slices are valid.
+    let written = unsafe {
+        MultiByteToWideChar(
+            CP_ACP,
+            MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0),
+            bytes,
+            Some(&mut wide),
+        )
+    };
+    if written == 0 {
+        return Err(ParserError::PropertyError(format!(
+            "ANSI conversion failed: {}",
+            std::io::Error::last_os_error()
+        )));
+    }
+    wide.truncate(written as usize);
+    Ok(String::from_utf16_lossy(&wide))
 }
 
 fn parse_sid(data: &[u8]) -> ParserResult<String> {
@@ -1055,5 +1123,21 @@ mod tests {
         assert_eq!(parser.try_parse::<u32>("Third").unwrap(), 33);
         assert_eq!(parser.try_parse::<u32>("Second").unwrap(), 22);
         assert_eq!(parser.try_parse::<u32>("First").unwrap(), 11);
+    }
+}
+
+#[cfg(test)]
+#[path = "parser/reversed_ansi_out_type_tests.rs"]
+mod reversed_ansi_out_type_tests;
+
+#[cfg(all(test, feature = "serde"))]
+pub(crate) fn parser_for_test_property<'schema, 'record>(
+    record: &'record EventRecord,
+    property: &'schema Property,
+) -> Parser<'schema, 'record> {
+    Parser {
+        properties: std::slice::from_ref(property),
+        record,
+        cache: Mutex::new(CachedSlices::default()),
     }
 }
