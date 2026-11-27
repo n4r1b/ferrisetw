@@ -78,6 +78,22 @@ pub(crate) enum ControlValues {
     Update = 2,
 }
 
+/// Clock that stamps the events of a trace session
+///
+/// See the `ClientContext` member of <https://learn.microsoft.com/en-us/windows/win32/etw/wnode-header>
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum ClockType {
+    /// > Query performance counter (QPC). The QPC counter provides a high-resolution time stamp that is not affected by adjustments to the system clock.
+    ///
+    /// A change of the system time after the session start thus shifts the time stamps that `ProcessTrace` reports.
+    #[default]
+    QueryPerformanceCounter = 1,
+    /// > System time. The system time provides a time stamp that tracks changes to the system's clock.
+    SystemTime = 2,
+    /// > CPU cycle counter.
+    CpuCycleCounter = 3,
+}
+
 bitflags! {
     /// Logging Mode constants that applies to a general trace
     ///
@@ -243,6 +259,7 @@ impl EventTraceProperties {
         trace_name: &U16CStr,
         etl_dump_file: Option<(&U16CStr, DumpFileLoggingMode, Option<u32>)>,
         trace_properties: &TraceProperties,
+        clock_type: ClockType,
         enable_flags: Etw::EVENT_TRACE_FLAG,
     ) -> Self
     where
@@ -253,7 +270,7 @@ impl EventTraceProperties {
         etw_trace_properties.Wnode.BufferSize = std::mem::size_of::<EventTraceProperties>() as u32;
         etw_trace_properties.Wnode.Guid = T::trace_guid();
         etw_trace_properties.Wnode.Flags = Etw::WNODE_FLAG_TRACED_GUID;
-        etw_trace_properties.Wnode.ClientContext = 1; // QPC clock resolution
+        etw_trace_properties.Wnode.ClientContext = clock_type as u32;
         etw_trace_properties.BufferSize = trace_properties.buffer_size;
         etw_trace_properties.MinimumBuffers = trace_properties.min_buffer;
         etw_trace_properties.MaximumBuffers = trace_properties.max_buffer;

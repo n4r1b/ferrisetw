@@ -25,6 +25,7 @@ use crate::utils;
 use crate::EventRecord;
 use crate::SchemaLocator;
 
+pub use crate::native::etw_types::ClockType;
 pub use crate::native::etw_types::DumpFileLoggingMode;
 pub use crate::native::etw_types::LoggingMode;
 
@@ -285,6 +286,7 @@ pub struct TraceBuilder<T: RealTimeTraceTrait> {
     name: String,
     etl_dump_file: Option<DumpFileParams>,
     properties: TraceProperties,
+    clock_type: ClockType,
     rt_callback_data: RealTimeCallbackData,
     stop_if_exist: bool,
     trace_kind: PhantomData<T>,
@@ -305,6 +307,7 @@ impl UserTrace {
             rt_callback_data: RealTimeCallbackData::new(TraceKind::User),
             properties: TraceProperties::default(),
             stop_if_exist: true,
+            clock_type: ClockType::default(),
             trace_kind: PhantomData,
         }
     }
@@ -327,6 +330,7 @@ impl KernelTrace {
             rt_callback_data: RealTimeCallbackData::new(TraceKind::Kernel),
             properties: TraceProperties::default(),
             stop_if_exist: true,
+            clock_type: ClockType::default(),
             trace_kind: PhantomData,
         };
         // Not all names are valid. Let's use the setter to check them for us
@@ -484,6 +488,14 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
         self
     }
 
+    /// Define the clock that stamps the events of the trace.
+    ///
+    /// Defaults to [`ClockType::QueryPerformanceCounter`].
+    pub fn set_clock_type(mut self, clock_type: ClockType) -> Self {
+        self.clock_type = clock_type;
+        self
+    }
+
     /// Define a dump file for the events.
     ///
     /// If set, events will be dumped to a file on disk.<br/>
@@ -566,6 +578,7 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
                 .as_ref()
                 .map(|(path, params, max_size)| (path.as_ucstr(), *params, *max_size)),
             &self.properties,
+            self.clock_type,
             flags,
         )?;
 
@@ -695,6 +708,7 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
                         .as_ref()
                         .map(|(path, params, max_size)| (path.as_ucstr(), *params, *max_size)),
                     &self.properties,
+                    self.clock_type,
                     flags,
                 ),
                 ControlHandle { Value: 0 },
@@ -808,6 +822,7 @@ pub fn stop_trace_by_name(trace_name: &str) -> TraceResult<()> {
         &wide_name,
         None, // MSDN says the dump file name (if any) must be populated for a EVENT_TRACE_CONTROL_STOP, but experience shows this is not necessary.
         &trace_properties,
+        ClockType::default(),
         flags,
     );
 
@@ -873,6 +888,7 @@ mod test {
                 &wide_name,
                 None,
                 &TraceProperties::default(),
+                ClockType::default(),
                 Etw::EVENT_TRACE_FLAG::default(),
             );
             let query =
