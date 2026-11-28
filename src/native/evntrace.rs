@@ -359,6 +359,40 @@ pub(crate) fn set_kernel_group_mask(
     }
 }
 
+/// Enable stack tracing for the specified classic kernel events.
+pub(crate) fn set_kernel_stack_tracing(
+    control_handle: ControlHandle,
+    events: &[crate::trace::KernelStackEvent],
+) -> EvntraceNativeResult<()> {
+    let handle =
+        filter_invalid_control_handle(control_handle).ok_or(EvntraceNativeError::InvalidHandle)?;
+    let native: Vec<Etw::CLASSIC_EVENT_ID> = events
+        .iter()
+        .map(|event| Etw::CLASSIC_EVENT_ID {
+            EventGuid: event.guid,
+            Type: event.opcode,
+            Reserved: [0; 7],
+        })
+        .collect();
+    // SAFETY: native is a live, contiguous array of CLASSIC_EVENT_ID values and
+    // the builder validates the maximum of 256 entries before opening a session.
+    let status = unsafe {
+        TraceSetInformation(
+            handle,
+            Etw::TraceStackTracingInfo,
+            native.as_ptr().cast(),
+            (native.len() * std::mem::size_of::<Etw::CLASSIC_EVENT_ID>()) as u32,
+        )
+    };
+    if status == ERROR_SUCCESS {
+        Ok(())
+    } else {
+        Err(EvntraceNativeError::IoError(
+            std::io::Error::from_raw_os_error(status.0 as i32),
+        ))
+    }
+}
+
 /// Start processing a trace (this call is blocking until the trace is stopped)
 ///
 /// You probably want to spawn a thread that will block on this call.
