@@ -16,8 +16,9 @@ use self::private::{PrivateRealTimeTraceTrait, PrivateTraceTrait};
 
 use crate::native::etw_types::{EventTraceProperties, SubscriptionSource, PERFINFO_GROUPMASK};
 use crate::native::evntrace::{
-    close_trace, control_trace, control_trace_by_name, enable_provider, open_trace, process_trace,
-    set_kernel_group_mask, set_kernel_stack_tracing, start_trace, ControlHandle, TraceHandle,
+    close_trace, control_trace, control_trace_by_name, enable_provider, open_trace,
+    open_trace_with_mode, process_trace, set_kernel_group_mask, set_kernel_stack_tracing,
+    start_trace, ControlHandle, TraceHandle,
 };
 use crate::native::{version_helper, EvntraceNativeError};
 use crate::provider::Provider;
@@ -308,6 +309,7 @@ pub struct TraceBuilder<T: RealTimeTraceTrait> {
     rt_callback_data: RealTimeCallbackData,
     stop_if_exist: bool,
     stack_events: Vec<KernelStackEvent>,
+    raw_timestamps: bool,
     trace_kind: PhantomData<T>,
 }
 
@@ -327,6 +329,7 @@ impl UserTrace {
             properties: TraceProperties::default(),
             stop_if_exist: true,
             stack_events: Vec::new(),
+            raw_timestamps: false,
             trace_kind: PhantomData,
         }
     }
@@ -350,6 +353,7 @@ impl KernelTrace {
             properties: TraceProperties::default(),
             stop_if_exist: true,
             stack_events: Vec::new(),
+            raw_timestamps: false,
             trace_kind: PhantomData,
         };
         // Not all names are valid. Let's use the setter to check them for us
@@ -366,6 +370,11 @@ impl KernelTrace {
 }
 
 impl TraceBuilder<KernelTrace> {
+    pub(crate) fn with_raw_timestamps(mut self) -> Self {
+        self.raw_timestamps = true;
+        self
+    }
+
     /// Configure call-stack capture for classic kernel events.
     ///
     /// This replaces the builder's previous list. An empty list leaves stack tracing
@@ -636,6 +645,7 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
         )?;
 
         let stack_events = self.stack_events;
+        let raw_timestamps = self.raw_timestamps;
         let callback_data = Box::new(Arc::new(CallbackData::RealTime(self.rt_callback_data)));
         let startup = (|| -> Result<TraceHandle, EvntraceNativeError> {
             if T::TRACE_KIND == private::TraceKind::User {
@@ -673,9 +683,10 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
                 .unwrap();
                 return open_trace(SubscriptionSource::FromFile(missing), &callback_data);
             }
-            open_trace(
+            open_trace_with_mode(
                 SubscriptionSource::RealTimeSession(trace_wide_name),
                 &callback_data,
+                raw_timestamps,
             )
         })();
         let trace_handle = match startup {
