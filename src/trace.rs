@@ -17,7 +17,7 @@ use self::private::{PrivateRealTimeTraceTrait, PrivateTraceTrait};
 use crate::native::etw_types::{EventTraceProperties, SubscriptionSource, PERFINFO_GROUPMASK};
 use crate::native::evntrace::{
     close_trace, control_trace, control_trace_by_name, enable_provider, open_trace, process_trace,
-    set_kernel_group_mask, start_trace, ControlHandle, TraceHandle,
+    set_kernel_group_mask, set_kernel_stack_tracing, start_trace, ControlHandle, TraceHandle,
 };
 use crate::native::{version_helper, EvntraceNativeError};
 use crate::provider::Provider;
@@ -78,6 +78,26 @@ impl From<crate::native::EvntraceNativeError> for TraceError {
 }
 
 type TraceResult<T> = Result<T, TraceError>;
+
+/// A classic kernel event whose call stack should be captured.
+///
+/// `guid` identifies the event class; `opcode` identifies an event within that class.
+/// For sampled profiles use PerfInfo GUID `ce1dbfb4-137e-4da6-87b0-3f59aa102cbc`
+/// and opcode 46. Enable the corresponding kernel provider separately.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KernelStackEvent {
+    /// Event class GUID.
+    pub guid: GUID,
+    /// Classic event type (opcode).
+    pub opcode: u8,
+}
+
+impl KernelStackEvent {
+    /// Identify a classic event by class GUID and opcode.
+    pub const fn new(guid: GUID, opcode: u8) -> Self {
+        Self { guid, opcode }
+    }
+}
 
 /// Trace Properties struct
 ///
@@ -287,6 +307,7 @@ pub struct TraceBuilder<T: RealTimeTraceTrait> {
     properties: TraceProperties,
     rt_callback_data: RealTimeCallbackData,
     stop_if_exist: bool,
+    stack_events: Vec<KernelStackEvent>,
     trace_kind: PhantomData<T>,
 }
 
@@ -305,6 +326,7 @@ impl UserTrace {
             rt_callback_data: RealTimeCallbackData::new(TraceKind::User),
             properties: TraceProperties::default(),
             stop_if_exist: true,
+            stack_events: Vec::new(),
             trace_kind: PhantomData,
         }
     }
@@ -327,6 +349,7 @@ impl KernelTrace {
             rt_callback_data: RealTimeCallbackData::new(TraceKind::Kernel),
             properties: TraceProperties::default(),
             stop_if_exist: true,
+            stack_events: Vec::new(),
             trace_kind: PhantomData,
         };
         // Not all names are valid. Let's use the setter to check them for us
@@ -339,6 +362,41 @@ impl KernelTrace {
     /// The same result is achieved by dropping `Self`
     pub fn stop(mut self) -> TraceResult<()> {
         self.non_consuming_stop()
+    }
+}
+
+impl TraceBuilder<KernelTrace> {
+    /// Configure call-stack capture for classic kernel events.
+    ///
+    /// This replaces the builder's previous list. An empty list leaves stack tracing
+    /// disabled. At most 256 events are accepted; `start` rejects a longer list before
+    /// touching a session. The corresponding providers must also be enabled.
+    /// Kernel stack walks are delivered as separate StackWalk events. Register a
+    /// callback for GUID `def2fe46-7bd6-4b80-bd94-f57fe20d0ce3` to receive them.
+    /// Their original timestamps can be in a different clock domain from converted
+    /// event header timestamps; do not compare them without accounting for the clock.
+    /// Sampled profiling may require `SeSystemProfilePrivilege` enabled in the process token.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use ferrisetw::provider::{kernel_providers, Provider};
+    /// use ferrisetw::trace::{KernelStackEvent, KernelTrace};
+    ///
+    /// let profile = Provider::kernel(&kernel_providers::PROFILE_PROVIDER).build();
+    /// let stack = Provider::by_guid(0xdef2fe46_7bd6_4b80_bd94_f57fe20d0ce3)
+    ///     .add_callback(|record, _| println!("stack event opcode: {}", record.opcode()))
+    ///     .build();
+    /// let trace = KernelTrace::new()
+    ///     .enable(profile)
+    ///     .enable(stack)
+    ///     .stack_tracing(vec![KernelStackEvent::new(kernel_providers::PROFILE_PROVIDER.guid, 46)])
+    ///     .start_and_process()
+    ///     .unwrap();
+    /// trace.stop().unwrap();
+    /// ```
+    pub fn stack_tracing(mut self, events: Vec<KernelStackEvent>) -> Self {
+        self.stack_events = events;
+        self
     }
 }
 
@@ -531,6 +589,14 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
     ///   This convenience function spawns a thread for you, call [`TraceBuilder::start`] on the trace, and returns immediately.<br/>
     ///   This option returns a `T`, so you can explicitly stop the trace, but there is no way to get the status code of the ProcessTrace API.
     pub fn start(self) -> TraceResult<(T, TraceHandle)> {
+        if self.stack_events.len() > 256 {
+            return Err(TraceError::EtwNativeError(EvntraceNativeError::IoError(
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "stack tracing supports at most 256 events",
+                ),
+            )));
+        }
         if self.stop_if_exist {
             stop_trace_by_name(&self.name)?;
         }
@@ -569,6 +635,7 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
             flags,
         )?;
 
+        let stack_events = self.stack_events;
         let callback_data = Box::new(Arc::new(CallbackData::RealTime(self.rt_callback_data)));
         let startup = (|| -> Result<TraceHandle, EvntraceNativeError> {
             if T::TRACE_KIND == private::TraceKind::User {
@@ -586,6 +653,11 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
                         set_kernel_group_mask(control_handle, &group_mask)?;
                         #[cfg(test)]
                         injected_startup_error(1)?;
+                    }
+                    if !stack_events.is_empty() {
+                        #[cfg(test)]
+                        injected_startup_error(4)?;
+                        set_kernel_stack_tracing(control_handle, &stack_events)?;
                     }
                 }
             }
@@ -651,6 +723,14 @@ impl<T: RealTimeTraceTrait + PrivateRealTimeTraceTrait> TraceBuilder<T> {
     ///
     /// To start receiving events, see the [`TraceBuilder::start`] function to see the options, while keeping in mind that the trace cannot be stopped.
     pub fn open_existing(self) -> TraceResult<(T, TraceHandle)> {
+        if !self.stack_events.is_empty() {
+            return Err(TraceError::EtwNativeError(EvntraceNativeError::IoError(
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "stack tracing requires a newly created session",
+                ),
+            )));
+        }
         // Prepare a wide version of the trace name
         let trace_wide_name = U16CString::from_str_truncate(self.name);
         let mut trace_wide_vec = trace_wide_name.into_vec();
@@ -1009,3 +1089,7 @@ mod test {
         assert_eq!(trace_builder.rt_callback_data.providers().len(), 2);
     }
 }
+
+#[cfg(test)]
+#[path = "trace/stack_tracing_tests.rs"]
+mod stack_tracing_tests;
