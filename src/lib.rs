@@ -119,6 +119,8 @@ pub mod parser;
 mod property;
 pub mod provider;
 pub mod query;
+/// Typed access to raw kernel event timestamps.
+pub mod raw;
 pub mod schema;
 pub mod schema_locator;
 pub mod ser;

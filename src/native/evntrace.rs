@@ -260,8 +260,21 @@ pub(crate) fn open_trace(
     subscription_source: SubscriptionSource,
     callback_data: &Box<Arc<CallbackData>>,
 ) -> EvntraceNativeResult<TraceHandle> {
-    let mut log_file =
-        EventTraceLogfile::create(callback_data, subscription_source, trace_callback_thunk);
+    open_trace_with_mode(subscription_source, callback_data, false)
+}
+
+#[allow(clippy::borrowed_box)]
+pub(crate) fn open_trace_with_mode(
+    subscription_source: SubscriptionSource,
+    callback_data: &Box<Arc<CallbackData>>,
+    raw_timestamps: bool,
+) -> EvntraceNativeResult<TraceHandle> {
+    let mut log_file = EventTraceLogfile::create(
+        callback_data,
+        subscription_source,
+        trace_callback_thunk,
+        raw_timestamps,
+    );
 
     let context = log_file.context_ptr();
     if let Err(ContextError::AlreadyExist) = UNIQUE_VALID_CONTEXTS.insert(context) {

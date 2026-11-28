@@ -355,6 +355,7 @@ impl<'callbackdata> EventTraceLogfile<'callbackdata> {
         callback_data: &'callbackdata Box<Arc<CallbackData>>,
         subscription_source: SubscriptionSource,
         callback: unsafe extern "system" fn(*mut Etw::EVENT_RECORD),
+        raw_timestamps: bool,
     ) -> Self {
         let not_really_mut_ptr =
             callback_data.as_ref() as *const Arc<CallbackData> as *const c_void as *mut c_void; // That's kind-of fine because the user context is _not supposed_ to be changed by Windows APIs
@@ -373,6 +374,12 @@ impl<'callbackdata> EventTraceLogfile<'callbackdata> {
             lifetime: PhantomData,
         };
 
+        let raw_mode = if raw_timestamps {
+            Etw::PROCESS_TRACE_MODE_RAW_TIMESTAMP
+        } else {
+            0
+        };
+
         // What should we subscribe to?
         match &mut log_file.owned_subscription_source {
             SubscriptionSource::RealTimeSession(wide_logger_name) => {
@@ -380,14 +387,15 @@ impl<'callbackdata> EventTraceLogfile<'callbackdata> {
 
                 log_file.native.Anonymous1 = Etw::EVENT_TRACE_LOGFILEW_0 {
                     ProcessTraceMode: Etw::PROCESS_TRACE_MODE_REAL_TIME
-                        | Etw::PROCESS_TRACE_MODE_EVENT_RECORD, // In case you really want to use PROCESS_TRACE_MODE_RAW_TIMESTAMP, please review EventRecord::timestamp(), which could not be valid anymore
+                        | Etw::PROCESS_TRACE_MODE_EVENT_RECORD
+                        | raw_mode,
                 };
             }
             SubscriptionSource::FromFile(wide_file_name) => {
                 log_file.native.LogFileName = PWSTR(wide_file_name.as_mut_ptr());
 
                 log_file.native.Anonymous1 = Etw::EVENT_TRACE_LOGFILEW_0 {
-                    ProcessTraceMode: Etw::PROCESS_TRACE_MODE_EVENT_RECORD, // In case you really want to use PROCESS_TRACE_MODE_RAW_TIMESTAMP, please review EventRecord::timestamp(), which could not be valid anymore
+                    ProcessTraceMode: Etw::PROCESS_TRACE_MODE_EVENT_RECORD | raw_mode,
                 };
             }
         }
@@ -558,3 +566,7 @@ mod groupmask_test {
         assert_eq!(std::mem::size_of::<PERFINFO_GROUPMASK>(), 32);
     }
 }
+
+#[cfg(test)]
+#[path = "etw_types/raw_mode_tests.rs"]
+mod raw_mode_tests;
